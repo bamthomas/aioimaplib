@@ -1,0 +1,4 @@
+nose
+asynctest
+pytz
+tzlocal

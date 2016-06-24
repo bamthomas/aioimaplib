@@ -1,0 +1,15 @@
+venv
+*.pyo
+*.pyc
+__pycache__
+.idea/*
+*.iml
+*.log
+*.db
+*.eggs
+__pycache__
+*.egg-info
+.gitconfig
+.tmux.conf
+.viminfo
+.vimrc
