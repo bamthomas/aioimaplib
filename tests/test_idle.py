@@ -5,8 +5,8 @@ import functools
 import asynctest
 from imaplib2.imaplib2 import IMAP4
 from mock import Mock
-from tests.imapserver import create_imap_protocol, reset_mailboxes, imap_receive, Mail, _SERVER_STATE, \
-    get_imapconnection
+from tests import imapserver
+from tests.imapserver import create_imap_protocol, reset, imap_receive, Mail, get_imapconnection
 
 
 class TestImapServerIdle(asynctest.TestCase):
@@ -18,7 +18,7 @@ class TestImapServerIdle(asynctest.TestCase):
 
     @asyncio.coroutine
     def tearDown(self):
-        reset_mailboxes()
+        reset()
         self.server.close()
         asyncio.wait_for(self.server.wait_closed(), 1)
 
@@ -27,11 +27,11 @@ class TestImapServerIdle(asynctest.TestCase):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         idle_callback = Mock()
         self.loop.run_in_executor(None, functools.partial(imap_client.idle, callback=idle_callback))
-        yield from asyncio.wait_for(get_imapconnection('user').wait(idle=True), 1)
+        yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.IDLE), 1)
 
         self.loop.run_in_executor(None, functools.partial(imap_receive, Mail(to=['user'], mail_from='me', subject='hello')))
 
-        yield from asyncio.wait_for(get_imapconnection('user').wait(idle=False), 1)
+        yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.SELECTED), 1)
         idle_callback.assert_called_once()
 
     @asyncio.coroutine

@@ -10,7 +10,7 @@ import pytz
 import asynctest
 import functools
 from tests import imapserver
-from tests.imapserver import Mail, create_imap_protocol, imap_receive, reset_mailboxes, get_imapconnection
+from tests.imapserver import Mail, create_imap_protocol, imap_receive, reset, get_imapconnection
 
 
 class TestMailToString(unittest.TestCase):
@@ -47,7 +47,7 @@ class TestImapServer(asynctest.TestCase):
 
     @asyncio.coroutine
     def tearDown(self):
-        reset_mailboxes()
+        reset()
         self.server.close()
         asyncio.wait_for(self.server.wait_closed(), 1)
 

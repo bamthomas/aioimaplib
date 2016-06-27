@@ -4,6 +4,7 @@ import quopri
 import uuid
 from datetime import datetime
 from email._encoded_words import encode
+from functools import wraps, update_wrapper
 
 import tzlocal
 
@@ -25,8 +26,11 @@ class ServerState(object):
         self.mailboxes = dict()
         self.connections = dict()
 
-    def reset_mailboxes(self):
+    def reset(self):
         self.mailboxes = dict()
+        for connection in self.connections.values():
+            connection.transport.close()
+        self.connections = dict()
 
     def _add_mail_to_mailboxes(self, to, mail, mailbox):
         if to not in self.mailboxes:
@@ -66,8 +70,22 @@ class ServerState(object):
         return self.connections.get(user)
 
 
-class ImapProtocol(asyncio.Protocol):
+def critical_section(next_state):
+    @asyncio.coroutine
+    def execute_section(self, state, critical_func, *args, **kwargs):
+        with (yield from self.state_condition):
+            critical_func(self, *args, **kwargs)
+            self.state = state
+            yield from self.state_condition.notify_all()
 
+    def decorator(func):
+        def wrapper(self, *args, **kwargs):
+            asyncio.async(execute_section(self, next_state, func, *args, **kwargs))
+        return update_wrapper(wrapper, func)
+    return decorator
+
+
+class ImapProtocol(asyncio.Protocol):
     def __init__(self, server_state):
         self.transport = None
         self.server_state = server_state
@@ -84,7 +102,7 @@ class ImapProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         command_array = data.decode().rstrip().split()
-        if self.idle_tag is None:
+        if self.state is not IDLE:
             tag = command_array[0]
             self.by_uid = False
             self.exec_command(tag, command_array[1:])
@@ -114,22 +132,20 @@ class ImapProtocol(asyncio.Protocol):
         log.debug("Sending %s", response)
         self.transport.write('{tag} {response}\r\n'.format(tag=tag, response=response).encode())
 
-    def capability(self, tag, *args):
-        self.send_untagged_line('CAPABILITY IMAP4rev1')
-        self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
-
+    @critical_section(next_state=AUTH)
     def login(self, tag, *args):
         self.user_login = args[0]
         self.server_state.login(self.user_login, self)
         self.send_untagged_line('CAPABILITY IMAP4rev1')
         self.send_tagged_line(tag, 'OK LOGIN completed')
 
+    @critical_section(next_state=LOGOUT)
     def logout(self, tag, *args):
         self.server_state.login(self.user_login, self)
         self.send_tagged_line(tag, 'OK LOGOUT completed')
         self.transport.close()
-        self.state = LOGOUT
 
+    @critical_section(next_state=SELECTED)
     def select(self, tag, *args):
         self.user_mailbox = args[0]
         self.server_state.select(self.user_login, self.user_mailbox)
@@ -142,6 +158,22 @@ class ImapProtocol(asyncio.Protocol):
         self.send_untagged_line('OK [UIDNEXT {next_uid}] Predicted next UID'.format(next_uid=len(mailbox) + 1))
         self.send_tagged_line(tag, 'OK [READ] Select completed (0.000 secs).')
 
+    @critical_section(next_state=IDLE)
+    def idle(self, tag, *args):
+        log.debug("Entering idle for '%s'", self.user_login)
+        self.idle_tag = tag
+        self.send_untagged_line('idling', continuation=True)
+
+    @critical_section(next_state=SELECTED)
+    def done(self, _, *args):
+        self.send_tagged_line(self.idle_tag, 'OK IDLE terminated')
+        self.idle_tag = None
+
+    @asyncio.coroutine
+    def wait(self, state):
+        with (yield from self.state_condition):
+            yield from self.state_condition.wait_for(lambda: self.state == state)
+
     def search(self, tag, *args):
         keyword = None
         if 'keyword' in args[0].lower():
@@ -149,13 +181,6 @@ class ImapProtocol(asyncio.Protocol):
         unkeyword = args[0].lower() == 'unkeyword'
         self.send_untagged_line('SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(keyword, unkeyword))))
         self.send_tagged_line(tag, 'OK SEARCH completed')
-
-    def idle(self, tag, *args):
-        def begin_idle():
-            log.debug("Entering idle for '%s'", self.user_login)
-            self.idle_tag = tag
-            self.send_untagged_line('idling', continuation=True)
-        asyncio.async(self.notify_all(begin_idle))
 
     def memory_search(self, keyword, unkeyword=False):
         return [str(msg.uid) for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
@@ -183,6 +208,10 @@ class ImapProtocol(asyncio.Protocol):
                                         encoding=message.encoding)
         self.send_tagged_line(tag, 'OK FETCH completed.')
 
+    def capability(self, tag, *args):
+        self.send_untagged_line('CAPABILITY IMAP4rev1')
+        self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
+
     def uid(self, tag, *args):
         self.by_uid = True
         self.exec_command(tag, args)
@@ -193,23 +222,6 @@ class ImapProtocol(asyncio.Protocol):
     def notify_new_mail(self, uid):
         if self.idle_tag:
             self.send_untagged_line('{uid} EXISTS'.format(uid=uid))
-
-    def done(self, _, *args):
-        def end_idle():
-            self.send_tagged_line(self.idle_tag, 'OK IDLE terminated')
-            self.idle_tag = None
-        asyncio.async(self.notify_all(end_idle))
-
-    @asyncio.coroutine
-    def wait(self, idle):
-        with (yield from self.state_condition):
-            yield from self.state_condition.wait_for(lambda: (self.idle_tag is not None) == idle)
-
-    @asyncio.coroutine
-    def notify_all(self, critical_section):
-        with (yield from self.state_condition):
-            critical_section()
-            yield from self.state_condition.notify_all()
 
 
 _SERVER_STATE = ServerState()
@@ -239,9 +251,9 @@ def create_imap_protocol():
     return protocol
 
 
-def reset_mailboxes():
+def reset():
     global _SERVER_STATE
-    _SERVER_STATE.reset_mailboxes()
+    _SERVER_STATE.reset()
 
 
 class Mail(object):
