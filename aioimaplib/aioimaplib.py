@@ -2,18 +2,17 @@
 import asyncio
 import logging
 
-import re
+import functools
 
 import random
+from collections import namedtuple
 
-from functools import update_wrapper
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 sh = logging.StreamHandler()
-sh.setLevel(logging.DEBUG)
-sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s " +
-                                  "[%(module)s:%(lineno)d] %(message)s"))
+sh.setLevel(logging.INFO)
+sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
 log.addHandler(sh)
 
 IMAP4_PORT = 143
@@ -22,32 +21,40 @@ STARTED, CONNECTED, NONAUTH, AUTH, SELECTED, LOGOUT = 'STARTED', 'CONNECTED', 'N
 
 AllowedVersions = ('IMAP4REV1', 'IMAP4')
 
-#       Patterns to match server responses
-Continuation = re.compile(br'\+( (?P<data>.*))?')
-Flags = re.compile(br'.*FLAGS \((?P<flags>[^\)]*)\)')
-InternalDate = re.compile(br'.*INTERNALDATE "'
-                          br'(?P<day>[ 0123][0-9])-(?P<mon>[A-Z][a-z][a-z])-(?P<year>[0-9][0-9][0-9][0-9])'
-                          br' (?P<hour>[0-9][0-9]):(?P<min>[0-9][0-9]):(?P<sec>[0-9][0-9])'
-                          br' (?P<zonen>[-+])(?P<zoneh>[0-9][0-9])(?P<zonem>[0-9][0-9])'
-                          br'"')
-Literal = re.compile(br'.*{(?P<size>\d+)}$', re.ASCII)
-MapCRLF = re.compile(br'\r\n|\r|\n')
-Response_code = re.compile(br'\[(?P<type>[A-Z-]+)( (?P<data>[^\]]*))?\]')
-Untagged_response = re.compile(br'\* (?P<type>[A-Z-]+)( (?P<data>.*))?')
-Untagged_status = re.compile(br'\* (?P<data>\d+) (?P<type>[A-Z-]+)( (?P<data2>.*))?', re.ASCII)
 
-
-def critical_section(func):
+def change_state(coro):
+    @functools.wraps(coro)
     @asyncio.coroutine
-    def execute_section(self, critical_func, *args, **kwargs):
+    def wrapper(self, *args, **kargs):
         with (yield from self.state_condition):
-            critical_func(self, *args, **kwargs)
+            res = yield from coro(self, *args, **kargs)
             log.debug('state -> %s' % self.state)
             self.state_condition.notify_all()
+            return res
+    return wrapper
 
-    def wrapper(self, *args, **kwargs):
-        asyncio.wait(asyncio.async(execute_section(self, func, *args, **kwargs)))
-    return update_wrapper(wrapper, func)
+
+Response = namedtuple('Response', 'result text')
+
+
+class Command(object):
+    def __init__(self, name, *args, **kwargs):
+        self.name = name
+        self.args = args
+        self.response = None
+        self.event = asyncio.Event(loop=kwargs.pop('loop', asyncio.get_event_loop()))
+        self.kwargs = kwargs
+
+    def __repr__(self):
+        return '%s %s' % (self.name, ' '.join(self.args))
+
+    def ok(self, response):
+        self.response = response
+        self.event.set()
+
+    @asyncio.coroutine
+    def wait(self):
+        yield from self.event.wait()
 
 
 class IMAP4ClientProtocol(asyncio.Protocol):
@@ -75,42 +82,31 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport = transport
         self.state = CONNECTED
 
-    @asyncio.coroutine
-    def wait(self, state):
-        with (yield from self.state_condition):
-            yield from self.state_condition.wait_for(lambda: self.state == state)
-
-    def data_received(self, data):
-        response_array = data.decode().rstrip().split()
-        if self.state == CONNECTED:
-            self.welcome(response_array)
-        else:
-            if response_array[0] == '*':
-                self._untagged_response(response_array[1:])
-            elif response_array[0] == '+':
-                self._continuation(response_array[1:])
+    def data_received(self, data, encoding='utf-8'):
+        log.debug('Received : %s' % data)
+        lines = data.rstrip().split(b'\r\n')
+        for line in lines:
+            response_array = line.decode(encoding=encoding).split()
+            if self.state == CONNECTED:
+                asyncio.async(self.welcome(response_array))
             else:
-                self._tagged_response(response_array[0], response_array[1:])
+                if response_array[0] == '*':
+                    self._untagged_response(response_array[1:])
+                elif response_array[0] == '+':
+                    self._continuation(response_array[1:])
+                else:
+                    self._tagged_response(response_array[0], response_array[1:])
 
     def connection_lost(self, exc):
         self.transport.close()
         self.state = LOGOUT
 
-    @critical_section
-    def welcome(self, command_array):
-        if 'PREAUTH' in command_array:
-            self.state = AUTH
-        elif 'OK' in command_array:
-            self.state = NONAUTH
-        else:
-            raise self.Error(command_array)
-        self.send_tagged_command('CAPABILITY')
-
     def send_tagged_command(self, command):
         tag = self._new_tag()
-        self.transport.write('{tag} {command}\r\n'.format(tag=tag, command=command).encode())
-        self.tagged_commands[tag] = asyncio.Event(loop=self.loop)
-        return tag
+        command_string = '{tag} {command}\r\n'.format(tag=tag, command=command).encode()
+        log.debug('Sending : %s' % command_string)
+        self.transport.write(command_string)
+        self.tagged_commands[tag] = command
 
     def _new_tag(self):
         tag = self.tagpre + str(self.tagnum)
@@ -138,28 +134,57 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if not tag in self.tagged_commands:
             raise self.Abort('unexpected tagged (%s) response: %s' % (tag, args))
 
-        response_status = args[0]
-        if 'OK' == response_status:
-            self.tagged_commands.get(tag).set()
+        response_result = args[0]
+        if 'OK' == response_result:
+            self.tagged_commands.get(tag).ok(Response(response_result, [' '.join(args[1:])]))
             self.tagged_commands[tag] = None # where do we purge None values?
         else:
-            raise self.Abort('response status %s for : %s' % (response_status, args))
+            raise self.Abort('response status %s for : %s' % (response_result, args))
 
     @asyncio.coroutine
     def wait_pending_commands(self):
-        for event in self.tagged_commands.values():
-            yield from event.wait()
+        for command in self.tagged_commands.values():
+            yield from command.wait()
+
+    @asyncio.coroutine
+    def wait(self, state):
+        with (yield from self.state_condition):
+            yield from self.state_condition.wait_for(lambda: self.state == state)
+
+    @change_state
+    @asyncio.coroutine
+    def welcome(self, command_array):
+        if 'PREAUTH' in command_array:
+            self.state = AUTH
+        elif 'OK' in command_array:
+            self.state = NONAUTH
+        else:
+            raise self.Error(command_array)
+        self.send_tagged_command(Command('CAPABILITY', loop=self.loop))
+
+    @change_state
+    @asyncio.coroutine
+    def login(self, user, password):
+        login_cmd = Command('LOGIN', user, password, loop=self.loop)
+        self.send_tagged_command(login_cmd)
+        yield from login_cmd.wait()
+        if 'OK' == login_cmd.response.result:
+            self.state = AUTH
+        return login_cmd.response
 
 
 class IMAP4(object):
+    TIMEOUT_SECONDS = 30
+
     def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop()):
         self.port = port
         self.host = host
         self.protocol = IMAP4ClientProtocol(loop)
         loop.create_task(loop.create_connection(lambda: self.protocol, 'localhost', 12345))
 
+    @asyncio.coroutine
     def login(self, user, password):
-        pass
+        return (yield from asyncio.wait_for(self.protocol.login(user, password), self.TIMEOUT_SECONDS))
 
 
 def int2ap(num):
