@@ -18,13 +18,61 @@ sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s " +
 log.addHandler(sh)
 
 
+class ServerState(object):
+    def __init__(self):
+        self.mailboxes = dict()
+        self.connections = dict()
+
+    def reset_mailboxes(self):
+        self.mailboxes = dict()
+
+    def _add_mail_to_mailboxes(self, to, mail, mailbox):
+        if to not in self.mailboxes:
+            self.mailboxes[to] = dict()
+            self.mailboxes[to][mailbox] = list()
+        m = deepcopy(mail)
+        m.uid = self.nb_mails() + 1
+        self.mailboxes[to][mailbox].append(m)
+        return m.uid
+
+    def nb_mails(self):
+        nb_mails = 0
+        for user in self.mailboxes.keys():
+            for mailbox in self.mailboxes[user].keys():
+                nb_mails += len(self.mailboxes[user][mailbox])
+        return nb_mails
+
+    def login(self, user_login, protocol):
+        if user_login not in self.mailboxes:
+            self.mailboxes[user_login] = dict()
+        if user_login not in self.connections:
+            self.connections[user_login] = protocol
+
+    def select(self, user_login, user_mailbox):
+        if user_mailbox not in self.mailboxes[user_login]:
+            self.mailboxes[user_login][user_mailbox] = list()
+
+    def get_mailbox_messages(self, user_login, user_mailbox):
+        return self.mailboxes[user_login][user_mailbox]
+
+    def imap_receive(self, user, mail, mailbox):
+        uid = self._add_mail_to_mailboxes(user, mail, mailbox)
+        if user in self.connections:
+            self.connections[user].notify_new_mail(uid)
+
+    def get_connection(self, user):
+        return self.connections.get(user)
+
+
 class ImapProtocol(asyncio.Protocol):
-    def __init__(self, mailbox_map):
+    def __init__(self, server_state):
         self.transport = None
-        self.mailbox_map = mailbox_map
+        self.server_state = server_state
         self.user_login = None
         self.user_mailbox = None
         self.by_uid = False
+        self.idle_tag = None
+        self.state_condition = asyncio.Condition()
 
     def connection_made(self, transport):
         self.transport = transport
@@ -32,9 +80,12 @@ class ImapProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         command_array = data.decode().rstrip().split()
-        tag = command_array[0]
-        self.by_uid = False
-        self.exec_command(tag, command_array[1:])
+        if self.idle_tag is None:
+            tag = command_array[0]
+            self.by_uid = False
+            self.exec_command(tag, command_array[1:])
+        else:
+            self.exec_command(None, command_array)
 
     def connection_lost(self, error):
         if error:
@@ -50,9 +101,10 @@ class ImapProtocol(asyncio.Protocol):
             return self.error(tag, 'Command "%s" not implemented' % command)
         getattr(self, command)(tag, *command_array[1:])
 
-    def send_untagged_line(self, response, encoding='utf-8'):
+    def send_untagged_line(self, response, encoding='utf-8', continuation=False):
         log.debug("Sending %s", response)
-        self.transport.write('* {response}\r\n'.format(response=response).encode(encoding))
+        prefix = '+' if continuation else '*'
+        self.transport.write('{prefix} {response}\r\n'.format(response=response, prefix=prefix).encode(encoding))
 
     def send_tagged_line(self, tag, response):
         log.debug("Sending %s", response)
@@ -64,17 +116,14 @@ class ImapProtocol(asyncio.Protocol):
 
     def login(self, tag, *args):
         self.user_login = args[0]
-        if self.user_login not in self.mailbox_map:
-            self.mailbox_map[self.user_login] = dict()
+        self.server_state.login(self.user_login, self)
         self.send_untagged_line('CAPABILITY IMAP4rev1')
         self.send_tagged_line(tag, 'OK LOGIN completed')
 
     def select(self, tag, *args):
         self.user_mailbox = args[0]
-        if self.user_mailbox not in self.mailbox_map[self.user_login]:
-            self.mailbox_map[self.user_login][self.user_mailbox] = list()
-
-        mailbox = self.get_mailbox_messages()
+        self.server_state.select(self.user_login, self.user_mailbox)
+        mailbox = self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
         self.send_untagged_line('FLAGS (\Answered \Flagged \Deleted \Seen \Draft)')
         self.send_untagged_line('OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.')
         self.send_untagged_line('{nb_messages} EXISTS'.format(nb_messages=len(mailbox)))
@@ -91,26 +140,30 @@ class ImapProtocol(asyncio.Protocol):
         self.send_untagged_line('SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(keyword, unkeyword))))
         self.send_tagged_line(tag, 'OK SEARCH completed')
 
+    def idle(self, tag, *args):
+        def begin_idle():
+            log.debug("Entering idle for '%s'", self.user_login)
+            self.idle_tag = tag
+            self.send_untagged_line('idling', continuation=True)
+        asyncio.async(self.notify_all(begin_idle))
+
     def memory_search(self, keyword, unkeyword=False):
-        return [str(msg.uid) for msg in self.get_mailbox_messages()
+        return [str(msg.uid) for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
                 if keyword is None or ((keyword in msg.flags) != unkeyword)]
 
     def store(self, tag, *args):
         uid = int(args[0])  # args = ['12', '+FLAGS', 'FOO']
         flag = args[2]  # only support one flag and do not handle replacement (without + sign)
-        for message in self.get_mailbox_messages():
+        for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
             if message.uid == uid:
                 message.flags.append(flag)
                 self.send_untagged_line('{uid} FETCH (UID {uid} FLAGS ({flags}))'.format(
                     uid=uid, flags=' '.join(message.flags)))
         self.send_tagged_line(tag, 'OK Store completed.')
 
-    def get_mailbox_messages(self):
-        return self.mailbox_map[self.user_login][self.user_mailbox]
-
     def fetch(self, tag, *args):
         uid = int(args[0])
-        for message in self.get_mailbox_messages():
+        for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
             message_body = str(message)
             if message.uid == uid:
                 self.send_untagged_line('{msg_uid} FETCH (UID {msg_uid} RFC822 {{{size}}}\r\n'
@@ -127,49 +180,58 @@ class ImapProtocol(asyncio.Protocol):
     def error(self, tag, msg):
         self.send_tagged_line(tag, 'BAD %s' % msg)
 
+    def notify_new_mail(self, uid):
+        if self.idle_tag:
+            self.send_untagged_line('{uid} EXISTS'.format(uid=uid))
 
-def imap_receive(mail, imap_user=None, mailbox='INBOX', to_list=None):
+    def done(self, _, *args):
+        def end_idle():
+            self.send_tagged_line(self.idle_tag, 'OK IDLE terminated')
+            self.idle_tag = None
+        asyncio.async(self.notify_all(end_idle))
+
+    @asyncio.coroutine
+    def wait(self, idle):
+        with (yield from self.state_condition):
+            yield from self.state_condition.wait_for(lambda: (self.idle_tag is not None) == idle)
+
+    @asyncio.coroutine
+    def notify_all(self, critical_section):
+        with (yield from self.state_condition):
+            critical_section()
+            yield from self.state_condition.notify_all()
+
+
+_SERVER_STATE = ServerState()
+
+
+def imap_receive(mail, imap_user=None, mailbox='INBOX'):
     """
     :param imap_user: str
     :type mail: Mail
     :type mailbox: str
     :type to_list: list
     """
+    global _SERVER_STATE
     if imap_user is not None:
-        _add_mail_to_mailboxes(mail, mailbox, imap_user)
+        _SERVER_STATE.imap_receive(imap_user, mail, mailbox)
     else:
-        to_list = to_list if to_list is not None else mail.to
-        for to in to_list:
-            _add_mail_to_mailboxes(mail, mailbox, to)
+        for to in mail.to:
+            _SERVER_STATE.imap_receive(to, mail, mailbox)
 
 
-def nb_mails_in_mailbox_map(mailbox_map):
-    nb_mails = 0
-    for user in mailbox_map.keys():
-        for mailbox in mailbox_map[user].keys():
-            nb_mails += len(mailbox_map[user][mailbox])
-    return nb_mails
-
-
-_MAILBOX_MAP = dict()
-
-
-def _add_mail_to_mailboxes(mail, mailbox, to):
-    if to not in _MAILBOX_MAP:
-        _MAILBOX_MAP[to] = dict()
-        _MAILBOX_MAP[to][mailbox] = list()
-    m = deepcopy(mail)
-    m.uid = nb_mails_in_mailbox_map(_MAILBOX_MAP) + 1
-    _MAILBOX_MAP[to][mailbox].append(m)
+def get_imapconnection(user):
+    return _SERVER_STATE.get_connection(user)
 
 
 def create_imap_protocol():
-    return ImapProtocol(_MAILBOX_MAP)
+    protocol = ImapProtocol(_SERVER_STATE)
+    return protocol
 
 
 def reset_mailboxes():
-    global _MAILBOX_MAP
-    _MAILBOX_MAP = dict()
+    global _SERVER_STATE
+    _SERVER_STATE.reset_mailboxes()
 
 
 class Mail(object):

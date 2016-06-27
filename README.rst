@@ -1,3 +1,13 @@
+*****
+About
+*****
+
+This library is based on imaplib2_.
+
+.. _imaplib2 https://sourceforge.net/projects/imaplib2/
+from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth.
+
+
 *******
 Develop
 *******

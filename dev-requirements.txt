@@ -1,4 +1,6 @@
 nose
 asynctest
+mock
 pytz
 tzlocal
+imaplib2
