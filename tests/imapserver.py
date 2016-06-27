@@ -11,9 +11,9 @@ import tzlocal
 from copy import deepcopy
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setLevel(logging.INFO)
+sh.setLevel(logging.DEBUG)
 sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s " +
                                   "[%(module)s:%(lineno)d] %(message)s"))
 log.addHandler(sh)
@@ -76,6 +76,7 @@ def critical_section(next_state):
         with (yield from self.state_condition):
             critical_func(self, *args, **kwargs)
             self.state = state
+            log.debug('state -> %s' % state)
             yield from self.state_condition.notify_all()
 
     def decorator(func):
