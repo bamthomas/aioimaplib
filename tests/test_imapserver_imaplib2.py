@@ -5,10 +5,10 @@ from imaplib2 import imaplib2
 from mock import Mock
 from tests import imapserver
 from tests.imapserver import imap_receive, Mail, get_imapconnection
-from tests.test_imapserver import TestImapServer
+from tests.test_imapserver import WithImapServer
 
 
-class TestImapServerIdle(TestImapServer):
+class TestImapServerIdle(WithImapServer):
     @asyncio.coroutine
     def test_idle(self):
         imap_client = yield from self.login_user('user', 'pass', select=True, lib=imaplib2.IMAP4)

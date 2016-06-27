@@ -6,10 +6,10 @@ import imaplib
 import functools
 from tests import imapserver
 from tests.imapserver import Mail, imap_receive, get_imapconnection
-from tests.test_imapserver import TestImapServer
+from tests.test_imapserver import WithImapServer
 
 
-class TestImapServerWithImaplib(TestImapServer):
+class TestImapServerWithImaplib(WithImapServer):
     @asyncio.coroutine
     def test_server_greetings_and_capabilities(self):
         pending_imap = self.loop.run_in_executor(None, functools.partial(imaplib.IMAP4, host='localhost', port=12345))

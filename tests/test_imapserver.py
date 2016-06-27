@@ -39,7 +39,7 @@ class TestMailToString(unittest.TestCase):
         self.assertTrue('Bonjour =C3=A0 vous' in str(mail), msg='"=C3=A0" not found in %s' % str(mail))
 
 
-class TestImapServer(asynctest.TestCase):
+class WithImapServer(asynctest.TestCase):
     def setUp(self):
         self.loop = asyncio.get_event_loop()
         factory = self.loop.create_server(imapserver.create_imap_protocol, 'localhost', 12345)
