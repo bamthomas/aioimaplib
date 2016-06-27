@@ -9,7 +9,8 @@ import pytz
 
 import asynctest
 import functools
-from tests.imapserver import Mail, create_imap_protocol, imap_receive, reset_mailboxes
+from tests import imapserver
+from tests.imapserver import Mail, create_imap_protocol, imap_receive, reset_mailboxes, get_imapconnection
 
 
 class TestMailToString(unittest.TestCase):
@@ -67,6 +68,7 @@ class TestImapServer(asynctest.TestCase):
 
         self.assertEqual('OK', result)
         self.assertEqual([b'LOGIN completed'], data)
+        self.assertEquals(imapserver.AUTH, get_imapconnection('user').state)
 
     @asyncio.coroutine
     def test_select_no_messages_in_mailbox(self):
@@ -77,6 +79,7 @@ class TestImapServer(asynctest.TestCase):
 
         self.assertEqual('OK', result)
         self.assertEqual([b'0'], data)
+        self.assertEquals(imapserver.SELECTED, get_imapconnection('user').state)
 
     @asyncio.coroutine
     def test_select_one_message_in_mailbox(self):
@@ -194,6 +197,16 @@ class TestImapServer(asynctest.TestCase):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'search', None, 'UNKEYWORD FOO')), 1)
         self.assertEqual('OK', result)
         self.assertEqual([b'2'], data)
+
+    @asyncio.coroutine
+    def test_logout(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        result, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.logout)), 1)
+        self.assertEqual('OK', result)
+
+        self.assertEquals(imapserver.LOGOUT, get_imapconnection('user').state)
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False):

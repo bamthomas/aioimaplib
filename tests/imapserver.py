@@ -17,6 +17,8 @@ sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s " +
                                   "[%(module)s:%(lineno)d] %(message)s"))
 log.addHandler(sh)
 
+NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
+
 
 class ServerState(object):
     def __init__(self):
@@ -65,6 +67,7 @@ class ServerState(object):
 
 
 class ImapProtocol(asyncio.Protocol):
+
     def __init__(self, server_state):
         self.transport = None
         self.server_state = server_state
@@ -72,6 +75,7 @@ class ImapProtocol(asyncio.Protocol):
         self.user_mailbox = None
         self.by_uid = False
         self.idle_tag = None
+        self.state = NONAUTH
         self.state_condition = asyncio.Condition()
 
     def connection_made(self, transport):
@@ -119,6 +123,12 @@ class ImapProtocol(asyncio.Protocol):
         self.server_state.login(self.user_login, self)
         self.send_untagged_line('CAPABILITY IMAP4rev1')
         self.send_tagged_line(tag, 'OK LOGIN completed')
+
+    def logout(self, tag, *args):
+        self.server_state.login(self.user_login, self)
+        self.send_tagged_line(tag, 'OK LOGOUT completed')
+        self.transport.close()
+        self.state = LOGOUT
 
     def select(self, tag, *args):
         self.user_mailbox = args[0]
