@@ -8,6 +8,11 @@ This library is based on imaplib2_.
 from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth.
 
 
+**********
+Not tested
+**********
+- PREAUTH
+
 *******
 Develop
 *******
