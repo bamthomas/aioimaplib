@@ -52,9 +52,9 @@ class TestImapServer(asynctest.TestCase):
         asyncio.wait_for(self.server.wait_closed(), 1)
 
     @asyncio.coroutine
-    def login_user(self, login, password, select=False):
+    def login_user(self, login, password, select=False, lib=imaplib.IMAP4):
         imap_client = yield from asyncio.wait_for(
-            self.loop.run_in_executor(None, functools.partial(imaplib.IMAP4, host='localhost', port=12345)), 1)
+            self.loop.run_in_executor(None, functools.partial(lib, host='localhost', port=12345)), 1)
 
         yield from asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.login, login, password)), 1)

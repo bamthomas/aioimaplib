@@ -11,9 +11,9 @@ import tzlocal
 from copy import deepcopy
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 sh = logging.StreamHandler()
-sh.setLevel(logging.DEBUG)
+sh.setLevel(logging.INFO)
 sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s " +
                                   "[%(module)s:%(lineno)d] %(message)s"))
 log.addHandler(sh)
@@ -77,11 +77,11 @@ def critical_section(next_state):
             critical_func(self, *args, **kwargs)
             self.state = state
             log.debug('state -> %s' % state)
-            yield from self.state_condition.notify_all()
+            self.state_condition.notify_all()
 
     def decorator(func):
         def wrapper(self, *args, **kwargs):
-            asyncio.async(execute_section(self, next_state, func, *args, **kwargs))
+            asyncio.wait(asyncio.async(execute_section(self, next_state, func, *args, **kwargs)))
         return update_wrapper(wrapper, func)
     return decorator
 
