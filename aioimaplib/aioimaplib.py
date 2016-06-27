@@ -108,38 +108,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport.write(command_string)
         self.tagged_commands[tag] = command
 
-    def _new_tag(self):
-        tag = self.tagpre + str(self.tagnum)
-        self.tagnum += 1
-        return tag
-
     def capability(self, *args):
         version = args[0].upper()
         if version not in AllowedVersions:
             raise self.Error('server not IMAP4 compliant')
         else:
             self.imap_version = version
-
-    def _untagged_response(self, response_array):
-        command = response_array[0].lower()
-        if not hasattr(self, command):
-            raise self.Error('Command "%s" not implemented' % command)
-        getattr(self, command)(*response_array[1:])
-
-    def _continuation(self, *args):
-        # TODO
-        pass
-
-    def _tagged_response(self, tag, args):
-        if not tag in self.tagged_commands:
-            raise self.Abort('unexpected tagged (%s) response: %s' % (tag, args))
-
-        response_result = args[0]
-        if 'OK' == response_result:
-            self.tagged_commands.get(tag).ok(Response(response_result, [' '.join(args[1:])]))
-            self.tagged_commands[tag] = None # where do we purge None values?
-        else:
-            raise self.Abort('response status %s for : %s' % (response_result, args))
 
     @asyncio.coroutine
     def wait_pending_commands(self):
@@ -171,6 +145,32 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if 'OK' == login_cmd.response.result:
             self.state = AUTH
         return login_cmd.response
+
+    def _untagged_response(self, response_array):
+        command = response_array[0].lower()
+        if not hasattr(self, command):
+            raise self.Error('Command "%s" not implemented' % command)
+        getattr(self, command)(*response_array[1:])
+
+    def _continuation(self, *args):
+        # TODO
+        pass
+
+    def _tagged_response(self, tag, args):
+        if not tag in self.tagged_commands:
+            raise self.Abort('unexpected tagged (%s) response: %s' % (tag, args))
+
+        response_result = args[0]
+        if 'OK' == response_result:
+            self.tagged_commands.get(tag).ok(Response(response_result, [' '.join(args[1:])]))
+            self.tagged_commands[tag] = None # where do we purge None values?
+        else:
+            raise self.Abort('response status %s for : %s' % (response_result, args))
+
+    def _new_tag(self):
+        tag = self.tagpre + str(self.tagnum)
+        self.tagnum += 1
+        return tag
 
 
 class IMAP4(object):
