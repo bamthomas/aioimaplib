@@ -139,7 +139,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def login(self, user, password):
-        login_cmd = Command('LOGIN', user, password, loop=self.loop)
+        login_cmd = Command('LOGIN', user, '"%s"' % password, loop=self.loop)
         self.send_tagged_command(login_cmd)
         yield from login_cmd.wait()
         if 'OK' == login_cmd.response.result:
