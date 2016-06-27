@@ -41,7 +41,6 @@ class TestMailToString(unittest.TestCase):
 
 class WithImapServer(asynctest.TestCase):
     def setUp(self):
-        self.loop = asyncio.get_event_loop()
         factory = self.loop.create_server(imapserver.create_imap_protocol, 'localhost', 12345)
         self.server = self.loop.run_until_complete(factory)
 
