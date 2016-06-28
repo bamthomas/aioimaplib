@@ -10,6 +10,10 @@ def fetch_mail(host, user, password):
     yield from imap_client.wait_hello_from_server()
 
     yield from imap_client.login(user, password)
+
+    res, data = yield from imap_client.select()
+    print('there is %s messages INBOX' % data[0])
+
     yield from imap_client.logout()
 
 
