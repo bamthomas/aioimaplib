@@ -16,7 +16,7 @@ class TestAioimaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_login(self):
-        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop)
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         result, data = yield from imap_client.login('user', 'password')
@@ -41,8 +41,18 @@ class TestAioimaplib(WithImapServer):
         result, data = yield from imap_client.logout()
 
         self.assertEqual('OK', result)
-        self.assertEqual(['LOGOUT completed'], data)
+        self.assertEqual(['BYE Logging out', 'LOGOUT completed'], data)
         self.assertEquals(aioimaplib.LOGOUT, imap_client.protocol.state)
+
+    @asyncio.coroutine
+    def test_select_no_messages(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        result, data = yield from imap_client.select()
+
+        self.assertEqual('OK', result)
+        self.assertEqual(['0'], data)
+        self.assertEquals(aioimaplib.SELECTED, imap_client.protocol.state)
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):

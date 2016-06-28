@@ -13,9 +13,9 @@ from collections import namedtuple
 
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setLevel(logging.INFO)
+sh.setLevel(logging.DEBUG)
 sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
 log.addHandler(sh)
 
@@ -86,9 +86,16 @@ class Command(object):
     def __repr__(self):
         return '%s %s' % (self.name, ' '.join(self.args))
 
-    def ok(self, response):
-        self.response = response
+    def close(self, line, result):
+        self.append_to_resp(line, result=result)
         self.event.set()
+
+    def append_to_resp(self, line, result='Pending'):
+        if self.response is None:
+            self.response = Response(result, [line])
+        else:
+            old = self.response
+            self.response = Response(result, old.text + [line])
 
     @asyncio.coroutine
     def wait(self):
@@ -125,6 +132,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.state_condition = asyncio.Condition()
         self.capabilities = ()
         self.tagged_commands = dict()
+        self.pending_sync_command = None
         self.imap_version = None
 
         self.tagnum = 0
@@ -134,20 +142,20 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport = transport
         self.state = CONNECTED
 
-    def data_received(self, data, encoding='utf-8'):
+    def data_received(self, data):
         log.debug('Received : %s' % data)
         lines = data.rstrip().split(b'\r\n')
         for line in lines:
-            response_array = line.decode(encoding=encoding).split()
+            response_line = line.decode()
             if self.state == CONNECTED:
-                asyncio.async(self.welcome(response_array))
+                asyncio.async(self.welcome(response_line))
             else:
-                if response_array[0] == '*':
-                    self._untagged_response(response_array[1:])
-                elif response_array[0] == '+':
-                    self._continuation(response_array[1:])
+                if response_line.startswith('*'):
+                    self._untagged_response(response_line.replace('* ', ''))
+                elif response_line.startswith('+'):
+                    self._continuation(response_line.replace('+ ', ''))
                 else:
-                    self._tagged_response(response_array[0], response_array[1:])
+                    self._tagged_response(response_line)
 
     def connection_lost(self, exc):
         self.transport.close()
@@ -155,10 +163,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def send_tagged_command(self, command):
         tag = self._new_tag()
+
         command_string = '{tag} {command}\r\n'.format(tag=tag, command=command).encode()
         log.debug('Sending : %s' % command_string)
         self.transport.write(command_string)
+
         self.tagged_commands[tag] = command
+        if Commands.get(command.name).exec == Exec.sync:
+            self.pending_sync_command = command
 
     def capability(self, *args):
         version = args[0].upper()
@@ -180,13 +192,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @change_state
     @asyncio.coroutine
-    def welcome(self, command_array):
-        if 'PREAUTH' in command_array:
+    def welcome(self, command):
+        if 'PREAUTH' in command:
             self.state = AUTH
-        elif 'OK' in command_array:
+        elif 'OK' in command:
             self.state = NONAUTH
         else:
-            raise Error(command_array)
+            raise Error(command)
         self.send_tagged_command(Command('CAPABILITY', loop=self.loop))
 
     @change_state
@@ -215,28 +227,49 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.connection_lost(None)
         return logout_cmd.response
 
+    @change_state
+    @asyncio.coroutine
+    def select(self, mailbox='INBOX'):
+        if self.state not in Commands.get('SELECT').valid_states:
+            raise Error('command SELECT illegal in state %s' % self.state)
+        select_cmd = Command('SELECT', mailbox, loop=self.loop)
+        self.send_tagged_command(select_cmd)
+        yield from select_cmd.wait()
+        if 'OK' == select_cmd.response.result:
+            self.state = SELECTED
+        for line in select_cmd.response.text:
+            if 'EXISTS' in line:
+                return Response(select_cmd.response.result, [line.replace(' EXISTS', '')])
+        return select_cmd.response
+
     def bye(self, *args): pass
 
-    def _untagged_response(self, response_array):
-        command = response_array[0].lower()
-        if not hasattr(self, command):
-            raise Error('Command "%s" not implemented' % command)
-        getattr(self, command)(*response_array[1:])
+    def _untagged_response(self, line):
+        if self.pending_sync_command is not None:
+            self.pending_sync_command.append_to_resp(line)
+        else:
+            command, _, text = line.partition(' ')
+            if not hasattr(self, command.lower()):
+                raise Error('Command "%s" not implemented' % command)
+            getattr(self, command.lower())(*text.split())
 
     def _continuation(self, *args):
         # TODO
         pass
 
-    def _tagged_response(self, tag, args):
-        if not tag in self.tagged_commands:
-            raise Abort('unexpected tagged (%s) response: %s' % (tag, args))
+    def _tagged_response(self, line):
+        tag, _, response = line.partition(' ')
+        if tag not in self.tagged_commands:
+            raise Abort('unexpected tagged (%s) response: %s' % (tag, response))
 
-        response_result = args[0]
-        if 'OK' == response_result:
-            self.tagged_commands.get(tag).ok(Response(response_result, [' '.join(args[1:])]))
-            self.tagged_commands[tag] = None # where do we purge None values?
-        else:
-            raise Abort('response status %s for : %s' % (response_result, args))
+        response_result, _, response_text = response.partition(' ')
+        self.tagged_commands.get(tag).close(response_text, result=response_result)
+        self.tagged_commands[tag] = None  # where do we purge None values?
+        if self.pending_sync_command is not None:
+            self.pending_sync_command = None
+
+        if response_result != 'OK':
+            raise Abort('response status %s for : %s' % (response_result, response_text))
 
     def _new_tag(self):
         tag = self.tagpre + str(self.tagnum)
@@ -269,6 +302,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def logout(self):
         return (yield from asyncio.wait_for(self.protocol.logout(), self.timeout))
+
+    @asyncio.coroutine
+    def select(self, mailbox='INBOX'):
+        return (yield from asyncio.wait_for(self.protocol.select(mailbox), self.timeout))
 
 
 class IMAP4_SSL(IMAP4):
