@@ -76,7 +76,8 @@ Response = namedtuple('Response', 'result text')
 
 
 class Command(object):
-    def __init__(self, name, *args, **kwargs):
+    def __init__(self, name, tag, *args, **kwargs):
+        self.tag = tag
         self.name = name
         self.args = args
         self.response = None
@@ -84,7 +85,7 @@ class Command(object):
         self.kwargs = kwargs
 
     def __repr__(self):
-        return '%s %s' % (self.name, ' '.join(self.args))
+        return '%s %s %s' % (self.tag, self.name, ' '.join(self.args))
 
     def close(self, line, result):
         self.append_to_resp(line, result=result)
@@ -131,7 +132,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.state = STARTED
         self.state_condition = asyncio.Condition()
         self.capabilities = ()
-        self.tagged_commands = dict()
+        self.pending_async_commands = dict()
         self.pending_sync_command = None
         self.imap_version = None
 
@@ -161,19 +162,28 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport.close()
         self.state = LOGOUT
 
-    def send_tagged_command(self, command):
-        tag = self._new_tag()
-
-        command_string = '{tag} {command}\r\n'.format(tag=tag, command=command).encode()
+    def send_command(self, command):
+        command_string = '{command}\r\n'.format(command=command).encode()
         log.debug('Sending : %s' % command_string)
         self.transport.write(command_string)
 
-        self.tagged_commands[tag] = command
         if Commands.get(command.name).exec == Exec.sync:
             self.pending_sync_command = command
+        else:
+            self.pending_async_commands[command.name] = command
 
-    def capability(self, *args):
-        version = args[0].upper()
+    @asyncio.coroutine
+    def capability(self):
+        if self.state not in Commands.get('CAPABILITY').valid_states:
+            raise Error('command CAPABILITY illegal in state %s' % self.state)
+
+        capability_command = Command('CAPABILITY', self._new_tag(), loop=self.loop)
+        self.send_command(capability_command)
+        yield from capability_command.wait()
+        version = None
+        for line in capability_command.response.text:
+            if 'CAPABILITY' in line:
+                version = line.split()[1].upper()
         if version not in AllowedVersions:
             raise Error('server not IMAP4 compliant')
         else:
@@ -181,7 +191,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def wait_pending_commands(self):
-        for command in self.tagged_commands.values():
+        for command in self.pending_async_commands.values():
             yield from command.wait()
 
     @asyncio.coroutine
@@ -199,7 +209,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.state = NONAUTH
         else:
             raise Error(command)
-        self.send_tagged_command(Command('CAPABILITY', loop=self.loop))
+        yield from self.capability()
 
     @change_state
     @asyncio.coroutine
@@ -207,8 +217,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.state not in Commands.get('LOGIN').valid_states:
             raise Error('command LOGIN illegal in state %s' % self.state)
 
-        login_cmd = Command('LOGIN', user, '"%s"' % password, loop=self.loop)
-        self.send_tagged_command(login_cmd)
+        login_cmd = Command('LOGIN', self._new_tag(), user, '"%s"' % password, loop=self.loop)
+        self.send_command(login_cmd)
         yield from login_cmd.wait()
         if 'OK' == login_cmd.response.result:
             self.state = AUTH
@@ -220,8 +230,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.state not in Commands.get('LOGOUT').valid_states:
             raise Error('command LOGOUT illegal in state %s' % self.state)
 
-        logout_cmd = Command('LOGOUT', loop=self.loop)
-        self.send_tagged_command(logout_cmd)
+        logout_cmd = Command('LOGOUT', self._new_tag(), loop=self.loop)
+        self.send_command(logout_cmd)
         yield from logout_cmd.wait()
         if 'OK' == logout_cmd.response.result:
             self.connection_lost(None)
@@ -232,8 +242,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def select(self, mailbox='INBOX'):
         if self.state not in Commands.get('SELECT').valid_states:
             raise Error('command SELECT illegal in state %s' % self.state)
-        select_cmd = Command('SELECT', mailbox, loop=self.loop)
-        self.send_tagged_command(select_cmd)
+        select_cmd = Command('SELECT', self._new_tag(), mailbox, loop=self.loop)
+        self.send_command(select_cmd)
         yield from select_cmd.wait()
         if 'OK' == select_cmd.response.result:
             self.state = SELECTED
@@ -242,16 +252,31 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 return Response(select_cmd.response.result, [line.replace(' EXISTS', '')])
         return select_cmd.response
 
-    def bye(self, *args): pass
+    @asyncio.coroutine
+    def search(self, charset, *criteria):
+        if self.state not in Commands.get('SEARCH').valid_states:
+            raise Error('command SEARCH illegal in state %s' % self.state)
+
+        if charset is not None:
+            search_cmd = Command('SEARCH', self._new_tag(), 'CHARSET', charset, *criteria, loop=self.loop)
+        else:
+            search_cmd = Command('SEARCH', self._new_tag(), *criteria, loop=self.loop)
+        self.send_command(search_cmd)
+        yield from search_cmd.wait()
+        for line in search_cmd.response.text:
+            if 'SEARCH' in line:
+                return Response(search_cmd.response.result, [line.replace('SEARCH ', '')])
+        return search_cmd.response
 
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
         else:
             command, _, text = line.partition(' ')
-            if not hasattr(self, command.lower()):
-                raise Error('Command "%s" not implemented' % command)
-            getattr(self, command.lower())(*text.split())
+            pending_async_command = self.pending_async_commands.get(command)
+            if pending_async_command is None:
+                raise Abort('unexpected untagged (%s) response:' % line)
+            pending_async_command.append_to_resp('%s %s' % (command, text))
 
     def _continuation(self, *args):
         # TODO
@@ -259,22 +284,32 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def _tagged_response(self, line):
         tag, _, response = line.partition(' ')
-        if tag not in self.tagged_commands:
-            raise Abort('unexpected tagged (%s) response: %s' % (tag, response))
+
+        if self.pending_sync_command is not None:
+            if self.pending_sync_command.tag != tag:
+                raise Abort('unexpected tagged response with pending sync command (%s) response: %s' %
+                            (self.pending_sync_command, response))
+            command = self.pending_sync_command
+            self.pending_sync_command = None
+        else:
+            cmds = self._find_pending_async_cmd_by_tag(tag)
+            if len(cmds) == 0:
+                raise Abort('unexpected tagged (%s) response: %s' % (tag, response))
+            elif len(cmds) > 1:
+                raise Error('unconsistent state : two commands have the same tag (%s)' % cmds)
+            command = cmds[0]
+            self.pending_async_commands[command.name] = None
 
         response_result, _, response_text = response.partition(' ')
-        self.tagged_commands.get(tag).close(response_text, result=response_result)
-        self.tagged_commands[tag] = None  # where do we purge None values?
-        if self.pending_sync_command is not None:
-            self.pending_sync_command = None
-
-        if response_result != 'OK':
-            raise Abort('response status %s for : %s' % (response_result, response_text))
+        command.close(response_text, result=response_result)
 
     def _new_tag(self):
         tag = self.tagpre + str(self.tagnum)
         self.tagnum += 1
         return tag
+
+    def _find_pending_async_cmd_by_tag(self, tag):
+        return [c for c in self.pending_async_commands.values() if c is not None and c.tag == tag]
 
 
 class IMAP4(object):
@@ -306,6 +341,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def select(self, mailbox='INBOX'):
         return (yield from asyncio.wait_for(self.protocol.select(mailbox), self.timeout))
+
+    @asyncio.coroutine
+    def search(self, charset, *criteria):
+        return (yield from asyncio.wait_for(self.protocol.search(charset, *criteria), self.timeout))
 
 
 class IMAP4_SSL(IMAP4):
