@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import logging
+from enum import Enum
+
+import re
 
 import functools
 
@@ -20,18 +23,52 @@ IMAP4_SSL_PORT = 993
 STARTED, CONNECTED, NONAUTH, AUTH, SELECTED, LOGOUT = 'STARTED', 'CONNECTED', 'NONAUTH', 'AUTH', 'SELECTED', 'LOGOUT'
 
 AllowedVersions = ('IMAP4REV1', 'IMAP4')
-
-
-def change_state(coro):
-    @functools.wraps(coro)
-    @asyncio.coroutine
-    def wrapper(self, *args, **kargs):
-        with (yield from self.state_condition):
-            res = yield from coro(self, *args, **kargs)
-            log.debug('state -> %s' % self.state)
-            self.state_condition.notify_all()
-            return res
-    return wrapper
+Exec = Enum('Exec', 'sync async')
+Cmd = namedtuple('Cmd', 'name valid_states exec')
+Commands = {
+    'APPEND':       Cmd('APPEND',       (AUTH, SELECTED),           Exec.sync),
+    'AUTHENTICATE': Cmd('AUTHENTICATE', (NONAUTH,),                 Exec.sync),
+    'CAPABILITY':   Cmd('CAPABILITY',   (NONAUTH, AUTH, SELECTED),  Exec.async),
+    'CHECK':        Cmd('CHECK',        (SELECTED,),                Exec.async),
+    'CLOSE':        Cmd('CLOSE',        (SELECTED,),                Exec.sync),
+    'COMPRESS':     Cmd('COMPRESS',     (AUTH,),                    Exec.sync),
+    'COPY':         Cmd('COPY',         (SELECTED,),                Exec.async),
+    'CREATE':       Cmd('CREATE',       (AUTH, SELECTED),           Exec.async),
+    'DELETE':       Cmd('DELETE',       (AUTH, SELECTED),           Exec.async),
+    'DELETEACL':    Cmd('DELETEACL',    (AUTH, SELECTED),           Exec.async),
+    'EXAMINE':      Cmd('EXAMINE',      (AUTH, SELECTED),           Exec.sync),
+    'EXPUNGE':      Cmd('EXPUNGE',      (SELECTED,),                Exec.async),
+    'FETCH':        Cmd('FETCH',        (SELECTED,),                Exec.async),
+    'GETACL':       Cmd('GETACL',       (AUTH, SELECTED),           Exec.async),
+    'GETANNOTATION':Cmd('GETANNOTATION',(AUTH, SELECTED),           Exec.async),
+    'GETQUOTA':     Cmd('GETQUOTA',     (AUTH, SELECTED),           Exec.async),
+    'GETQUOTAROOT': Cmd('GETQUOTAROOT', (AUTH, SELECTED),           Exec.async),
+    'ID':           Cmd('ID',           (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.async),
+    'IDLE':         Cmd('IDLE',         (SELECTED,),                Exec.sync),
+    'LIST':         Cmd('LIST',         (AUTH, SELECTED),           Exec.async),
+    'LOGIN':        Cmd('LOGIN',        (NONAUTH,),                 Exec.sync),
+    'LOGOUT':       Cmd('LOGOUT',       (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.sync),
+    'LSUB':         Cmd('LSUB',         (AUTH, SELECTED),           Exec.async),
+    'MYRIGHTS':     Cmd('MYRIGHTS',     (AUTH, SELECTED),           Exec.async),
+    'NAMESPACE':    Cmd('NAMESPACE',    (AUTH, SELECTED),           Exec.async),
+    'NOOP':         Cmd('NOOP',         (NONAUTH, AUTH, SELECTED),  Exec.async),
+    'PARTIAL':      Cmd('PARTIAL',      (SELECTED,),                Exec.async),
+    'PROXYAUTH':    Cmd('PROXYAUTH',    (AUTH,),                    Exec.sync),
+    'RENAME':       Cmd('RENAME',       (AUTH, SELECTED),           Exec.async),
+    'SEARCH':       Cmd('SEARCH',       (SELECTED,),                Exec.async),
+    'SELECT':       Cmd('SELECT',       (AUTH, SELECTED),           Exec.sync),
+    'SETACL':       Cmd('SETACL',       (AUTH, SELECTED),           Exec.sync),
+    'SETANNOTATION':Cmd('SETANNOTATION',(AUTH, SELECTED),           Exec.async),
+    'SETQUOTA':     Cmd('SETQUOTA',     (AUTH, SELECTED),           Exec.sync),
+    'SORT':         Cmd('SORT',         (SELECTED,),                Exec.async),
+    'STARTTLS':     Cmd('STARTTLS',     (NONAUTH,),                 Exec.sync),
+    'STATUS':       Cmd('STATUS',       (AUTH, SELECTED),           Exec.async),
+    'STORE':        Cmd('STORE',        (SELECTED,),                Exec.async),
+    'SUBSCRIBE':    Cmd('SUBSCRIBE',    (AUTH, SELECTED),           Exec.sync),
+    'THREAD':       Cmd('THREAD',       (SELECTED,),                Exec.async),
+    'UID':          Cmd('UID',          (SELECTED,),                Exec.async),
+    'UNSUBSCRIBE':  Cmd('UNSUBSCRIBE',  (AUTH, SELECTED),           Exec.sync),
+}
 
 
 Response = namedtuple('Response', 'result text')
@@ -57,15 +94,29 @@ class Command(object):
         yield from self.event.wait()
 
 
+class Error(Exception):
+    def __init__(self, reason):
+        super().__init__(reason)
+
+
+class Abort(Error):
+    def __init__(self, reason):
+        super().__init__(reason)
+
+
+def change_state(coro):
+    @functools.wraps(coro)
+    @asyncio.coroutine
+    def wrapper(self, *args, **kargs):
+        with (yield from self.state_condition):
+            res = yield from coro(self, *args, **kargs)
+            log.debug('state -> %s' % self.state)
+            self.state_condition.notify_all()
+            return res
+    return wrapper
+
+
 class IMAP4ClientProtocol(asyncio.Protocol):
-    class Error(Exception):
-        def __init__(self, reason):
-            super().__init__(reason)
-
-    class Abort(Error):
-        def __init__(self, reason):
-            super().__init__(reason)
-
     def __init__(self, loop):
         self.loop = loop
         self.transport = None
@@ -111,7 +162,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def capability(self, *args):
         version = args[0].upper()
         if version not in AllowedVersions:
-            raise self.Error('server not IMAP4 compliant')
+            raise Error('server not IMAP4 compliant')
         else:
             self.imap_version = version
 
@@ -121,9 +172,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             yield from command.wait()
 
     @asyncio.coroutine
-    def wait(self, state):
+    def wait(self, state_regexp):
+        state_re = re.compile(state_regexp)
         with (yield from self.state_condition):
-            yield from self.state_condition.wait_for(lambda: self.state == state)
+            yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
 
     @change_state
     @asyncio.coroutine
@@ -133,12 +185,15 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         elif 'OK' in command_array:
             self.state = NONAUTH
         else:
-            raise self.Error(command_array)
+            raise Error(command_array)
         self.send_tagged_command(Command('CAPABILITY', loop=self.loop))
 
     @change_state
     @asyncio.coroutine
     def login(self, user, password):
+        if self.state not in Commands.get('LOGIN').valid_states:
+            raise Error('command LOGIN illegal in state %s' % self.state)
+
         login_cmd = Command('LOGIN', user, '"%s"' % password, loop=self.loop)
         self.send_tagged_command(login_cmd)
         yield from login_cmd.wait()
@@ -149,7 +204,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def _untagged_response(self, response_array):
         command = response_array[0].lower()
         if not hasattr(self, command):
-            raise self.Error('Command "%s" not implemented' % command)
+            raise Error('Command "%s" not implemented' % command)
         getattr(self, command)(*response_array[1:])
 
     def _continuation(self, *args):
@@ -158,14 +213,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def _tagged_response(self, tag, args):
         if not tag in self.tagged_commands:
-            raise self.Abort('unexpected tagged (%s) response: %s' % (tag, args))
+            raise Abort('unexpected tagged (%s) response: %s' % (tag, args))
 
         response_result = args[0]
         if 'OK' == response_result:
             self.tagged_commands.get(tag).ok(Response(response_result, [' '.join(args[1:])]))
             self.tagged_commands[tag] = None # where do we purge None values?
         else:
-            raise self.Abort('response status %s for : %s' % (response_result, args))
+            raise Abort('response status %s for : %s' % (response_result, args))
 
     def _new_tag(self):
         tag = self.tagpre + str(self.tagnum)
@@ -181,6 +236,10 @@ class IMAP4(object):
         self.host = host
         self.protocol = IMAP4ClientProtocol(loop)
         loop.create_task(loop.create_connection(lambda: self.protocol, 'localhost', 12345))
+
+    @asyncio.coroutine
+    def wait_hello_from_server(self):
+        yield from asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.TIMEOUT_SECONDS)
 
     @asyncio.coroutine
     def login(self, user, password):

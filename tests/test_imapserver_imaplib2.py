@@ -21,3 +21,13 @@ class TestImapServerIdle(WithImapServer):
         yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.SELECTED), 1)
         yield from asyncio.sleep(0.1) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
         idle_callback.assert_called_once()
+
+    @asyncio.coroutine
+    def test_login_twice(self):
+        with self.assertRaises(imaplib2.IMAP4.error) as expected:
+            imap_client = yield from self.login_user('user', 'pass', lib=imaplib2.IMAP4)
+
+            yield from asyncio.wait_for(
+                self.loop.run_in_executor(None, functools.partial(imap_client.login, 'user', 'pass')), 1)
+
+        self.assertEqual(expected.exception.args, ('command LOGIN illegal in state AUTH',))
