@@ -8,10 +8,11 @@ This library is based on imaplib2_.
 from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth.
 
 
-**********
-Not tested
-**********
+***************
+Not unit tested
+***************
 - PREAUTH
+- SSL/STARTTLS
 
 *******
 Develop
@@ -19,8 +20,8 @@ Develop
 
 To develop, just run::
 
-	virtualenv --python=python3.4 venv
-  source venv/bin/activate	
-	python setup.py develop
-	pip install -r dev-requirements.txt
+    virtualenv --python=python3.4 venv
+    source venv/bin/activate
+    python setup.py develop
+    pip install -r dev-requirements.txt
 

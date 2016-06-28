@@ -201,6 +201,21 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.state = AUTH
         return login_cmd.response
 
+    @change_state
+    @asyncio.coroutine
+    def logout(self):
+        if self.state not in Commands.get('LOGOUT').valid_states:
+            raise Error('command LOGOUT illegal in state %s' % self.state)
+
+        logout_cmd = Command('LOGOUT', loop=self.loop)
+        self.send_tagged_command(logout_cmd)
+        yield from logout_cmd.wait()
+        if 'OK' == logout_cmd.response.result:
+            self.connection_lost(None)
+        return logout_cmd.response
+
+    def bye(self, *args): pass
+
     def _untagged_response(self, response_array):
         command = response_array[0].lower()
         if not hasattr(self, command):
@@ -231,19 +246,24 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 class IMAP4(object):
     TIMEOUT_SECONDS = 30
 
-    def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop()):
+    def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS):
+        self.timeout = timeout
         self.port = port
         self.host = host
         self.protocol = IMAP4ClientProtocol(loop)
-        loop.create_task(loop.create_connection(lambda: self.protocol, 'localhost', 12345))
+        loop.create_task(loop.create_connection(lambda: self.protocol, host, port))
 
     @asyncio.coroutine
     def wait_hello_from_server(self):
-        yield from asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.TIMEOUT_SECONDS)
+        yield from asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.timeout)
 
     @asyncio.coroutine
     def login(self, user, password):
-        return (yield from asyncio.wait_for(self.protocol.login(user, password), self.TIMEOUT_SECONDS))
+        return (yield from asyncio.wait_for(self.protocol.login(user, password), self.timeout))
+
+    @asyncio.coroutine
+    def logout(self):
+        return (yield from asyncio.wait_for(self.protocol.logout(), self.timeout))
 
 
 def int2ap(num):

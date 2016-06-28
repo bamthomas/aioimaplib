@@ -143,6 +143,7 @@ class ImapProtocol(asyncio.Protocol):
     @critical_section(next_state=LOGOUT)
     def logout(self, tag, *args):
         self.server_state.login(self.user_login, self)
+        self.send_untagged_line('BYE Logging out')
         self.send_tagged_line(tag, 'OK LOGOUT completed')
         self.transport.close()
 

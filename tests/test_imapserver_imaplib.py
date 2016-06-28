@@ -161,8 +161,8 @@ class TestImapServerWithImaplib(WithImapServer):
     def test_logout(self):
         imap_client = yield from self.login_user('user', 'pass')
 
-        result, data = yield from asyncio.wait_for(
-            self.loop.run_in_executor(None, functools.partial(imap_client.logout)), 1)
-        self.assertEqual('OK', result)
+        result, data = yield from asyncio.wait_for(self.loop.run_in_executor(None, imap_client.logout), 1)
 
+        self.assertEqual('BYE', result) # uhh ?
+        self.assertEqual([b'Logging out'], data)
         self.assertEquals(imapserver.LOGOUT, get_imapconnection('user').state)

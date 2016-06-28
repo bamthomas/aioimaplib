@@ -35,8 +35,18 @@ class TestAioimaplib(WithImapServer):
         self.assertEqual(expected.exception.args, ('command LOGIN illegal in state AUTH',))
 
     @asyncio.coroutine
+    def test_logout(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        result, data = yield from imap_client.logout()
+
+        self.assertEqual('OK', result)
+        self.assertEqual(['LOGOUT completed'], data)
+        self.assertEquals(aioimaplib.LOGOUT, imap_client.protocol.state)
+
+    @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
-        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop)
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         yield from imap_client.login('user', 'password')
