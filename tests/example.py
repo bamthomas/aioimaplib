@@ -6,7 +6,7 @@ from aioimaplib import aioimaplib
 
 @asyncio.coroutine
 def fetch_mail(host, user, password):
-    imap_client = aioimaplib.IMAP4(host=host)
+    imap_client = aioimaplib.IMAP4_SSL(host=host)
     yield from imap_client.wait_hello_from_server()
 
     yield from imap_client.login(user, password)

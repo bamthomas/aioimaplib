@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import logging
+import ssl
 from enum import Enum
 
 import re
@@ -250,6 +251,10 @@ class IMAP4(object):
         self.timeout = timeout
         self.port = port
         self.host = host
+        self.protocol = None
+        self.create_client(host, port, loop)
+
+    def create_client(self, host, port, loop):
         self.protocol = IMAP4ClientProtocol(loop)
         loop.create_task(loop.create_connection(lambda: self.protocol, host, port))
 
@@ -266,11 +271,22 @@ class IMAP4(object):
         return (yield from asyncio.wait_for(self.protocol.logout(), self.timeout))
 
 
+class IMAP4_SSL(IMAP4):
+    def __init__(self, host='localhost', port=IMAP4_SSL_PORT, loop=asyncio.get_event_loop(),
+                 timeout=IMAP4.TIMEOUT_SECONDS):
+        super().__init__(host, port, loop, timeout)
+
+    def create_client(self, host, port, loop):
+        self.protocol = IMAP4ClientProtocol(loop)
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        loop.create_task(loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
+
+
 def int2ap(num):
     """Convert integer to A-P string representation."""
-    val = ''; AP = 'ABCDEFGHIJKLMNOP'
+    val = ''; ap = 'ABCDEFGHIJKLMNOP'
     num = int(abs(num))
     while num:
         num, mod = divmod(num, 16)
-        val += AP[mod:mod + 1]
+        val += ap[mod:mod + 1]
     return val
