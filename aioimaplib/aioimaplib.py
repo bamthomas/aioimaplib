@@ -76,16 +76,16 @@ Response = namedtuple('Response', 'result text')
 
 
 class Command(object):
-    def __init__(self, name, tag, *args, **kwargs):
+    def __init__(self, name, tag, *args, prefix='', loop=asyncio.get_event_loop()):
         self.tag = tag
         self.name = name
         self.args = args
         self.response = None
-        self.event = asyncio.Event(loop=kwargs.pop('loop', asyncio.get_event_loop()))
-        self.kwargs = kwargs
+        self.prefix = prefix
+        self.event = asyncio.Event(loop=loop)
 
     def __repr__(self):
-        return '%s %s %s' % (self.tag, self.name, ' '.join(self.args))
+        return '%s %s%s %s' % (self.tag, self.prefix, self.name, ' '.join(self.args))
 
     def close(self, line, result):
         self.append_to_resp(line, result=result)
@@ -253,14 +253,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return select_cmd.response
 
     @asyncio.coroutine
-    def search(self, charset, *criteria):
+    def search(self, *criteria, charset='utf-8', by_uid=False):
         if self.state not in Commands.get('SEARCH').valid_states:
             raise Error('command SEARCH illegal in state %s' % self.state)
 
-        if charset is not None:
-            search_cmd = Command('SEARCH', self._new_tag(), 'CHARSET', charset, *criteria, loop=self.loop)
-        else:
-            search_cmd = Command('SEARCH', self._new_tag(), *criteria, loop=self.loop)
+        args = ('CHARSET', charset) + criteria if charset is not None else criteria
+        prefix = 'UID ' if by_uid else ''
+        search_cmd = Command('SEARCH', self._new_tag(), *args, prefix=prefix, loop=self.loop)
+
         self.send_command(search_cmd)
         yield from search_cmd.wait()
         for line in search_cmd.response.text:
@@ -268,12 +268,20 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 return Response(search_cmd.response.result, [line.replace('SEARCH ', '')])
         return search_cmd.response
 
+    @asyncio.coroutine
+    def uid(self, command, *criteria):
+        if self.state not in Commands.get('UID').valid_states:
+            raise Error('command UID illegal in state %s' % self.state)
+
+        if command.upper() not in {'COPY', 'FETCH', 'STORE'}:
+            raise Abort('command UID only possible with COPY, FETCH or STORE (was %s)' % command)
+
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
         else:
             command, _, text = line.partition(' ')
-            pending_async_command = self.pending_async_commands.get(command)
+            pending_async_command = self.pending_async_commands.get(command.upper())
             if pending_async_command is None:
                 raise Abort('unexpected untagged (%s) response:' % line)
             pending_async_command.append_to_resp('%s %s' % (command, text))
@@ -343,8 +351,14 @@ class IMAP4(object):
         return (yield from asyncio.wait_for(self.protocol.select(mailbox), self.timeout))
 
     @asyncio.coroutine
-    def search(self, charset, *criteria):
-        return (yield from asyncio.wait_for(self.protocol.search(charset, *criteria), self.timeout))
+    def search(self, *criteria, charset='utf-8'):
+        return (yield from asyncio.wait_for(self.protocol.search(*criteria, charset=charset), self.timeout))
+
+    def uid_search(self, *criteria, charset='utf-8'):
+        return (yield from asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout))
+
+    def uid(self, command, *criteria):
+        return (yield from asyncio.wait_for(self.protocol.uid(command, *criteria), self.timeout))
 
 
 class IMAP4_SSL(IMAP4):

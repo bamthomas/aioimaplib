@@ -2,6 +2,7 @@
 import asyncio
 
 from aioimaplib import aioimaplib
+from aioimaplib.aioimaplib import Commands
 from tests.imapserver import imap_receive, Mail
 from tests.test_imapserver import WithImapServer
 
@@ -60,10 +61,31 @@ class TestAioimaplib(WithImapServer):
         imap_receive(Mail(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        result, data = yield from imap_client.search('utf-8', 'ALL')
+        result, data = yield from imap_client.search('ALL')
 
         self.assertEqual('OK', result)
         self.assertEqual(['1 2'], data)
+
+    @asyncio.coroutine
+    def test_uid_with_illegal_command(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        for command in {'COPY', 'FETCH', 'STORE'}.symmetric_difference(Commands.keys()):
+            with self.assertRaises(aioimaplib.Abort) as expected:
+                yield from imap_client.uid(command)
+
+            self.assertEqual(expected.exception.args,
+                             ('command UID only possible with COPY, FETCH or STORE (was %s)' % command, ))
+
+    @asyncio.coroutine
+    def test_search_three_messages_by_uid(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_receive(Mail(['user'])) # id=1 uid=1
+        imap_receive(Mail(['user']), mailbox='OTHER_MAILBOX') # id=1 uid=2
+        imap_receive(Mail(['user'])) # id=2 uid=3
+
+        self.assertEqual(('OK', ['1 3']), (yield from imap_client.uid_search('ALL')))
+        self.assertEqual(('OK', ['1 2']), (yield from imap_client.search('ALL')))
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):

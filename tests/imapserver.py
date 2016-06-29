@@ -194,7 +194,8 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK SEARCH completed')
 
     def memory_search(self, keyword, unkeyword=False):
-        return [str(msg.uid) for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
+        return [str(msg.uid if self.by_uid else msg.id)
+                for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
                 if keyword is None or ((keyword in msg.flags) != unkeyword)]
 
     def store(self, tag, *args):
