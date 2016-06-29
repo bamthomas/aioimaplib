@@ -77,13 +77,21 @@ Response = namedtuple('Response', 'result text')
 
 
 class Command(object):
-    def __init__(self, name, tag, *args, prefix='', loop=asyncio.get_event_loop()):
-        self.tag = tag
+    def __init__(self, name, *args):
         self.name = name
         self.args = args
-        self.response = None
+
+    def __repr__(self):
+        return '%s %s' % (self.name, ' '.join(self.args))
+
+
+class TaggedCommand(Command):
+    def __init__(self, name, tag, *args, prefix='', loop=asyncio.get_event_loop()):
+        super().__init__(name, *args)
         self.prefix = prefix
+        self.response = None
         self.event = asyncio.Event(loop=loop)
+        self.tag = tag
 
     def __repr__(self):
         return '%s %s%s %s' % (self.tag, self.prefix, self.name, ' '.join(self.args))
@@ -127,7 +135,7 @@ def change_state(coro):
 
 # cf https://tools.ietf.org/html/rfc3501#section-9
 # untagged responses types
-message_data_re = re.compile(rb'\* [0-9]+ [EXPUNGE|FETCH]')
+message_data_re = re.compile(rb'\* [0-9]+ ((EXPUNGE)|(FETCH))')
 resp_state_re = re.compile(rb'OK|NO|BAD .*')
 literal_re = re.compile(rb'.*{(?P<size>\d+)}$')
 
@@ -184,7 +192,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.state not in Commands.get('CAPABILITY').valid_states:
             raise Error('command CAPABILITY illegal in state %s' % self.state)
 
-        capability_command = Command('CAPABILITY', self._new_tag(), loop=self.loop)
+        capability_command = TaggedCommand('CAPABILITY', self._new_tag(), loop=self.loop)
         self.send_command(capability_command)
         yield from capability_command.wait()
         version = None
@@ -224,7 +232,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.state not in Commands.get('LOGIN').valid_states:
             raise Error('command LOGIN illegal in state %s' % self.state)
 
-        login_cmd = Command('LOGIN', self._new_tag(), user, '"%s"' % password, loop=self.loop)
+        login_cmd = TaggedCommand('LOGIN', self._new_tag(), user, '"%s"' % password, loop=self.loop)
         self.send_command(login_cmd)
         yield from login_cmd.wait()
         if 'OK' == login_cmd.response.result:
@@ -237,7 +245,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.state not in Commands.get('LOGOUT').valid_states:
             raise Error('command LOGOUT illegal in state %s' % self.state)
 
-        logout_cmd = Command('LOGOUT', self._new_tag(), loop=self.loop)
+        logout_cmd = TaggedCommand('LOGOUT', self._new_tag(), loop=self.loop)
         self.send_command(logout_cmd)
         yield from logout_cmd.wait()
         if 'OK' == logout_cmd.response.result:
@@ -249,7 +257,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def select(self, mailbox='INBOX'):
         if self.state not in Commands.get('SELECT').valid_states:
             raise Error('command SELECT illegal in state %s' % self.state)
-        select_cmd = Command('SELECT', self._new_tag(), mailbox, loop=self.loop)
+        select_cmd = TaggedCommand('SELECT', self._new_tag(), mailbox, loop=self.loop)
         self.send_command(select_cmd)
         yield from select_cmd.wait()
         if 'OK' == select_cmd.response.result:
@@ -266,7 +274,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
         prefix = 'UID ' if by_uid else ''
-        search_cmd = Command('SEARCH', self._new_tag(), *args, prefix=prefix, loop=self.loop)
+        search_cmd = TaggedCommand('SEARCH', self._new_tag(), *args, prefix=prefix, loop=self.loop)
 
         self.send_command(search_cmd)
         yield from search_cmd.wait()
@@ -280,8 +288,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.state not in Commands.get('FETCH').valid_states:
             raise Error('command FETCH illegal in state %s' % self.state)
 
-        fetch_cmd = Command('FETCH', self._new_tag(), message_set, message_parts,
-                            prefix='UID ' if by_uid else '', loop=self.loop)
+        fetch_cmd = TaggedCommand('FETCH', self._new_tag(), message_set, message_parts,
+                                  prefix='UID ' if by_uid else '', loop=self.loop)
         self.send_command(fetch_cmd)
         yield from fetch_cmd.wait()
         head, _, tail = fetch_cmd.response.text[0].partition(CRLF.decode())
@@ -298,9 +306,21 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if command.upper() == 'FETCH':
             return self.fetch(criteria[0], criteria[1], by_uid=True)
 
+    @asyncio.coroutine
+    def idle(self):
+        if self.state not in Commands.get('IDLE').valid_states:
+            raise Error('command IDLE illegal in state %s' % self.state)
+
+        idle_cmd = TaggedCommand('IDLE', self._new_tag(), loop=self.loop)
+        self.send_command(idle_cmd)
+        yield from idle_cmd.wait()
+        return idle_cmd.response
+
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
+            if self.pending_sync_command.name == 'IDLE':
+                self.send_command(Command('DONE'))
         else:
             if 'FETCH' in line:
                 _, _, line = line.partition(' ')
@@ -311,7 +331,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             pending_async_command.append_to_resp('%s %s' % (command, text))
 
     def _continuation(self, *args):
-        # TODO
+        # TODO What ?
         pass
 
     def _tagged_response(self, line):
@@ -350,7 +370,7 @@ def _split_responses(data):
         msg_size = literal_re.match(head).group('size')
         # we want to cut -----------------------
         #                              ...here |
-        #                                      v
+        #                               so 4+1 v
         # b'* 3 FETCH (UID 3 RFC822 {4}\r\nmail)\r\n...
         end_message_index_with_parenthesis = int(msg_size) + 1
 
@@ -404,6 +424,11 @@ class IMAP4(object):
 
     def fetch(self, message_set, message_parts):
         return (yield from asyncio.wait_for(self.protocol.fetch(message_set, message_parts), self.timeout))
+
+    def idle(self, callback):
+        future = asyncio.async(self.protocol.idle(), loop=self.protocol.loop)
+        future.add_done_callback(callback)
+        return future
 
 
 class IMAP4_SSL(IMAP4):

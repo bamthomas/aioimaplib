@@ -5,7 +5,9 @@ import unittest
 
 from aioimaplib import aioimaplib
 from aioimaplib.aioimaplib import Commands, _split_responses
-from tests.imapserver import imap_receive, Mail
+from mock import Mock
+from tests import imapserver
+from tests.imapserver import imap_receive, Mail, get_imapconnection
 from tests.test_imapserver import WithImapServer
 
 
@@ -137,6 +139,19 @@ class TestAioimaplib(WithImapServer):
 
         self.assertEqual('OK', result)
         self.assertEqual(['FETCH (UID 1 RFC822 {368}', str(mail).encode()], data)
+
+    @asyncio.coroutine
+    def test_idle(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        def idle_callback(fut):
+            print('**************')
+
+        future = imap_client.idle(idle_callback)
+        yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.IDLE), 1)
+        imap_receive(Mail(to=['user'], mail_from='me', subject='hello'))
+
+        self.assertEquals(('OK', ['1 EXISTS', 'IDLE terminated']), (yield from asyncio.wait_for(future, 1)))
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
