@@ -128,6 +128,17 @@ class TestAioimaplib(WithImapServer):
         self.assertEqual('hello', emaillib_decoded_msg['Subject'])
 
     @asyncio.coroutine
+    def test_fetch_by_uid(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        mail = Mail(['user'], mail_from='me', subject='hello', content='pleased to meet you, wont you guess my name ?')
+        imap_receive(mail)
+
+        result, data = yield from imap_client.uid('fetch', '1', '(RFC822)')
+
+        self.assertEqual('OK', result)
+        self.assertEqual(['FETCH (UID 1 RFC822 {368}', str(mail).encode()], data)
+
+    @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)

@@ -276,11 +276,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return search_cmd.response
 
     @asyncio.coroutine
-    def fetch(self, message_set, message_parts):
+    def fetch(self, message_set, message_parts, by_uid=False):
         if self.state not in Commands.get('FETCH').valid_states:
             raise Error('command FETCH illegal in state %s' % self.state)
 
-        fetch_cmd = Command('FETCH', self._new_tag(), message_set, message_parts, loop=self.loop)
+        fetch_cmd = Command('FETCH', self._new_tag(), message_set, message_parts,
+                            prefix='UID ' if by_uid else '', loop=self.loop)
         self.send_command(fetch_cmd)
         yield from fetch_cmd.wait()
         head, _, tail = fetch_cmd.response.text[0].partition(CRLF.decode())
@@ -293,6 +294,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         if command.upper() not in {'COPY', 'FETCH', 'STORE'}:
             raise Abort('command UID only possible with COPY, FETCH or STORE (was %s)' % command)
+
+        if command.upper() == 'FETCH':
+            return self.fetch(criteria[0], criteria[1], by_uid=True)
 
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
