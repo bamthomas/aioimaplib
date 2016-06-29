@@ -93,7 +93,7 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'search', None, 'ALL')), 1)
 
         self.assertEqual('OK', result)
-        self.assertEqual([b'2'], data)
+        self.assertEqual([b'1'], data)
 
     @asyncio.coroutine
     def test_fetch_one_messages_by_uid(self):

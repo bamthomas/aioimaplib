@@ -11,6 +11,7 @@ import functools
 import asynctest
 import pytz
 from tests import imapserver
+from tests.imapserver import ServerState, Mail
 
 
 class TestMailToString(unittest.TestCase):
@@ -37,6 +38,29 @@ class TestMailToString(unittest.TestCase):
         mail = imapserver.Mail(['user'], content='Bonjour à vous', content_transfer_encoding='quoted-printable')
 
         self.assertTrue('Bonjour =C3=A0 vous' in str(mail), msg='"=C3=A0" not found in %s' % str(mail))
+
+
+class TestServerState(unittest.TestCase):
+    def test_max_ids_with_no_user(self):
+        self.assertEquals(0, ServerState().max_uid('user'))
+        self.assertEquals(0, ServerState().max_id('user', 'INBOX'))
+
+    def test_max_ids_one_user_one_mail(self):
+        server_state = ServerState()
+        server_state.add_mail('user', Mail(['user']))
+
+        self.assertEquals(1, server_state.max_id('user', 'INBOX'))
+        self.assertEquals(1, server_state.max_uid('user'))
+        self.assertEquals(0, server_state.max_id('user', 'OTHER_MAILBOX'))
+
+    def test_max_ids_one_user_two_mails_one_per_mailbox(self):
+        server_state = ServerState()
+        server_state.add_mail('user', Mail(['user']), mailbox='INBOX')
+        server_state.add_mail('user', Mail(['user']), mailbox='OUTBOX')
+
+        self.assertEquals(1, server_state.max_id('user', 'INBOX'))
+        self.assertEquals(1, server_state.max_id('user', 'OUTBOX'))
+        self.assertEquals(2, server_state.max_uid('user'))
 
 
 class WithImapServer(asynctest.TestCase):

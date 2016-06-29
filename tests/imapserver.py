@@ -32,21 +32,28 @@ class ServerState(object):
             connection.transport.close()
         self.connections = dict()
 
-    def _add_mail_to_mailboxes(self, to, mail, mailbox):
+    def add_mail(self, to, mail, mailbox='INBOX'):
         if to not in self.mailboxes:
             self.mailboxes[to] = dict()
+        if mailbox not in self.mailboxes[to]:
             self.mailboxes[to][mailbox] = list()
         m = deepcopy(mail)
-        m.uid = self.nb_mails() + 1
+        m.id = self.max_id(to, mailbox) + 1
+        m.uid = self.max_uid(to) + 1
         self.mailboxes[to][mailbox].append(m)
         return m.uid
 
-    def nb_mails(self):
-        nb_mails = 0
-        for user in self.mailboxes.keys():
-            for mailbox in self.mailboxes[user].keys():
-                nb_mails += len(self.mailboxes[user][mailbox])
-        return nb_mails
+    def max_uid(self, user):
+        if user not in self.mailboxes: return 0
+        return max(map(lambda mailbox: max(mailbox, default=Mail(user), key=lambda msg: msg.uid).uid,
+                       self.mailboxes[user].values()))
+
+    def max_id(self, user, mailbox):
+        if user not in self.mailboxes or \
+                mailbox not in self.mailboxes[user] or \
+                len(self.mailboxes[user][mailbox]) == 0:
+            return 0
+        return max(self.mailboxes[user][mailbox], key=lambda msg: msg.id).id
 
     def login(self, user_login, protocol):
         if user_login not in self.mailboxes:
@@ -62,7 +69,7 @@ class ServerState(object):
         return self.mailboxes[user_login][user_mailbox]
 
     def imap_receive(self, user, mail, mailbox):
-        uid = self._add_mail_to_mailboxes(user, mail, mailbox)
+        uid = self.add_mail(user, mail, mailbox)
         if user in self.connections:
             self.connections[user].notify_new_mail(uid)
 
@@ -82,7 +89,9 @@ def critical_section(next_state):
     def decorator(func):
         def wrapper(self, *args, **kwargs):
             asyncio.wait(asyncio.async(execute_section(self, next_state, func, *args, **kwargs)))
+
         return update_wrapper(wrapper, func)
+
     return decorator
 
 
@@ -279,6 +288,7 @@ class Mail(object):
         self.content = content
         self.message_id = str(uuid.uuid1())
         self.uid = 0
+        self.id = 0
         self.flags = []
         self.to = to
         self.subject = subject
@@ -307,7 +317,8 @@ class Mail(object):
                                         date=self.date.strftime('%a, %d %b %Y %H:%M:%S %z'), subject=self.get_subject(),
                                         content=content, charset=self.encoding,
                                         content_transfer_encoding=self.content_transfer_encoding,
-                                        reply_to_header='' if self.in_reply_to is None else 'In-Reply-To: <%s>\r\n' % self.in_reply_to)
+                                        reply_to_header='' if self.in_reply_to is None else 'In-Reply-To: <%s>\r\n' %
+                                                                                            self.in_reply_to)
 
     def get_subject(self):
         try:
