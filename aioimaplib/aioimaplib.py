@@ -22,6 +22,7 @@ log.addHandler(sh)
 IMAP4_PORT = 143
 IMAP4_SSL_PORT = 993
 STARTED, CONNECTED, NONAUTH, AUTH, SELECTED, LOGOUT = 'STARTED', 'CONNECTED', 'NONAUTH', 'AUTH', 'SELECTED', 'LOGOUT'
+CRLF = b'\r\n'
 
 AllowedVersions = ('IMAP4REV1', 'IMAP4')
 Exec = Enum('Exec', 'sync async')
@@ -124,6 +125,12 @@ def change_state(coro):
             return res
     return wrapper
 
+# cf https://tools.ietf.org/html/rfc3501#section-9
+# untagged responses types
+message_data_re = re.compile(rb'\* [0-9]+ [EXPUNGE|FETCH]')
+resp_state_re = re.compile(rb'OK|NO|BAD .*')
+literal_re = re.compile(rb'.*{(?P<size>\d+)}$')
+
 
 class IMAP4ClientProtocol(asyncio.Protocol):
     def __init__(self, loop):
@@ -145,7 +152,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         log.debug('Received : %s' % data)
-        lines = data.rstrip().split(b'\r\n')
+        lines = _split_responses(data)
         for line in lines:
             response_line = line.decode()
             if self.state == CONNECTED:
@@ -269,6 +276,17 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return search_cmd.response
 
     @asyncio.coroutine
+    def fetch(self, message_set, message_parts):
+        if self.state not in Commands.get('FETCH').valid_states:
+            raise Error('command FETCH illegal in state %s' % self.state)
+
+        fetch_cmd = Command('FETCH', self._new_tag(), message_set, message_parts, loop=self.loop)
+        self.send_command(fetch_cmd)
+        yield from fetch_cmd.wait()
+        head, _, tail = fetch_cmd.response.text[0].partition(CRLF.decode())
+        return Response(fetch_cmd.response.result, [head, tail.rstrip(')').encode()])
+
+    @asyncio.coroutine
     def uid(self, command, *criteria):
         if self.state not in Commands.get('UID').valid_states:
             raise Error('command UID illegal in state %s' % self.state)
@@ -280,6 +298,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
         else:
+            if 'FETCH' in line:
+                _, _, line = line.partition(' ')
             command, _, text = line.partition(' ')
             pending_async_command = self.pending_async_commands.get(command.upper())
             if pending_async_command is None:
@@ -318,6 +338,24 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def _find_pending_async_cmd_by_tag(self, tag):
         return [c for c in self.pending_async_commands.values() if c is not None and c.tag == tag]
+
+
+def _split_responses(data):
+    if message_data_re.match(data):
+        head, _, tail = data.partition(CRLF)
+        msg_size = literal_re.match(head).group('size')
+        # we want to cut -----------------------
+        #                              ...here |
+        #                                      v
+        # b'* 3 FETCH (UID 3 RFC822 {4}\r\nmail)\r\n...
+        end_message_index_with_parenthesis = int(msg_size) + 1
+
+        fetch_line = head + CRLF + tail[0:end_message_index_with_parenthesis]
+        after_fetch = tail[end_message_index_with_parenthesis:].strip()
+
+        return [fetch_line] + _split_responses(after_fetch)
+    else:
+        return data.strip().splitlines()
 
 
 class IMAP4(object):
@@ -359,6 +397,9 @@ class IMAP4(object):
 
     def uid(self, command, *criteria):
         return (yield from asyncio.wait_for(self.protocol.uid(command, *criteria), self.timeout))
+
+    def fetch(self, message_set, message_parts):
+        return (yield from asyncio.wait_for(self.protocol.fetch(message_set, message_parts), self.timeout))
 
 
 class IMAP4_SSL(IMAP4):

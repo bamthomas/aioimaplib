@@ -1,10 +1,37 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import email
+import unittest
 
 from aioimaplib import aioimaplib
-from aioimaplib.aioimaplib import Commands
+from aioimaplib.aioimaplib import Commands, _split_responses
 from tests.imapserver import imap_receive, Mail
 from tests.test_imapserver import WithImapServer
+
+
+class TestAioimaplibUtils(unittest.TestCase):
+    def test_split_responses_no_data(self):
+        self.assertEquals([], _split_responses(b''))
+
+    def test_split_responses_regular_lines(self):
+        self.assertEquals([b'* BYE Logging out', b'CAPB2 OK LOGOUT completed'],
+                          _split_responses(b'* BYE Logging out\r\nCAPB2 OK LOGOUT completed\r\n'))
+
+    def test_split_responses_with_message_data(self):
+        self.assertEquals([b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)',
+                           b'TAG OK FETCH completed.'],
+                          _split_responses(
+                              b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)\r\n'
+                              b'TAG OK FETCH completed.'))
+
+    def test_split_responses_with_two_messages_data(self):
+        self.assertEquals([b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)',
+                           b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)',
+                           b'TAG OK FETCH completed.'],
+                          _split_responses(
+                              b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
+                              b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
+                              b'TAG OK FETCH completed.'))
 
 
 class TestAioimaplib(WithImapServer):
@@ -75,17 +102,30 @@ class TestAioimaplib(WithImapServer):
                 yield from imap_client.uid(command)
 
             self.assertEqual(expected.exception.args,
-                             ('command UID only possible with COPY, FETCH or STORE (was %s)' % command, ))
+                             ('command UID only possible with COPY, FETCH or STORE (was %s)' % command,))
 
     @asyncio.coroutine
     def test_search_three_messages_by_uid(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        imap_receive(Mail(['user'])) # id=1 uid=1
-        imap_receive(Mail(['user']), mailbox='OTHER_MAILBOX') # id=1 uid=2
-        imap_receive(Mail(['user'])) # id=2 uid=3
+        imap_receive(Mail(['user']))  # id=1 uid=1
+        imap_receive(Mail(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=2
+        imap_receive(Mail(['user']))  # id=2 uid=3
 
         self.assertEqual(('OK', ['1 3']), (yield from imap_client.uid_search('ALL')))
         self.assertEqual(('OK', ['1 2']), (yield from imap_client.search('ALL')))
+
+    @asyncio.coroutine
+    def test_fetch(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        mail = Mail(['user'], mail_from='me', subject='hello', content='pleased to meet you, wont you guess my name ?')
+        imap_receive(mail)
+
+        result, data = yield from imap_client.fetch('1', '(RFC822)')
+
+        self.assertEqual('OK', result)
+        self.assertEqual(['FETCH (UID 1 RFC822 {368}', str(mail).encode()], data)
+        emaillib_decoded_msg = email.message_from_bytes(data[1])
+        self.assertEqual('hello', emaillib_decoded_msg['Subject'])
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
