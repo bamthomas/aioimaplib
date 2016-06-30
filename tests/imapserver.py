@@ -4,6 +4,9 @@ import quopri
 import uuid
 from datetime import datetime
 from email._encoded_words import encode
+
+import re
+
 from functools import wraps, update_wrapper
 
 import tzlocal
@@ -94,6 +97,8 @@ def critical_section(next_state):
 
     return decorator
 
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w "\(\)\+\-]+)?\r\n$)')
+
 
 class ImapProtocol(asyncio.Protocol):
     def __init__(self, server_state):
@@ -111,6 +116,9 @@ class ImapProtocol(asyncio.Protocol):
         transport.write('* OK IMAP4rev1 MockIMAP Server ready\r\n'.encode())
 
     def data_received(self, data):
+        if command_re.match(data) is None:
+            self.send_untagged_line('BAD Error in IMAP command : Unknown command (%s).' % data)
+            return
         command_array = data.decode().rstrip().split()
         if self.state is not IDLE:
             tag = command_array[0]
