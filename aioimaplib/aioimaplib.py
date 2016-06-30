@@ -418,22 +418,22 @@ class IMAP4(object):
     def search(self, *criteria, charset='utf-8'):
         return (yield from asyncio.wait_for(self.protocol.search(*criteria, charset=charset), self.timeout))
 
+    @asyncio.coroutine
     def uid_search(self, *criteria, charset='utf-8'):
         return (yield from asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout))
 
+    @asyncio.coroutine
     def uid(self, command, *criteria):
         return (yield from asyncio.wait_for(self.protocol.uid(command, *criteria), self.timeout))
 
+    @asyncio.coroutine
     def fetch(self, message_set, message_parts):
         return (yield from asyncio.wait_for(self.protocol.fetch(message_set, message_parts), self.timeout))
 
     def idle(self, callback=None):
-        if callback is None:
-            return (yield from self.protocol.idle())
-        else:
-            future = asyncio.async(self.protocol.idle(), loop=self.protocol.loop)
-            future.add_done_callback(callback)
-            return future
+        future = asyncio.async(self.protocol.idle(), loop=self.protocol.loop)
+        future.add_done_callback(callback)
+        return future
 
 
 class IMAP4_SSL(IMAP4):
