@@ -174,48 +174,20 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         log.debug('Sending : %s' % data)
         self.transport.write(data)
 
-    def send_command(self, command):
-        self.send(str(command))
-        if Commands.get(command.name).exec == Exec.sync:
-            self.pending_sync_command = command
-        else:
-            self.pending_async_commands[command.name] = command
-
     @asyncio.coroutine
     def execute_command(self, command):
         if self.state not in Commands.get(command.name).valid_states:
             raise Abort('command %s illegal in state %s' % (command.name, self.state))
 
-        self.send_command(command)
-        yield from command.wait()
+        self.send(str(command))
 
-        return command.response
-
-    @asyncio.coroutine
-    def wait_pending_commands(self):
-        for command in self.pending_async_commands.values():
-            yield from command.wait()
-
-    @asyncio.coroutine
-    def wait(self, state_regexp):
-        state_re = re.compile(state_regexp)
-        with (yield from self.state_condition):
-            yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
-
-    @asyncio.coroutine
-    def capability(self):
-        capability_command = Command('CAPABILITY', self._new_tag(), loop=self.loop)
-
-        response = yield from self.execute_command(capability_command)
-
-        version = None
-        for line in response.text:
-            if 'CAPABILITY' in line:
-                version = line.split()[1].upper()
-        if version not in AllowedVersions:
-            raise Error('server not IMAP4 compliant')
+        if Commands.get(command.name).exec == Exec.sync:
+            self.pending_sync_command = command
         else:
-            self.imap_version = version
+            self.pending_async_commands[command.name] = command
+
+        yield from command.wait()
+        return command.response
 
     @change_state
     @asyncio.coroutine
@@ -257,6 +229,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return response
 
     @asyncio.coroutine
+    def idle(self):
+        return (yield from self.execute_command(Command('IDLE', self._new_tag(), loop=self.loop)))
+
+    @asyncio.coroutine
     def search(self, *criteria, charset='utf-8', by_uid=False):
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
         prefix = 'UID ' if by_uid else ''
@@ -290,8 +266,28 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             return self.fetch(criteria[0], criteria[1], by_uid=True)
 
     @asyncio.coroutine
-    def idle(self):
-        return (yield from self.execute_command(Command('IDLE', self._new_tag(), loop=self.loop)))
+    def capability(self):
+        response = yield from self.execute_command(Command('CAPABILITY', self._new_tag(), loop=self.loop))
+
+        version = None
+        for line in response.text:
+            if 'CAPABILITY' in line:
+                version = line.split()[1].upper()
+        if version not in AllowedVersions:
+            raise Error('server not IMAP4 compliant')
+        else:
+            self.imap_version = version
+
+    @asyncio.coroutine
+    def wait_pending_commands(self):
+        for command in self.pending_async_commands.values():
+            yield from command.wait()
+
+    @asyncio.coroutine
+    def wait(self, state_regexp):
+        state_re = re.compile(state_regexp)
+        with (yield from self.state_condition):
+            yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
 
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
@@ -306,10 +302,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if pending_async_command is None:
                 raise Abort('unexpected untagged (%s) response:' % line)
             pending_async_command.append_to_resp('%s %s' % (command, text))
-
-    def _continuation(self, *args):
-        # TODO What ?
-        pass
 
     def _tagged_response(self, line):
         tag, _, response = line.partition(' ')
@@ -331,6 +323,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         response_result, _, response_text = response.partition(' ')
         command.close(response_text, result=response_result)
+
+    def _continuation(self, *args):
+        # TODO What ?
+        pass
 
     def _new_tag(self):
         tag = self.tagpre + str(self.tagnum)
