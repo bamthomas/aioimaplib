@@ -167,7 +167,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def connection_lost(self, exc):
         self.transport.close()
-        self.state = LOGOUT
 
     def send(self, line):
         data = ('%s\r\n' % line).encode()
@@ -213,7 +212,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def logout(self):
-        return (yield from self.execute_command(Command('LOGOUT', self.new_tag(), loop=self.loop)))
+        response = (yield from self.execute_command(Command('LOGOUT', self.new_tag(), loop=self.loop)))
+        if 'OK' == response.result:
+            self.state = LOGOUT
+        return response
 
     @change_state
     @asyncio.coroutine
