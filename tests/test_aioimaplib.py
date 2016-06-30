@@ -54,6 +54,7 @@ class TestAioimaplib(WithImapServer):
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
+        self.assertEquals(['IMAP4rev1', 'LITERAL+', 'IDLE'], imap_client.protocol.capabilities)
 
     @asyncio.coroutine
     def test_login(self):

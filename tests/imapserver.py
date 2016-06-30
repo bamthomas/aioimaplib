@@ -237,7 +237,7 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK EXPUNGE completed.')
 
     def capability(self, tag, *args):
-        self.send_untagged_line('CAPABILITY IMAP4rev1')
+        self.send_untagged_line('CAPABILITY IMAP4rev1 LITERAL+ IDLE')
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
 
     def uid(self, tag, *args):

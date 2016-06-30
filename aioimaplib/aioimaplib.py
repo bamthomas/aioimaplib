@@ -234,6 +234,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def idle(self):
+        if 'IDLE' not in self.capabilities:
+            Abort('server has not IDLE capability')
         return (yield from self.execute_command(Command('IDLE', self.new_tag(), loop=self.loop)))
 
     @asyncio.coroutine
@@ -279,7 +281,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def capability(self):
         response = yield from self.execute_command(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
-        version = response.text[0].upper()
+        self.capabilities = response.text[0].split()
+        version = self.capabilities[0].upper()
         if version not in AllowedVersions:
             raise Error('server not IMAP4 compliant')
         else:
