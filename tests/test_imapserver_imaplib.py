@@ -158,6 +158,17 @@ class TestImapServerWithImaplib(WithImapServer):
         self.assertEqual([b'2'], data)
 
     @asyncio.coroutine
+    def test_delete_and_expunge_message(self):
+        imap_receive(Mail(['user']))
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        yield from asyncio.wait_for(self.loop.run_in_executor(None, imap_client.expunge), 1)
+
+        self.assertEquals(('OK', [b'0']), (yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.select)), 1)))
+
+    @asyncio.coroutine
     def test_logout(self):
         imap_client = yield from self.login_user('user', 'pass')
 

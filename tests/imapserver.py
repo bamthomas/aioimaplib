@@ -79,6 +79,8 @@ class ServerState(object):
     def get_connection(self, user):
         return self.connections.get(user)
 
+    def remove(self, message, user, mailbox):
+        self.mailboxes[user][mailbox].remove(message)
 
 def critical_section(next_state):
     @asyncio.coroutine
@@ -227,6 +229,12 @@ class ImapProtocol(asyncio.Protocol):
                                                                  message_body=message_body),
                                         encoding=message.encoding)
         self.send_tagged_line(tag, 'OK FETCH completed.')
+
+    def expunge(self, tag, *args):
+        for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox).copy():
+            self.server_state.remove(message, self.user_login, self.user_mailbox)
+            self.send_untagged_line('{msg_uid} EXPUNGE'.format(msg_uid=message.uid))
+        self.send_tagged_line(tag, 'OK EXPUNGE completed.')
 
     def capability(self, tag, *args):
         self.send_untagged_line('CAPABILITY IMAP4rev1')
