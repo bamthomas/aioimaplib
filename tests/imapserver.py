@@ -199,7 +199,7 @@ class ImapProtocol(asyncio.Protocol):
             keyword = args[1]
         unkeyword = args[0].lower() == 'unkeyword'
         self.send_untagged_line('SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(keyword, unkeyword))))
-        self.send_tagged_line(tag, 'OK SEARCH completed')
+        self.send_tagged_line(tag, 'OK %sSEARCH completed' % ('UID ' if self.by_uid else ''))
 
     def memory_search(self, keyword, unkeyword=False):
         return [str(msg.uid if self.by_uid else msg.id)
@@ -234,7 +234,10 @@ class ImapProtocol(asyncio.Protocol):
 
     def uid(self, tag, *args):
         self.by_uid = True
-        self.exec_command(tag, args)
+        try:
+            self.exec_command(tag, args)
+        finally:
+            self.by_uid = False
 
     def error(self, tag, msg):
         self.send_tagged_line(tag, 'BAD %s' % msg)
