@@ -176,7 +176,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport.write(data)
 
     @asyncio.coroutine
-    def execute_command(self, command):
+    def execute(self, command):
         if self.state not in Commands.get(command.name).valid_states:
             raise Abort('command %s illegal in state %s' % (command.name, self.state))
 
@@ -204,7 +204,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def login(self, user, password):
-        response = yield from self.execute_command(
+        response = yield from self.execute(
             Command('LOGIN', self.new_tag(), user, '"%s"' % password, loop=self.loop))
 
         if 'OK' == response.result:
@@ -214,7 +214,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def logout(self):
-        response = (yield from self.execute_command(Command('LOGOUT', self.new_tag(), loop=self.loop)))
+        response = (yield from self.execute(Command('LOGOUT', self.new_tag(), loop=self.loop)))
         if 'OK' == response.result:
             self.state = LOGOUT
         return response
@@ -222,7 +222,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def select(self, mailbox='INBOX'):
-        response = yield from self.execute_command(
+        response = yield from self.execute(
             Command('SELECT', self.new_tag(), mailbox, loop=self.loop))
 
         if 'OK' == response.result:
@@ -236,33 +236,33 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def idle(self):
         if 'IDLE' not in self.capabilities:
             Abort('server has not IDLE capability')
-        return (yield from self.execute_command(Command('IDLE', self.new_tag(), loop=self.loop)))
+        return (yield from self.execute(Command('IDLE', self.new_tag(), loop=self.loop)))
 
     @asyncio.coroutine
     def search(self, *criteria, charset='utf-8', by_uid=False):
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
         prefix = 'UID ' if by_uid else ''
 
-        response = yield from self.execute_command(
+        response = yield from self.execute(
             Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop))
 
         return response
 
     @asyncio.coroutine
     def fetch(self, message_set, message_parts, by_uid=False):
-        return (yield from self.execute_command(
+        return (yield from self.execute(
             Command('FETCH', self.new_tag(), message_set, message_parts,
                     prefix='UID ' if by_uid else '', loop=self.loop)))
 
     @asyncio.coroutine
     def store(self, *args, by_uid=False):
-        return (yield from self.execute_command(
+        return (yield from self.execute(
             Command('STORE', self.new_tag(), *args,
                     prefix='UID ' if by_uid else '', untagged_resp='FETCH', loop=self.loop)))
 
     @asyncio.coroutine
     def expunge(self):
-        return (yield from self.execute_command(Command('EXPUNGE', self.new_tag(), loop=self.loop)))
+        return (yield from self.execute(Command('EXPUNGE', self.new_tag(), loop=self.loop)))
 
     @asyncio.coroutine
     def uid(self, command, *criteria):
@@ -279,7 +279,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def capability(self):
-        response = yield from self.execute_command(Command('CAPABILITY', self.new_tag(), loop=self.loop))
+        response = yield from self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
         self.capabilities = response.text[0].split()
         version = self.capabilities[0].upper()
@@ -356,10 +356,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
 
 def _split_responses(data):
-    match_object = fetch_message_with_literal_data_re.match(data)
-    if match_object:
+    match_fetch_message = fetch_message_with_literal_data_re.match(data)
+    if match_fetch_message:
         head, _, tail = data.partition(CRLF)
-        msg_size = match_object.group('size')
+        msg_size = match_fetch_message.group('size')
         # we want to cut -----------------------
         #                              ...here |
         #                               so 4+1 v
