@@ -163,7 +163,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 elif response_line.startswith('+'):
                     self._continuation(response_line.replace('+ ', ''))
                 else:
-                    self._tagged_response(response_line)
+                    self._response_done(response_line)
 
     def connection_lost(self, exc):
         self.transport.close()
@@ -204,7 +204,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def login(self, user, password):
         response = yield from self.execute_command(
-            Command('LOGIN', self._new_tag(), user, '"%s"' % password, loop=self.loop))
+            Command('LOGIN', self.new_tag(), user, '"%s"' % password, loop=self.loop))
 
         if 'OK' == response.result:
             self.state = AUTH
@@ -213,13 +213,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def logout(self):
-        return (yield from self.execute_command(Command('LOGOUT', self._new_tag(), loop=self.loop)))
+        return (yield from self.execute_command(Command('LOGOUT', self.new_tag(), loop=self.loop)))
 
     @change_state
     @asyncio.coroutine
     def select(self, mailbox='INBOX'):
         response = yield from self.execute_command(
-            Command('SELECT', self._new_tag(), mailbox, loop=self.loop))
+            Command('SELECT', self.new_tag(), mailbox, loop=self.loop))
 
         if 'OK' == response.result:
             self.state = SELECTED
@@ -230,7 +230,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def idle(self):
-        return (yield from self.execute_command(Command('IDLE', self._new_tag(), loop=self.loop)))
+        return (yield from self.execute_command(Command('IDLE', self.new_tag(), loop=self.loop)))
 
     @asyncio.coroutine
     def search(self, *criteria, charset='utf-8', by_uid=False):
@@ -238,7 +238,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         prefix = 'UID ' if by_uid else ''
 
         response = yield from self.execute_command(
-            Command('SEARCH', self._new_tag(), *args, prefix=prefix, loop=self.loop))
+            Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop))
 
         for line in response.text:
             if 'SEARCH' in line:
@@ -248,7 +248,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def fetch(self, message_set, message_parts, by_uid=False):
         response = yield from self.execute_command(
-            Command('FETCH', self._new_tag(), message_set, message_parts,
+            Command('FETCH', self.new_tag(), message_set, message_parts,
                     prefix='UID ' if by_uid else '', loop=self.loop))
 
         head, _, tail = response.text[0].partition(CRLF.decode())
@@ -267,7 +267,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def capability(self):
-        response = yield from self.execute_command(Command('CAPABILITY', self._new_tag(), loop=self.loop))
+        response = yield from self.execute_command(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
         version = None
         for line in response.text:
@@ -303,7 +303,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 raise Abort('unexpected untagged (%s) response:' % line)
             pending_async_command.append_to_resp('%s %s' % (command, text))
 
-    def _tagged_response(self, line):
+    def _response_done(self, line):
         tag, _, response = line.partition(' ')
 
         if self.pending_sync_command is not None:
@@ -328,7 +328,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         # TODO What ?
         pass
 
-    def _new_tag(self):
+    def new_tag(self):
         tag = self.tagpre + str(self.tagnum)
         self.tagnum += 1
         return tag
