@@ -19,15 +19,15 @@ class TestAioimaplibUtils(unittest.TestCase):
                           _split_responses(b'* BYE Logging out\r\nCAPB2 OK LOGOUT completed\r\n'))
 
     def test_split_responses_with_message_data(self):
-        self.assertEquals([b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)',
+        self.assertEquals([b'* FETCH ...\r\n(mail content)\r\n...\r\n)',
                            b'TAG OK FETCH completed.'],
                           _split_responses(
                               b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)\r\n'
                               b'TAG OK FETCH completed.'))
 
     def test_split_responses_with_two_messages_data(self):
-        self.assertEquals([b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)',
-                           b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)',
+        self.assertEquals([b'* FETCH mail 1\r\n)',
+                           b'* FETCH mail 2\r\n)',
                            b'TAG OK FETCH completed.'],
                           _split_responses(
                               b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
@@ -104,7 +104,7 @@ class TestAioimaplib(WithImapServer):
         result, data = yield from imap_client.search('ALL')
 
         self.assertEqual('OK', result)
-        self.assertEqual(['1 2'], data)
+        self.assertEqual('1 2', data[0])
 
     @asyncio.coroutine
     def test_uid_with_illegal_command(self):
@@ -124,8 +124,8 @@ class TestAioimaplib(WithImapServer):
         imap_receive(Mail(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=2
         imap_receive(Mail(['user']))  # id=2 uid=3
 
-        self.assertEqual(('OK', ['1 3']), (yield from imap_client.uid_search('ALL')))
-        self.assertEqual(('OK', ['1 2']), (yield from imap_client.search('ALL')))
+        self.assertEqual('1 3', (yield from imap_client.uid_search('ALL')).text[0])
+        self.assertEqual('1 2', (yield from imap_client.search('ALL')).text[0])
 
     @asyncio.coroutine
     def test_fetch(self):
@@ -136,8 +136,8 @@ class TestAioimaplib(WithImapServer):
         result, data = yield from imap_client.fetch('1', '(RFC822)')
 
         self.assertEqual('OK', result)
-        self.assertEqual(['FETCH (UID 1 RFC822 {368}', str(mail).encode()], data)
-        emaillib_decoded_msg = email.message_from_bytes(data[1])
+        self.assertEqual([str(mail).encode(), 'FETCH completed.'], data)
+        emaillib_decoded_msg = email.message_from_bytes(data[0])
         self.assertEqual('hello', emaillib_decoded_msg['Subject'])
 
     @asyncio.coroutine
@@ -146,10 +146,10 @@ class TestAioimaplib(WithImapServer):
         mail = Mail(['user'], mail_from='me', subject='hello', content='pleased to meet you, wont you guess my name ?')
         imap_receive(mail)
 
-        result, data = yield from imap_client.uid('fetch', '1', '(RFC822)')
+        response = (yield from imap_client.uid('fetch', '1', '(RFC822)'))
 
-        self.assertEqual('OK', result)
-        self.assertEqual(['FETCH (UID 1 RFC822 {368}', str(mail).encode()], data)
+        self.assertEqual('OK', response.result)
+        self.assertEquals(str(mail).encode(), response.text[0])
 
     @asyncio.coroutine
     def test_idle(self):
@@ -169,12 +169,22 @@ class TestAioimaplib(WithImapServer):
         imap_receive(Mail(['user']))
         imap_receive(Mail(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        self.assertEqual(('OK', ['']), (yield from imap_client.uid_search('KEYWORD FOO', charset=None)))
+        self.assertEqual('', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).text[0])
 
-        self.assertEquals('OK', (yield from imap_client.uid('store', '1', '+FLAGS FOO'))[0])
+        self.assertEquals('OK', (yield from imap_client.uid('store', '1', '+FLAGS FOO')).result)
 
-        self.assertEqual(('OK', ['1']), (yield from imap_client.uid_search('KEYWORD FOO', charset=None)))
-        self.assertEqual(('OK', ['2']), (yield from imap_client.uid_search('UNKEYWORD FOO', charset=None)))
+        self.assertEqual('1', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).text[0])
+        self.assertEqual('2', (yield from imap_client.uid_search('UNKEYWORD FOO', charset=None)).text[0])
+
+    @asyncio.coroutine
+    def test_expunge_messages(self):
+        imap_receive(Mail(['user']))
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        self.assertEquals(('OK', ['1', '2', 'EXPUNGE completed.']), (yield from imap_client.expunge()))
+
+        self.assertEquals(('OK', ['0']), (yield from imap_client.select()))
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):

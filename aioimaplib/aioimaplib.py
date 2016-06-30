@@ -129,7 +129,7 @@ def change_state(coro):
 # cf https://tools.ietf.org/html/rfc3501#section-9
 # untagged responses types
 fetch_message_with_literal_data_re = re.compile(rb'\* [0-9]+ FETCH [\w \(]+ \{(?P<size>\d+)\}\r\n')
-resp_state_re = re.compile(rb'OK|NO|BAD .*')
+message_data_without_literal_re = re.compile(r'[0-9]+ ((FETCH)|(EXPUNGE))([\w \(\)]+)?')
 
 
 class IMAP4ClientProtocol(asyncio.Protocol):
@@ -158,7 +158,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if self.state == CONNECTED:
                 asyncio.async(self.welcome(response_line))
             else:
-                if response_line.startswith('*'):
+                if response_line.startswith('* FETCH'):
+                    self._untagged_fetch_with_literal(line)
+                elif response_line.startswith('*'):
                     self._untagged_response(response_line.replace('* ', ''))
                 elif response_line.startswith('+'):
                     self._continuation(response_line.replace('+ ', ''))
@@ -242,25 +244,23 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         response = yield from self.execute_command(
             Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop))
 
-        for line in response.text:
-            if 'SEARCH' in line:
-                return Response(response.result, [line.replace('SEARCH ', '')])
         return response
 
     @asyncio.coroutine
     def fetch(self, message_set, message_parts, by_uid=False):
-        response = yield from self.execute_command(
+        return (yield from self.execute_command(
             Command('FETCH', self.new_tag(), message_set, message_parts,
-                    prefix='UID ' if by_uid else '', loop=self.loop))
-
-        head, _, tail = response.text[0].partition(CRLF.decode())
-        return Response(response.result, [head, tail.rstrip(')').encode()])
+                    prefix='UID ' if by_uid else '', loop=self.loop)))
 
     @asyncio.coroutine
     def store(self, *args, by_uid=False):
         return (yield from self.execute_command(
             Command('STORE', self.new_tag(), *args,
                     prefix='UID ' if by_uid else '', untagged_resp='FETCH', loop=self.loop)))
+
+    @asyncio.coroutine
+    def expunge(self):
+        return (yield from self.execute_command(Command('EXPUNGE', self.new_tag(), loop=self.loop)))
 
     @asyncio.coroutine
     def uid(self, command, *criteria):
@@ -279,10 +279,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def capability(self):
         response = yield from self.execute_command(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
-        version = None
-        for line in response.text:
-            if 'CAPABILITY' in line:
-                version = line.split()[1].upper()
+        version = response.text[0].upper()
         if version not in AllowedVersions:
             raise Error('server not IMAP4 compliant')
         else:
@@ -299,19 +296,27 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         with (yield from self.state_condition):
             yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
 
+    def _untagged_fetch_with_literal(self, raw_line):
+        pending_fetch = self.pending_async_commands.get('FETCH')
+        if pending_fetch is None:
+            raise Abort('unexpected fetch message (%r) response:' % raw_line)
+        _, _, email_binary = raw_line.strip(b'* ').partition(b' ')
+        pending_fetch.append_to_resp(email_binary.rstrip(b')'))
+
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
             if self.pending_sync_command.name == 'IDLE':
                 self.send('DONE')
         else:
-            if 'FETCH' in line:
-                _, _, line = line.partition(' ')
-            command, _, text = line.partition(' ')
+            if message_data_without_literal_re.match(line):
+                text, command = line.split()[0:2]
+            else:
+                command, _, text = line.partition(' ')
             pending_async_command = self.pending_async_commands.get(command.upper())
             if pending_async_command is None:
                 raise Abort('unexpected untagged (%s) response:' % line)
-            pending_async_command.append_to_resp('%s %s' % (command, text))
+            pending_async_command.append_to_resp(text)
 
     def _response_done(self, line):
         tag, _, response = line.partition(' ')
@@ -358,7 +363,7 @@ def _split_responses(data):
         # b'* 3 FETCH (UID 3 RFC822 {4}\r\nmail)\r\n...
         end_message_index_with_parenthesis = int(msg_size) + 1
 
-        fetch_line = head + CRLF + tail[0:end_message_index_with_parenthesis]
+        fetch_line = b'* FETCH ' + tail[0:end_message_index_with_parenthesis]
         after_fetch = tail[end_message_index_with_parenthesis:].strip()
 
         return [fetch_line] + _split_responses(after_fetch)
@@ -411,6 +416,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def store(self, *criteria):
         return (yield from asyncio.wait_for(self.protocol.store(*criteria), self.timeout))
+
+    @asyncio.coroutine
+    def expunge(self):
+        return (yield from asyncio.wait_for(self.protocol.expunge(), self.timeout))
 
     @asyncio.coroutine
     def fetch(self, message_set, message_parts):
