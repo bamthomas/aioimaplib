@@ -188,6 +188,27 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(('OK', ['0']), (yield from imap_client.select()))
 
     @asyncio.coroutine
+    def test_copy_messages(self):
+        imap_receive(Mail(['user']))
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        result, _ = yield from imap_client.copy('1', '2', 'MAILBOX')
+        self.assertEqual('OK', result)
+
+        self.assertEquals(('OK', ['2']), (yield from imap_client.select('MAILBOX')))
+
+    @asyncio.coroutine
+    def test_copy_messages_by_uid(self):
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        result, _ = yield from imap_client.uid('copy', '1', 'MAILBOX')
+        self.assertEqual('OK', result)
+
+        self.assertEquals(('OK', ['1']), (yield from imap_client.select('MAILBOX')))
+
+    @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)

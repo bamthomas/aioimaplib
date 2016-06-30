@@ -277,8 +277,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             raise Abort('command UID only possible with COPY, FETCH or STORE (was %s)' % command.upper())
 
     @asyncio.coroutine
-    def copy(self, param, by_uid=True):
-        pass
+    def copy(self, *args, by_uid=True):
+        return (yield from self.execute(
+            Command('COPY', self.new_tag(), *args, prefix='UID ' if by_uid else '', loop=self.loop)))
 
     @asyncio.coroutine
     def capability(self):
@@ -422,6 +423,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def store(self, *criteria):
         return (yield from asyncio.wait_for(self.protocol.store(*criteria), self.timeout))
+
+    @asyncio.coroutine
+    def copy(self, *criteria):
+        return (yield from asyncio.wait_for(self.protocol.copy(*criteria), self.timeout))
 
     @asyncio.coroutine
     def expunge(self):
