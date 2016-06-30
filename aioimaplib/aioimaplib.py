@@ -77,17 +77,9 @@ Response = namedtuple('Response', 'result text')
 
 
 class Command(object):
-    def __init__(self, name, *args):
+    def __init__(self, name, tag, *args, prefix='', loop=asyncio.get_event_loop()):
         self.name = name
         self.args = args
-
-    def __repr__(self):
-        return '%s %s' % (self.name, ' '.join(self.args))
-
-
-class TaggedCommand(Command):
-    def __init__(self, name, tag, *args, prefix='', loop=asyncio.get_event_loop()):
-        super().__init__(name, *args)
         self.prefix = prefix
         self.response = None
         self.event = asyncio.Event(loop=loop)
@@ -190,21 +182,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.pending_async_commands[command.name] = command
 
     @asyncio.coroutine
-    def capability(self):
-        if self.state not in Commands.get('CAPABILITY').valid_states:
-            raise Error('command CAPABILITY illegal in state %s' % self.state)
+    def execute_command(self, command):
+        if self.state not in Commands.get(command.name).valid_states:
+            raise Abort('command %s illegal in state %s' % (command.name, self.state))
 
-        capability_command = TaggedCommand('CAPABILITY', self._new_tag(), loop=self.loop)
-        self.send_command(capability_command)
-        yield from capability_command.wait()
-        version = None
-        for line in capability_command.response.text:
-            if 'CAPABILITY' in line:
-                version = line.split()[1].upper()
-        if version not in AllowedVersions:
-            raise Error('server not IMAP4 compliant')
-        else:
-            self.imap_version = version
+        self.send_command(command)
+        yield from command.wait()
+
+        return command.response
 
     @asyncio.coroutine
     def wait_pending_commands(self):
@@ -216,6 +201,21 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         state_re = re.compile(state_regexp)
         with (yield from self.state_condition):
             yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
+
+    @asyncio.coroutine
+    def capability(self):
+        capability_command = Command('CAPABILITY', self._new_tag(), loop=self.loop)
+
+        response = yield from self.execute_command(capability_command)
+
+        version = None
+        for line in response.text:
+            if 'CAPABILITY' in line:
+                version = line.split()[1].upper()
+        if version not in AllowedVersions:
+            raise Error('server not IMAP4 compliant')
+        else:
+            self.imap_version = version
 
     @change_state
     @asyncio.coroutine
@@ -231,71 +231,57 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def login(self, user, password):
-        if self.state not in Commands.get('LOGIN').valid_states:
-            raise Error('command LOGIN illegal in state %s' % self.state)
+        response = yield from self.execute_command(
+            Command('LOGIN', self._new_tag(), user, '"%s"' % password, loop=self.loop))
 
-        login_cmd = TaggedCommand('LOGIN', self._new_tag(), user, '"%s"' % password, loop=self.loop)
-        self.send_command(login_cmd)
-        yield from login_cmd.wait()
-        if 'OK' == login_cmd.response.result:
+        if 'OK' == response.result:
             self.state = AUTH
-        return login_cmd.response
+        return response
 
     @change_state
     @asyncio.coroutine
     def logout(self):
-        if self.state not in Commands.get('LOGOUT').valid_states:
-            raise Error('command LOGOUT illegal in state %s' % self.state)
+        response = yield from self.execute_command(
+            Command('LOGOUT', self._new_tag(), loop=self.loop))
 
-        logout_cmd = TaggedCommand('LOGOUT', self._new_tag(), loop=self.loop)
-        self.send_command(logout_cmd)
-        yield from logout_cmd.wait()
-        if 'OK' == logout_cmd.response.result:
+        if 'OK' == response.result:
             self.connection_lost(None)
-        return logout_cmd.response
+        return response
 
     @change_state
     @asyncio.coroutine
     def select(self, mailbox='INBOX'):
-        if self.state not in Commands.get('SELECT').valid_states:
-            raise Error('command SELECT illegal in state %s' % self.state)
-        select_cmd = TaggedCommand('SELECT', self._new_tag(), mailbox, loop=self.loop)
-        self.send_command(select_cmd)
-        yield from select_cmd.wait()
-        if 'OK' == select_cmd.response.result:
+        response = yield from self.execute_command(
+            Command('SELECT', self._new_tag(), mailbox, loop=self.loop))
+
+        if 'OK' == response.result:
             self.state = SELECTED
-        for line in select_cmd.response.text:
+        for line in response.text:
             if 'EXISTS' in line:
-                return Response(select_cmd.response.result, [line.replace(' EXISTS', '')])
-        return select_cmd.response
+                return Response(response.result, [line.replace(' EXISTS', '')])
+        return response
 
     @asyncio.coroutine
     def search(self, *criteria, charset='utf-8', by_uid=False):
-        if self.state not in Commands.get('SEARCH').valid_states:
-            raise Error('command SEARCH illegal in state %s' % self.state)
-
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
         prefix = 'UID ' if by_uid else ''
-        search_cmd = TaggedCommand('SEARCH', self._new_tag(), *args, prefix=prefix, loop=self.loop)
 
-        self.send_command(search_cmd)
-        yield from search_cmd.wait()
-        for line in search_cmd.response.text:
+        response = yield from self.execute_command(
+            Command('SEARCH', self._new_tag(), *args, prefix=prefix, loop=self.loop))
+
+        for line in response.text:
             if 'SEARCH' in line:
-                return Response(search_cmd.response.result, [line.replace('SEARCH ', '')])
-        return search_cmd.response
+                return Response(response.result, [line.replace('SEARCH ', '')])
+        return response
 
     @asyncio.coroutine
     def fetch(self, message_set, message_parts, by_uid=False):
-        if self.state not in Commands.get('FETCH').valid_states:
-            raise Error('command FETCH illegal in state %s' % self.state)
+        response = yield from self.execute_command(
+            Command('FETCH', self._new_tag(), message_set, message_parts,
+                    prefix='UID ' if by_uid else '', loop=self.loop))
 
-        fetch_cmd = TaggedCommand('FETCH', self._new_tag(), message_set, message_parts,
-                                  prefix='UID ' if by_uid else '', loop=self.loop)
-        self.send_command(fetch_cmd)
-        yield from fetch_cmd.wait()
-        head, _, tail = fetch_cmd.response.text[0].partition(CRLF.decode())
-        return Response(fetch_cmd.response.result, [head, tail.rstrip(')').encode()])
+        head, _, tail = response.text[0].partition(CRLF.decode())
+        return Response(response.result, [head, tail.rstrip(')').encode()])
 
     @asyncio.coroutine
     def uid(self, command, *criteria):
@@ -310,13 +296,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def idle(self):
-        if self.state not in Commands.get('IDLE').valid_states:
-            raise Error('command IDLE illegal in state %s' % self.state)
-
-        idle_cmd = TaggedCommand('IDLE', self._new_tag(), loop=self.loop)
-        self.send_command(idle_cmd)
-        yield from idle_cmd.wait()
-        return idle_cmd.response
+        return (yield from self.execute_command(Command('IDLE', self._new_tag(), loop=self.loop)))
 
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
