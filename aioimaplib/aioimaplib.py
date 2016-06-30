@@ -135,7 +135,7 @@ def change_state(coro):
 
 # cf https://tools.ietf.org/html/rfc3501#section-9
 # untagged responses types
-message_data_re = re.compile(rb'\* [0-9]+ ((EXPUNGE)|(FETCH))')
+fetch_message_data_re = re.compile(rb'\* [0-9]+ FETCH')
 resp_state_re = re.compile(rb'OK|NO|BAD .*')
 literal_re = re.compile(rb'.*{(?P<size>\d+)}$')
 
@@ -177,11 +177,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport.close()
         self.state = LOGOUT
 
-    def send_command(self, command):
-        command_string = '{command}\r\n'.format(command=command).encode()
-        log.debug('Sending : %s' % command_string)
-        self.transport.write(command_string)
+    def send(self, line):
+        data = ('%s\r\n' % line).encode()
+        log.debug('Sending : %s' % data)
+        self.transport.write(data)
 
+    def send_command(self, command):
+        self.send(str(command))
         if Commands.get(command.name).exec == Exec.sync:
             self.pending_sync_command = command
         else:
@@ -320,7 +322,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
             if self.pending_sync_command.name == 'IDLE':
-                self.send_command(Command('DONE'))
+                self.send('DONE')
         else:
             if 'FETCH' in line:
                 _, _, line = line.partition(' ')
@@ -365,7 +367,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
 
 def _split_responses(data):
-    if message_data_re.match(data):
+    if fetch_message_data_re.match(data):
         head, _, tail = data.partition(CRLF)
         msg_size = literal_re.match(head).group('size')
         # we want to cut -----------------------
@@ -425,10 +427,13 @@ class IMAP4(object):
     def fetch(self, message_set, message_parts):
         return (yield from asyncio.wait_for(self.protocol.fetch(message_set, message_parts), self.timeout))
 
-    def idle(self, callback):
-        future = asyncio.async(self.protocol.idle(), loop=self.protocol.loop)
-        future.add_done_callback(callback)
-        return future
+    def idle(self, callback=None):
+        if callback is None:
+            return (yield from self.protocol.idle())
+        else:
+            future = asyncio.async(self.protocol.idle(), loop=self.protocol.loop)
+            future.add_done_callback(callback)
+            return future
 
 
 class IMAP4_SSL(IMAP4):

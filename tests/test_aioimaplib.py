@@ -5,7 +5,6 @@ import unittest
 
 from aioimaplib import aioimaplib
 from aioimaplib.aioimaplib import Commands, _split_responses
-from mock import Mock
 from tests import imapserver
 from tests.imapserver import imap_receive, Mail, get_imapconnection
 from tests.test_imapserver import WithImapServer
@@ -34,6 +33,10 @@ class TestAioimaplibUtils(unittest.TestCase):
                               b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
                               b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
                               b'TAG OK FETCH completed.'))
+
+    def test_split_responses_with_message_data_expunge(self):
+        self.assertEquals([b'* 123 EXPUNGE', b'TAG OK SELECT completed.'],
+                          _split_responses(b'* 123 EXPUNGE\r\nTAG OK SELECT completed.\r\n'))
 
 
 class TestAioimaplib(WithImapServer):
