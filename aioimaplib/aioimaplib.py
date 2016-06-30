@@ -77,10 +77,11 @@ Response = namedtuple('Response', 'result text')
 
 
 class Command(object):
-    def __init__(self, name, tag, *args, prefix='', loop=asyncio.get_event_loop()):
+    def __init__(self, name, tag, *args, prefix='', untagged_resp=None, loop=asyncio.get_event_loop()):
         self.name = name
         self.args = args
         self.prefix = prefix
+        self.untagged_resp = name if untagged_resp is None else untagged_resp
         self.response = None
         self.event = asyncio.Event(loop=loop)
         self.tag = tag
@@ -127,9 +128,8 @@ def change_state(coro):
 
 # cf https://tools.ietf.org/html/rfc3501#section-9
 # untagged responses types
-fetch_message_data_re = re.compile(rb'\* [0-9]+ FETCH')
+fetch_message_with_literal_data_re = re.compile(rb'\* [0-9]+ FETCH [\w \(]+ \{(?P<size>\d+)\}\r\n')
 resp_state_re = re.compile(rb'OK|NO|BAD .*')
-literal_re = re.compile(rb'.*{(?P<size>\d+)}$')
 
 
 class IMAP4ClientProtocol(asyncio.Protocol):
@@ -183,7 +183,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if Commands.get(command.name).exec == Exec.sync:
             self.pending_sync_command = command
         else:
-            self.pending_async_commands[command.name] = command
+            self.pending_async_commands[command.untagged_resp] = command
 
         yield from command.wait()
         return command.response
@@ -257,6 +257,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return Response(response.result, [head, tail.rstrip(')').encode()])
 
     @asyncio.coroutine
+    def store(self, *args, by_uid=False):
+        return (yield from self.execute_command(
+            Command('STORE', self.new_tag(), *args,
+                    prefix='UID ' if by_uid else '', untagged_resp='FETCH', loop=self.loop)))
+
+    @asyncio.coroutine
     def uid(self, command, *criteria):
         if self.state not in Commands.get('UID').valid_states:
             raise Error('command UID illegal in state %s' % self.state)
@@ -266,6 +272,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         if command.upper() == 'FETCH':
             return self.fetch(criteria[0], criteria[1], by_uid=True)
+        if command.upper() == 'STORE':
+            return self.store(*criteria, by_uid=True)
 
     @asyncio.coroutine
     def capability(self):
@@ -321,7 +329,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             elif len(cmds) > 1:
                 raise Error('unconsistent state : two commands have the same tag (%s)' % cmds)
             command = cmds[0]
-            self.pending_async_commands[command.name] = None
+            self.pending_async_commands[command.untagged_resp] = None
 
         response_result, _, response_text = response.partition(' ')
         command.close(response_text, result=response_result)
@@ -340,9 +348,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
 
 def _split_responses(data):
-    if fetch_message_data_re.match(data):
+    match_object = fetch_message_with_literal_data_re.match(data)
+    if match_object:
         head, _, tail = data.partition(CRLF)
-        msg_size = literal_re.match(head).group('size')
+        msg_size = match_object.group('size')
         # we want to cut -----------------------
         #                              ...here |
         #                               so 4+1 v
@@ -398,6 +407,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def uid(self, command, *criteria):
         return (yield from asyncio.wait_for(self.protocol.uid(command, *criteria), self.timeout))
+
+    @asyncio.coroutine
+    def store(self, *criteria):
+        return (yield from asyncio.wait_for(self.protocol.store(*criteria), self.timeout))
 
     @asyncio.coroutine
     def fetch(self, message_set, message_parts):

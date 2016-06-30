@@ -34,6 +34,14 @@ class TestAioimaplibUtils(unittest.TestCase):
                               b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
                               b'TAG OK FETCH completed.'))
 
+    def test_split_responses_with_flag_fetch_message_data(self):
+        self.assertEquals([b'* 1 FETCH (UID 10 FLAGS (FOO))',
+                           b'* 1 FETCH (UID 15 FLAGS (BAR))',
+                           b'TAG OK STORE completed.'],
+                          _split_responses(b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n'
+                                           b'* 1 FETCH (UID 15 FLAGS (BAR))\r\n'
+                                           b'TAG OK STORE completed.'))
+
     def test_split_responses_with_message_data_expunge(self):
         self.assertEquals([b'* 123 EXPUNGE', b'TAG OK SELECT completed.'],
                           _split_responses(b'* 123 EXPUNGE\r\nTAG OK SELECT completed.\r\n'))
@@ -155,6 +163,18 @@ class TestAioimaplib(WithImapServer):
         imap_receive(Mail(to=['user'], mail_from='me', subject='hello'))
 
         self.assertEquals(('OK', ['1 EXISTS', 'IDLE terminated']), (yield from asyncio.wait_for(future, 1)))
+
+    @asyncio.coroutine
+    def test_store_and_search_by_keyword(self):
+        imap_receive(Mail(['user']))
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        self.assertEqual(('OK', ['']), (yield from imap_client.uid_search('KEYWORD FOO', charset=None)))
+
+        self.assertEquals('OK', (yield from imap_client.uid('store', '1', '+FLAGS FOO'))[0])
+
+        self.assertEqual(('OK', ['1']), (yield from imap_client.uid_search('KEYWORD FOO', charset=None)))
+        self.assertEqual(('OK', ['2']), (yield from imap_client.uid_search('UNKEYWORD FOO', charset=None)))
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
