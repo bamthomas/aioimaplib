@@ -243,10 +243,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
         prefix = 'UID ' if by_uid else ''
 
-        response = yield from self.execute(
-            Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop))
-
-        return response
+        return (yield from self.execute(
+            Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop)))
 
     @asyncio.coroutine
     def fetch(self, message_set, message_parts, by_uid=False):
@@ -267,15 +265,20 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def uid(self, command, *criteria):
         if self.state not in Commands.get('UID').valid_states:
-            raise Error('command UID illegal in state %s' % self.state)
-
-        if command.upper() not in {'COPY', 'FETCH', 'STORE'}:
-            raise Abort('command UID only possible with COPY, FETCH or STORE (was %s)' % command)
+            raise Abort('command UID illegal in state %s' % self.state)
 
         if command.upper() == 'FETCH':
             return self.fetch(criteria[0], criteria[1], by_uid=True)
         if command.upper() == 'STORE':
             return self.store(*criteria, by_uid=True)
+        if command.upper() == 'COPY':
+            return self.copy(*criteria, by_uid=True)
+        else:
+            raise Abort('command UID only possible with COPY, FETCH or STORE (was %s)' % command.upper())
+
+    @asyncio.coroutine
+    def copy(self, param, by_uid=True):
+        pass
 
     @asyncio.coroutine
     def capability(self):
