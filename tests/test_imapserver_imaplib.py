@@ -169,6 +169,19 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.select)), 1)))
 
     @asyncio.coroutine
+    def test_copy_messages(self):
+        imap_receive(Mail(['user']))
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        result, _ = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.copy, '1 2', 'MAILBOX')), 20)
+        self.assertEqual('OK', result)
+
+        self.assertEquals(('OK', [b'2']), (yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.select, 'MAILBOX')), 20)))
+
+    @asyncio.coroutine
     def test_logout(self):
         imap_client = yield from self.login_user('user', 'pass')
 

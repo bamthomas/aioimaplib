@@ -82,6 +82,13 @@ class ServerState(object):
     def remove(self, message, user, mailbox):
         self.mailboxes[user][mailbox].remove(message)
 
+    def copy(self, user, src_mailbox, dest_mailbox, message_set):
+        to_copy = [msg for msg in self.mailboxes[user][src_mailbox] if str(msg.id) in message_set]
+        if dest_mailbox not in self.mailboxes[user]:
+            self.mailboxes[user][dest_mailbox] = list()
+        self.mailboxes[user][dest_mailbox] += to_copy
+
+
 def critical_section(next_state):
     @asyncio.coroutine
     def execute_section(self, state, critical_func, *args, **kwargs):
@@ -239,6 +246,11 @@ class ImapProtocol(asyncio.Protocol):
     def capability(self, tag, *args):
         self.send_untagged_line('CAPABILITY IMAP4rev1 LITERAL+ IDLE')
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
+
+    def copy(self, tag, *args):
+        message_set, mailbox = args[0:-1], args[-1]
+        self.server_state.copy(self.user_login, self.user_mailbox, mailbox, message_set)
+        self.send_tagged_line(tag, 'OK COPY completed.')
 
     def uid(self, tag, *args):
         self.by_uid = True
