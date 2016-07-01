@@ -28,6 +28,7 @@ class ServerState(object):
     def __init__(self):
         self.mailboxes = dict()
         self.connections = dict()
+        self.subcriptions = dict()
 
     def reset(self):
         self.mailboxes = dict()
@@ -64,6 +65,8 @@ class ServerState(object):
             self.mailboxes[user_login]['INBOX'] = list()
         if user_login not in self.connections:
             self.connections[user_login] = protocol
+        if user_login not in self.subcriptions:
+            self.subcriptions[user_login] = set()
 
     def create_mailbox_if_not_exists(self, user_login, user_mailbox):
         if user_mailbox not in self.mailboxes[user_login]:
@@ -79,6 +82,9 @@ class ServerState(object):
 
     def get_connection(self, user):
         return self.connections.get(user)
+
+    def subscribe(self, user, mailbox):
+        self.subcriptions[user].add(mailbox)
 
     def remove(self, message, user, mailbox):
         self.mailboxes[user][mailbox].remove(message)
@@ -107,7 +113,7 @@ def critical_section(next_state):
 
     return decorator
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w "\(\)\+\-]+)?$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#"\(\)\+\-]+)?$)')
 
 
 class ImapProtocol(asyncio.Protocol):
@@ -288,6 +294,10 @@ class ImapProtocol(asyncio.Protocol):
         self.send_untagged_line(status_response)
         self.send_tagged_line(tag, 'OK STATUS completed.')
 
+    def subscribe(self, tag, *args):
+        mailbox_name = args[0]
+        self.server_state.subscribe(self.user_login, mailbox_name)
+        self.send_tagged_line(tag, 'OK SUBSCRIBE completed.')
 
     def uid(self, tag, *args):
         self.by_uid = True
