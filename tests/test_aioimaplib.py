@@ -304,6 +304,18 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(('OK', ['LSUB completed.']), (yield from imap_client.lsub('#fr', '.*')))
 
     @asyncio.coroutine
+    def test_create_delete_mailbox(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        self.assertEquals('NO', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+
+        self.assertEquals(('OK', ['CREATE completed.']), (yield from imap_client.create('MBOX')))
+        self.assertEquals('OK', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+
+        self.assertEquals(('OK', ['DELETE completed.']), (yield from imap_client.delete('MBOX')))
+        self.assertEquals('NO', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+
+
+    @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
