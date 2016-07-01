@@ -61,6 +61,7 @@ class ServerState(object):
     def login(self, user_login, protocol):
         if user_login not in self.mailboxes:
             self.mailboxes[user_login] = dict()
+            self.mailboxes[user_login]['INBOX'] = list()
         if user_login not in self.connections:
             self.connections[user_login] = protocol
 
@@ -267,6 +268,26 @@ class ImapProtocol(asyncio.Protocol):
 
     def check(self, tag, *args):
         self.send_tagged_line(tag, 'OK CHECK completed.')
+
+    def status(self, tag, *args):
+        mailbox_name = args[0]
+        data_items = ' '.join(args[1:])
+        mailbox = self.server_state.get_mailbox_messages(self.user_login, mailbox_name)
+        status_response = 'STATUS %s (' % mailbox_name
+        if 'MESSAGES' in data_items:
+            status_response += 'MESSAGES %s' % len(mailbox)
+        if 'RECENT' in data_items:
+            status_response += ' RECENT %s' % len([m for m in mailbox if 'RECENT' in m.flags])
+        if 'UIDNEXT' in data_items:
+            status_response += ' UIDNEXT %s' % (self.server_state.max_uid(self.user_login) + 1)
+        if 'UIDVALIDITY' in data_items:
+            status_response += ' UIDVALIDITY %s' % (self.server_state.max_uid(self.user_login) + 1)
+        if 'UNSEEN' in data_items:
+            status_response += ' UNSEEN %s' % len([m for m in mailbox if 'UNSEEN' in m.flags])
+        status_response += ')'
+        self.send_untagged_line(status_response)
+        self.send_tagged_line(tag, 'OK STATUS completed.')
+
 
     def uid(self, tag, *args):
         self.by_uid = True

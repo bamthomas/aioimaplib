@@ -192,6 +192,15 @@ class TestImapServerWithImaplib(WithImapServer):
                           (yield from asyncio.wait_for(self.loop.run_in_executor(None, imap_client.check), 1)))
 
     @asyncio.coroutine
+    def test_status(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        self.assertEquals(('OK', [b'INBOX (MESSAGES 0 UIDNEXT 1)']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.status, 'INBOX',
+                                                                                '(MESSAGES UIDNEXT)')), 1)))
+
+    @asyncio.coroutine
     def test_close(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         self.assertEquals(imapserver.SELECTED, get_imapconnection('user').state)
@@ -220,6 +229,6 @@ class TestImapServerWithImaplib(WithImapServer):
 
         result, data = yield from asyncio.wait_for(self.loop.run_in_executor(None, imap_client.logout), 1)
 
-        self.assertEqual('BYE', result) # uhh ?
+        self.assertEqual('BYE', result)  # uhh ?
         self.assertEqual([b'Logging out'], data)
         self.assertEquals(imapserver.LOGOUT, get_imapconnection('user').state)
