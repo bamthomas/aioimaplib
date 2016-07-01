@@ -86,6 +86,9 @@ class ServerState(object):
     def subscribe(self, user, mailbox):
         self.subcriptions[user].add(mailbox)
 
+    def unsubscribe(self, user, mailbox):
+        self.subcriptions[user].remove(mailbox)
+
     def remove(self, message, user, mailbox):
         self.mailboxes[user][mailbox].remove(message)
 
@@ -298,6 +301,11 @@ class ImapProtocol(asyncio.Protocol):
         mailbox_name = args[0]
         self.server_state.subscribe(self.user_login, mailbox_name)
         self.send_tagged_line(tag, 'OK SUBSCRIBE completed.')
+
+    def unsubscribe(self, tag, *args):
+        mailbox_name = args[0]
+        self.server_state.unsubscribe(self.user_login, mailbox_name)
+        self.send_tagged_line(tag, 'OK UNSUBSCRIBE completed.')
 
     def uid(self, tag, *args):
         self.by_uid = True

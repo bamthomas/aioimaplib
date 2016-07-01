@@ -201,13 +201,17 @@ class TestImapServerWithImaplib(WithImapServer):
                                                                                 '(MESSAGES UIDNEXT)')), 1)))
 
     @asyncio.coroutine
-    def test_subscribe(self):
+    def test_subscribe_unsubscribe(self):
         imap_client = yield from self.login_user('user', 'pass')
 
         self.assertEquals(('OK', [b'SUBSCRIBE completed.']),
                           (yield from asyncio.wait_for(
                               self.loop.run_in_executor(None, functools.partial(
                                   imap_client.subscribe, '#fr.soc.feminisme')), 1)))
+        self.assertEquals(('OK', [b'UNSUBSCRIBE completed.']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(
+                                  imap_client.unsubscribe, '#fr.soc.feminisme')), 1)))
 
     @asyncio.coroutine
     def test_close(self):
