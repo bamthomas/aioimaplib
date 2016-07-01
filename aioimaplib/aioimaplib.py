@@ -11,7 +11,6 @@ import functools
 import random
 from collections import namedtuple
 
-
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
@@ -28,50 +27,49 @@ AllowedVersions = ('IMAP4REV1', 'IMAP4')
 Exec = Enum('Exec', 'sync async')
 Cmd = namedtuple('Cmd', 'name valid_states exec')
 Commands = {
-    'APPEND':       Cmd('APPEND',       (AUTH, SELECTED),           Exec.sync),
-    'AUTHENTICATE': Cmd('AUTHENTICATE', (NONAUTH,),                 Exec.sync),
-    'CAPABILITY':   Cmd('CAPABILITY',   (NONAUTH, AUTH, SELECTED),  Exec.async),
-    'CHECK':        Cmd('CHECK',        (SELECTED,),                Exec.async),
-    'CLOSE':        Cmd('CLOSE',        (SELECTED,),                Exec.sync),
-    'COMPRESS':     Cmd('COMPRESS',     (AUTH,),                    Exec.sync),
-    'COPY':         Cmd('COPY',         (SELECTED,),                Exec.async),
-    'CREATE':       Cmd('CREATE',       (AUTH, SELECTED),           Exec.async),
-    'DELETE':       Cmd('DELETE',       (AUTH, SELECTED),           Exec.async),
-    'DELETEACL':    Cmd('DELETEACL',    (AUTH, SELECTED),           Exec.async),
-    'EXAMINE':      Cmd('EXAMINE',      (AUTH, SELECTED),           Exec.sync),
-    'EXPUNGE':      Cmd('EXPUNGE',      (SELECTED,),                Exec.async),
-    'FETCH':        Cmd('FETCH',        (SELECTED,),                Exec.async),
-    'GETACL':       Cmd('GETACL',       (AUTH, SELECTED),           Exec.async),
-    'GETANNOTATION':Cmd('GETANNOTATION',(AUTH, SELECTED),           Exec.async),
-    'GETQUOTA':     Cmd('GETQUOTA',     (AUTH, SELECTED),           Exec.async),
-    'GETQUOTAROOT': Cmd('GETQUOTAROOT', (AUTH, SELECTED),           Exec.async),
-    'ID':           Cmd('ID',           (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.async),
-    'IDLE':         Cmd('IDLE',         (SELECTED,),                Exec.sync),
-    'LIST':         Cmd('LIST',         (AUTH, SELECTED),           Exec.async),
-    'LOGIN':        Cmd('LOGIN',        (NONAUTH,),                 Exec.sync),
-    'LOGOUT':       Cmd('LOGOUT',       (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.sync),
-    'LSUB':         Cmd('LSUB',         (AUTH, SELECTED),           Exec.async),
-    'MYRIGHTS':     Cmd('MYRIGHTS',     (AUTH, SELECTED),           Exec.async),
-    'NAMESPACE':    Cmd('NAMESPACE',    (AUTH, SELECTED),           Exec.async),
-    'NOOP':         Cmd('NOOP',         (NONAUTH, AUTH, SELECTED),  Exec.async),
-    'PARTIAL':      Cmd('PARTIAL',      (SELECTED,),                Exec.async),
-    'PROXYAUTH':    Cmd('PROXYAUTH',    (AUTH,),                    Exec.sync),
-    'RENAME':       Cmd('RENAME',       (AUTH, SELECTED),           Exec.async),
-    'SEARCH':       Cmd('SEARCH',       (SELECTED,),                Exec.async),
-    'SELECT':       Cmd('SELECT',       (AUTH, SELECTED),           Exec.sync),
-    'SETACL':       Cmd('SETACL',       (AUTH, SELECTED),           Exec.sync),
-    'SETANNOTATION':Cmd('SETANNOTATION',(AUTH, SELECTED),           Exec.async),
-    'SETQUOTA':     Cmd('SETQUOTA',     (AUTH, SELECTED),           Exec.sync),
-    'SORT':         Cmd('SORT',         (SELECTED,),                Exec.async),
-    'STARTTLS':     Cmd('STARTTLS',     (NONAUTH,),                 Exec.sync),
-    'STATUS':       Cmd('STATUS',       (AUTH, SELECTED),           Exec.async),
-    'STORE':        Cmd('STORE',        (SELECTED,),                Exec.async),
-    'SUBSCRIBE':    Cmd('SUBSCRIBE',    (AUTH, SELECTED),           Exec.sync),
-    'THREAD':       Cmd('THREAD',       (SELECTED,),                Exec.async),
-    'UID':          Cmd('UID',          (SELECTED,),                Exec.async),
-    'UNSUBSCRIBE':  Cmd('UNSUBSCRIBE',  (AUTH, SELECTED),           Exec.sync),
+    'APPEND': Cmd('APPEND', (AUTH, SELECTED), Exec.sync),
+    'AUTHENTICATE': Cmd('AUTHENTICATE', (NONAUTH,), Exec.sync),
+    'CAPABILITY': Cmd('CAPABILITY', (NONAUTH, AUTH, SELECTED), Exec.async),
+    'CHECK': Cmd('CHECK', (SELECTED,), Exec.async),
+    'CLOSE': Cmd('CLOSE', (SELECTED,), Exec.sync),
+    'COMPRESS': Cmd('COMPRESS', (AUTH,), Exec.sync),
+    'COPY': Cmd('COPY', (SELECTED,), Exec.async),
+    'CREATE': Cmd('CREATE', (AUTH, SELECTED), Exec.async),
+    'DELETE': Cmd('DELETE', (AUTH, SELECTED), Exec.async),
+    'DELETEACL': Cmd('DELETEACL', (AUTH, SELECTED), Exec.async),
+    'EXAMINE': Cmd('EXAMINE', (AUTH, SELECTED), Exec.sync),
+    'EXPUNGE': Cmd('EXPUNGE', (SELECTED,), Exec.async),
+    'FETCH': Cmd('FETCH', (SELECTED,), Exec.async),
+    'GETACL': Cmd('GETACL', (AUTH, SELECTED), Exec.async),
+    'GETANNOTATION': Cmd('GETANNOTATION', (AUTH, SELECTED), Exec.async),
+    'GETQUOTA': Cmd('GETQUOTA', (AUTH, SELECTED), Exec.async),
+    'GETQUOTAROOT': Cmd('GETQUOTAROOT', (AUTH, SELECTED), Exec.async),
+    'ID': Cmd('ID', (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.async),
+    'IDLE': Cmd('IDLE', (SELECTED,), Exec.sync),
+    'LIST': Cmd('LIST', (AUTH, SELECTED), Exec.async),
+    'LOGIN': Cmd('LOGIN', (NONAUTH,), Exec.sync),
+    'LOGOUT': Cmd('LOGOUT', (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.sync),
+    'LSUB': Cmd('LSUB', (AUTH, SELECTED), Exec.async),
+    'MYRIGHTS': Cmd('MYRIGHTS', (AUTH, SELECTED), Exec.async),
+    'NAMESPACE': Cmd('NAMESPACE', (AUTH, SELECTED), Exec.async),
+    'NOOP': Cmd('NOOP', (NONAUTH, AUTH, SELECTED), Exec.async),
+    'PARTIAL': Cmd('PARTIAL', (SELECTED,), Exec.async),
+    'PROXYAUTH': Cmd('PROXYAUTH', (AUTH,), Exec.sync),
+    'RENAME': Cmd('RENAME', (AUTH, SELECTED), Exec.async),
+    'SEARCH': Cmd('SEARCH', (SELECTED,), Exec.async),
+    'SELECT': Cmd('SELECT', (AUTH, SELECTED), Exec.sync),
+    'SETACL': Cmd('SETACL', (AUTH, SELECTED), Exec.sync),
+    'SETANNOTATION': Cmd('SETANNOTATION', (AUTH, SELECTED), Exec.async),
+    'SETQUOTA': Cmd('SETQUOTA', (AUTH, SELECTED), Exec.sync),
+    'SORT': Cmd('SORT', (SELECTED,), Exec.async),
+    'STARTTLS': Cmd('STARTTLS', (NONAUTH,), Exec.sync),
+    'STATUS': Cmd('STATUS', (AUTH, SELECTED), Exec.async),
+    'STORE': Cmd('STORE', (SELECTED,), Exec.async),
+    'SUBSCRIBE': Cmd('SUBSCRIBE', (AUTH, SELECTED), Exec.sync),
+    'THREAD': Cmd('THREAD', (SELECTED,), Exec.async),
+    'UID': Cmd('UID', (SELECTED,), Exec.async),
+    'UNSUBSCRIBE': Cmd('UNSUBSCRIBE', (AUTH, SELECTED), Exec.sync),
 }
-
 
 Response = namedtuple('Response', 'result text')
 
@@ -124,7 +122,9 @@ def change_state(coro):
             log.debug('state -> %s' % self.state)
             self.state_condition.notify_all()
             return res
+
     return wrapper
+
 
 # cf https://tools.ietf.org/html/rfc3501#section-9
 # untagged responses types
@@ -182,6 +182,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         if self.pending_sync_command is not None:
             yield from self.pending_sync_command.wait()
+
+        if Commands.get(command.name).exec == Exec.async and \
+                self.pending_async_commands.get(command.untagged_resp) is not None:
+            yield from self.pending_async_commands[command.untagged_resp].wait()
 
         self.send(str(command))
 
@@ -430,7 +434,8 @@ class IMAP4(object):
 
     @asyncio.coroutine
     def uid_search(self, *criteria, charset='utf-8'):
-        return (yield from asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout))
+        return (
+            yield from asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout))
 
     @asyncio.coroutine
     def uid(self, command, *criteria):
@@ -471,7 +476,8 @@ class IMAP4_SSL(IMAP4):
 
 def int2ap(num):
     """Convert integer to A-P string representation."""
-    val = ''; ap = 'ABCDEFGHIJKLMNOP'
+    val = '';
+    ap = 'ABCDEFGHIJKLMNOP'
     num = int(abs(num))
     while num:
         num, mod = divmod(num, 16)

@@ -217,11 +217,23 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(('OK', ['1']), (yield from imap_client.select('MAILBOX')))
 
     @asyncio.coroutine
-    def test_executing_sync_commands_sequentialy(self):
+    def test_executing_sync_commands_sequentially(self):
         imap_client = yield from self.login_user('user', 'pass')
 
         f1 = asyncio.async(imap_client.examine('INBOX'))
         f2 = asyncio.async(imap_client.examine('MAILBOX'))
+
+        yield from asyncio.wait([f1, f2])
+        self.assertIsNone(f1.exception())
+        self.assertIsNone(f2.exception())
+
+    @asyncio.coroutine
+    def test_executing_same_async_commands_sequentially(self):
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        f1 = asyncio.async(imap_client.fetch('1', '(RFC822)'))
+        f2 = asyncio.async(imap_client.fetch('1', '(RFC822)'))
 
         yield from asyncio.wait([f1, f2])
         self.assertIsNone(f1.exception())
