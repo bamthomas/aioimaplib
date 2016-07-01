@@ -265,6 +265,9 @@ class ImapProtocol(asyncio.Protocol):
     def noop(self, tag, *args):
         self.send_tagged_line(tag, 'OK NOOP completed.')
 
+    def check(self, tag, *args):
+        self.send_tagged_line(tag, 'OK CHECK completed.')
+
     def uid(self, tag, *args):
         self.by_uid = True
         try:
