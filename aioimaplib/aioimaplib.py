@@ -183,20 +183,16 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.pending_sync_command is not None:
             yield from self.pending_sync_command.wait()
 
-        if Commands.get(command.name).exec == Exec.async and \
-                self.pending_async_commands.get(command.untagged_resp) is not None:
-            yield from self.pending_async_commands[command.untagged_resp].wait()
-
-        if Commands.get(command.name).exec == Exec.sync and self.pending_async_commands:
-            yield from asyncio.wait([asyncio.async(cmd.wait()) for cmd in self.pending_async_commands.values()])
-
-        self.send(str(command))
-
         if Commands.get(command.name).exec == Exec.sync:
+            if self.pending_async_commands:
+                yield from self.wait_async_pending_commands()
             self.pending_sync_command = command
         else:
+            if self.pending_async_commands.get(command.untagged_resp) is not None:
+                yield from self.pending_async_commands[command.untagged_resp].wait()
             self.pending_async_commands[command.untagged_resp] = command
 
+        self.send(str(command))
         yield from command.wait()
         return command.response
 
@@ -313,9 +309,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.imap_version = version
 
     @asyncio.coroutine
-    def wait_pending_commands(self):
-        for command in self.pending_async_commands.values():
-            yield from command.wait()
+    def wait_async_pending_commands(self):
+        yield from asyncio.wait([asyncio.async(cmd.wait()) for cmd in self.pending_async_commands.values()])
 
     @asyncio.coroutine
     def wait(self, state_regexp):
