@@ -190,6 +190,11 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(self.idle_tag, 'OK IDLE terminated')
         self.idle_tag = None
 
+    @critical_section(next_state=AUTH)
+    def close(self, tag, *args):
+        self.user_mailbox = None
+        self.send_tagged_line(tag, 'OK CLOSE completed.')
+
     @asyncio.coroutine
     def wait(self, state):
         with (yield from self.state_condition):

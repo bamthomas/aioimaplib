@@ -184,6 +184,15 @@ class TestImapServerWithImaplib(WithImapServer):
         self.assertEquals(('OK', [b'NOOP completed.']),
                           (yield from asyncio.wait_for(self.loop.run_in_executor(None, imap_client.noop), 1)))
 
+    @asyncio.coroutine
+    def test_close(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        self.assertEquals(imapserver.SELECTED, get_imapconnection('user').state)
+
+        self.assertEquals(('OK', [b'CLOSE completed.']),
+                          (yield from asyncio.wait_for(self.loop.run_in_executor(None, imap_client.close), 1)))
+
+        self.assertEquals(imapserver.AUTH, get_imapconnection('user').state)
 
     @asyncio.coroutine
     def test_copy_messages(self):
