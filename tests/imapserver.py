@@ -73,7 +73,7 @@ class ServerState(object):
             self.mailboxes[user_login][user_mailbox] = list()
 
     def get_mailbox_messages(self, user_login, user_mailbox):
-        return self.mailboxes[user_login][user_mailbox]
+        return self.mailboxes[user_login].get(user_mailbox)
 
     def imap_receive(self, user, mail, mailbox):
         uid = self.add_mail(user, mail, mailbox)
@@ -95,6 +95,10 @@ class ServerState(object):
 
     def remove(self, message, user, mailbox):
         self.mailboxes[user][mailbox].remove(message)
+
+    def delete_mailbox(self, user, mailbox):
+        if mailbox in self.mailboxes[user]:
+            del self.mailboxes[user][mailbox]
 
     def copy(self, user, src_mailbox, dest_mailbox, message_set):
         to_copy = [msg for msg in self.mailboxes[user][src_mailbox] if str(msg.id) in message_set]
@@ -286,6 +290,8 @@ class ImapProtocol(asyncio.Protocol):
         mailbox_name = args[0]
         data_items = ' '.join(args[1:])
         mailbox = self.server_state.get_mailbox_messages(self.user_login, mailbox_name)
+        if mailbox is None:
+            self.send_tagged_line(tag, 'NO STATUS completed.')
         status_response = 'STATUS %s (' % mailbox_name
         if 'MESSAGES' in data_items:
             status_response += 'MESSAGES %s' % len(mailbox)
@@ -322,6 +328,16 @@ class ImapProtocol(asyncio.Protocol):
         for found_mb_name in self.server_state.lsub(self.user_login, mailbox_search):
             self.send_untagged_line('LSUB () "." %s' % found_mb_name)
         self.send_tagged_line(tag, 'OK LSUB completed.')
+
+    def create(self, tag, *args):
+        mailbox_name = args[0]
+        self.server_state.create_mailbox_if_not_exists(self.user_login, mailbox_name)
+        self.send_tagged_line(tag, 'OK CREATE completed.')
+
+    def delete(self, tag, *args):
+        mailbox_name = args[0]
+        self.server_state.delete_mailbox(self.user_login, mailbox_name)
+        self.send_tagged_line(tag, 'OK DELETE completed.')
 
     def uid(self, tag, *args):
         self.by_uid = True

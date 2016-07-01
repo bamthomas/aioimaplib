@@ -248,6 +248,30 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.select, 'MAILBOX')), 20)))
 
     @asyncio.coroutine
+    def test_create_delete_mailbox(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        self.assertEquals(('NO', [b'STATUS completed.']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.status, 'MBOX', '(MESSAGES)')), 1)))
+
+        self.assertEquals(('OK', [b'CREATE completed.']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.create, 'MBOX')), 1)))
+
+        self.assertEquals(('OK', [b'MBOX (MESSAGES 0)']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.status, 'MBOX', '(MESSAGES)')), 1)))
+
+        self.assertEquals(('OK', [b'DELETE completed.']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.delete, 'MBOX')), 1)))
+
+        self.assertEquals(('NO', [b'STATUS completed.']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.status, 'MBOX', '(MESSAGES)')), 1)))
+
+    @asyncio.coroutine
     def test_logout(self):
         imap_client = yield from self.login_user('user', 'pass')
 
