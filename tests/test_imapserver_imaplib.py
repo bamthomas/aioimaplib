@@ -272,6 +272,23 @@ class TestImapServerWithImaplib(WithImapServer):
                               self.loop.run_in_executor(None, functools.partial(imap_client.status, 'MBOX', '(MESSAGES)')), 1)))
 
     @asyncio.coroutine
+    def test_rename_mailbox(self):
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass')
+
+        self.assertEquals(('NO', [b'STATUS completed.']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.status, 'MBOX', '(MESSAGES)')), 1)))
+
+        self.assertEquals(('OK', [b'RENAME completed.']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.rename, 'INBOX', 'MBOX')), 1)))
+
+        self.assertEquals(('OK', [b'MBOX (MESSAGES 1)']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(imap_client.status, 'MBOX', '(MESSAGES)')), 1)))
+
+    @asyncio.coroutine
     def test_logout(self):
         imap_client = yield from self.login_user('user', 'pass')
 

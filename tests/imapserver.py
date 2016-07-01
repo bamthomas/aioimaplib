@@ -100,6 +100,11 @@ class ServerState(object):
         if mailbox in self.mailboxes[user]:
             del self.mailboxes[user][mailbox]
 
+    def rename_mailbox(self, user, old_mb, new_mb):
+        if old_mb in self.mailboxes[user]:
+            mb = self.mailboxes[user].pop(old_mb)
+            self.mailboxes[user][new_mb] = mb
+
     def copy(self, user, src_mailbox, dest_mailbox, message_set):
         to_copy = [msg for msg in self.mailboxes[user][src_mailbox] if str(msg.id) in message_set]
         if dest_mailbox not in self.mailboxes[user]:
@@ -338,6 +343,11 @@ class ImapProtocol(asyncio.Protocol):
         mailbox_name = args[0]
         self.server_state.delete_mailbox(self.user_login, mailbox_name)
         self.send_tagged_line(tag, 'OK DELETE completed.')
+
+    def rename(self, tag, *args):
+        old_mb, new_mb = args
+        self.server_state.rename_mailbox(self.user_login, old_mb, new_mb)
+        self.send_tagged_line(tag, 'OK RENAME completed.')
 
     def uid(self, tag, *args):
         self.by_uid = True
