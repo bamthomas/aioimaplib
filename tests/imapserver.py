@@ -106,7 +106,7 @@ def critical_section(next_state):
 
     return decorator
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w "\(\)\+\-]+)?\r\n$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w "\(\)\+\-]+)?$)')
 
 
 class ImapProtocol(asyncio.Protocol):
@@ -125,16 +125,17 @@ class ImapProtocol(asyncio.Protocol):
         transport.write('* OK IMAP4rev1 MockIMAP Server ready\r\n'.encode())
 
     def data_received(self, data):
-        if command_re.match(data) is None:
-            self.send_untagged_line('BAD Error in IMAP command : Unknown command (%s).' % data)
-            return
-        command_array = data.decode().rstrip().split()
-        if self.state is not IDLE:
-            tag = command_array[0]
-            self.by_uid = False
-            self.exec_command(tag, command_array[1:])
-        else:
-            self.exec_command(None, command_array)
+        for cmd_line in data.splitlines():
+            if command_re.match(cmd_line) is None:
+                self.send_untagged_line('BAD Error in IMAP command : Unknown command (%r).' % cmd_line)
+                return
+            command_array = cmd_line.decode().rstrip().split()
+            if self.state is not IDLE:
+                tag = command_array[0]
+                self.by_uid = False
+                self.exec_command(tag, command_array[1:])
+            else:
+                self.exec_command(None, command_array)
 
     def connection_lost(self, error):
         if error:

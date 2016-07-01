@@ -240,6 +240,22 @@ class TestAioimaplib(WithImapServer):
         self.assertIsNone(f2.exception())
 
     @asyncio.coroutine
+    def test_executing_async_commands_in_parallel(self):
+         # cf valid example in https://tools.ietf.org/html/rfc3501#section-5.5
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        store = asyncio.async(imap_client.store('1', '+FLAGS FOO'))
+        copy = asyncio.async(imap_client.copy('1', 'MBOX'))
+        expunge = asyncio.async(imap_client.expunge())
+
+        yield from asyncio.wait([store, copy, expunge])
+        self.assertEquals(('OK', ['0']), (yield from imap_client.select()))
+        self.assertEquals(('OK', ['1']), (yield from imap_client.select('MBOX')))
+        self.assertEqual('1', (yield from imap_client.search('KEYWORD FOO', charset=None)).text[0])
+
+
+    @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
