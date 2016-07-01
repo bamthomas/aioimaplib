@@ -164,14 +164,17 @@ class TestAioimaplib(WithImapServer):
     def test_idle(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        def idle_callback(fut):
-            print('**************')
-
-        future = imap_client.idle(idle_callback)
+        idle = asyncio.async(imap_client.idle())
         yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.IDLE), 1)
+
+        idle_push = asyncio.async(imap_client.wait_server_push())
         imap_receive(Mail(to=['user'], mail_from='me', subject='hello'))
 
-        self.assertEquals(('OK', ['1 EXISTS', 'IDLE terminated']), (yield from asyncio.wait_for(future, 1)))
+        self.assertEquals('1 EXISTS', (yield from idle_push))
+        self.assertEquals('1 RECENT', (yield from imap_client.wait_server_push()))
+
+        imap_client.idle_done()
+        self.assertEquals(('OK', ['IDLE terminated']), (yield from asyncio.wait_for(idle, 1)))
 
     @asyncio.coroutine
     def test_store_and_search_by_keyword(self):

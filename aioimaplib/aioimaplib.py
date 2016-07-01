@@ -141,6 +141,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.capabilities = ()
         self.pending_async_commands = dict()
         self.pending_sync_command = None
+        self.idle_queue = asyncio.Queue()
         self.imap_version = None
 
         self.tagnum = 0
@@ -254,6 +255,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             Abort('server has not IDLE capability')
         return (yield from self.execute(Command('IDLE', self.new_tag(), loop=self.loop)))
 
+    def idle_done(self):
+        self.send('DONE')
+
     @asyncio.coroutine
     def search(self, *criteria, charset='utf-8', by_uid=False):
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
@@ -327,9 +331,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
-            self.pending_sync_command.append_to_resp(line)
             if self.pending_sync_command.name == 'IDLE':
-                self.send('DONE')
+                asyncio.async(self.idle_queue.put(line))
+            else:
+                self.pending_sync_command.append_to_resp(line)
         else:
             if message_data_without_literal_re.match(line):
                 text, command = line.split()[0:2]
@@ -455,10 +460,17 @@ class IMAP4(object):
     def fetch(self, message_set, message_parts):
         return (yield from asyncio.wait_for(self.protocol.fetch(message_set, message_parts), self.timeout))
 
-    def idle(self, callback=None):
-        future = asyncio.async(self.protocol.idle(), loop=self.protocol.loop)
-        future.add_done_callback(callback)
-        return future
+    @asyncio.coroutine
+    def idle(self):
+        return (yield from self.protocol.idle())
+
+    def idle_done(self):
+        self.protocol.idle_done()
+
+    @asyncio.coroutine
+    def wait_server_push(self):
+        return (yield from self.protocol.idle_queue.get())
+
 
 
 class IMAP4_SSL(IMAP4):
@@ -474,7 +486,7 @@ class IMAP4_SSL(IMAP4):
 
 def int2ap(num):
     """Convert integer to A-P string representation."""
-    val = '';
+    val = ''
     ap = 'ABCDEFGHIJKLMNOP'
     num = int(abs(num))
     while num:

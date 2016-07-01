@@ -270,6 +270,7 @@ class ImapProtocol(asyncio.Protocol):
     def notify_new_mail(self, uid):
         if self.idle_tag:
             self.send_untagged_line('{uid} EXISTS'.format(uid=uid))
+            self.send_untagged_line('{uid} RECENT'.format(uid=uid))
 
 
 _SERVER_STATE = ServerState()
