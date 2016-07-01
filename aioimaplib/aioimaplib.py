@@ -354,7 +354,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if len(cmds) == 0:
                 raise Abort('unexpected tagged (%s) response: %s' % (tag, response))
             elif len(cmds) > 1:
-                raise Error('unconsistent state : two commands have the same tag (%s)' % cmds)
+                raise Error('inconsistent state : two commands have the same tag (%s)' % cmds)
             command = cmds[0]
             self.pending_async_commands.pop(command.untagged_resp)
 
