@@ -97,6 +97,14 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(aioimaplib.SELECTED, imap_client.protocol.state)
 
     @asyncio.coroutine
+    def test_examine_no_messages(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        self.assertEquals(('OK', ['0']), (yield from imap_client.examine()))
+
+        self.assertEquals(aioimaplib.AUTH, imap_client.protocol.state)
+
+    @asyncio.coroutine
     def test_search_two_messages(self):
         imap_receive(Mail(['user']))
         imap_receive(Mail(['user']))
@@ -207,6 +215,16 @@ class TestAioimaplib(WithImapServer):
         self.assertEqual('OK', result)
 
         self.assertEquals(('OK', ['1']), (yield from imap_client.select('MAILBOX')))
+
+
+    # @asyncio.coroutine
+    # def test_executing_sync_commands_sequentialy(self):
+    #     imap_client = yield from self.login_user('user', 'pass')
+    #
+    #     f1 = asyncio.async(imap_client.protocol.select('INBOX'))
+    #     f2 = asyncio.async(imap_client.protocol.select('MAILBOX'))
+    #
+    #     yield from asyncio.wait([f1, f2])
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
