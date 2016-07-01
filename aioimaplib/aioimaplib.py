@@ -187,6 +187,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 self.pending_async_commands.get(command.untagged_resp) is not None:
             yield from self.pending_async_commands[command.untagged_resp].wait()
 
+        if Commands.get(command.name).exec == Exec.sync and self.pending_async_commands:
+            yield from asyncio.wait([asyncio.async(cmd.wait()) for cmd in self.pending_async_commands.values()])
+
         self.send(str(command))
 
         if Commands.get(command.name).exec == Exec.sync:
@@ -358,7 +361,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             elif len(cmds) > 1:
                 raise Error('unconsistent state : two commands have the same tag (%s)' % cmds)
             command = cmds[0]
-            self.pending_async_commands[command.untagged_resp] = None
+            self.pending_async_commands.pop(command.untagged_resp)
 
         response_result, _, response_text = response.partition(' ')
         command.close(response_text, result=response_result)

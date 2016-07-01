@@ -217,7 +217,7 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(('OK', ['1']), (yield from imap_client.select('MAILBOX')))
 
     @asyncio.coroutine
-    def test_executing_sync_commands_sequentially(self):
+    def test_concurrency_1_executing_sync_commands_sequentially(self):
         imap_client = yield from self.login_user('user', 'pass')
 
         f1 = asyncio.async(imap_client.examine('INBOX'))
@@ -228,7 +228,7 @@ class TestAioimaplib(WithImapServer):
         self.assertIsNone(f2.exception())
 
     @asyncio.coroutine
-    def test_executing_same_async_commands_sequentially(self):
+    def test_concurrency_2_executing_same_async_commands_sequentially(self):
         imap_receive(Mail(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
@@ -240,7 +240,7 @@ class TestAioimaplib(WithImapServer):
         self.assertIsNone(f2.exception())
 
     @asyncio.coroutine
-    def test_executing_async_commands_in_parallel(self):
+    def test_concurrency_3_executing_async_commands_in_parallel(self):
          # cf valid example in https://tools.ietf.org/html/rfc3501#section-5.5
         imap_receive(Mail(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
@@ -254,6 +254,16 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(('OK', ['1']), (yield from imap_client.select('MBOX')))
         self.assertEqual('1', (yield from imap_client.search('KEYWORD FOO', charset=None)).text[0])
 
+    @asyncio.coroutine
+    def test_concurrency_4_sync_command_waits_for_async_commands_to_finish(self):
+        imap_receive(Mail(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        asyncio.async(imap_client.copy('1', 'MBOX'))
+        asyncio.async(imap_client.expunge())
+        examine = asyncio.async(imap_client.examine('MBOX'))
+
+        self.assertEquals(('OK', ['1']), (yield from asyncio.wait_for(examine, 1)))
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
