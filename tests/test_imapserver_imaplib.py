@@ -65,6 +65,15 @@ class TestImapServerWithImaplib(WithImapServer):
         self.assertEqual([b'0'], data)
 
     @asyncio.coroutine
+    def test_examine_no_messages_in_mailbox(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        self.assertEquals(('OK', [b'0']), (yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.select, readonly=True)), 1)))
+
+        self.assertEquals(imapserver.AUTH, get_imapconnection('user').state)
+
+    @asyncio.coroutine
     def test_search_by_uid_two_messages(self):
         imap_receive(Mail(['user']))
         imap_receive(Mail(['user']))

@@ -64,7 +64,7 @@ class ServerState(object):
         if user_login not in self.connections:
             self.connections[user_login] = protocol
 
-    def select(self, user_login, user_mailbox):
+    def create_mailbox_if_not_exists(self, user_login, user_mailbox):
         if user_mailbox not in self.mailboxes[user_login]:
             self.mailboxes[user_login][user_mailbox] = list()
 
@@ -176,15 +176,7 @@ class ImapProtocol(asyncio.Protocol):
     @critical_section(next_state=SELECTED)
     def select(self, tag, *args):
         self.user_mailbox = args[0]
-        self.server_state.select(self.user_login, self.user_mailbox)
-        mailbox = self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
-        self.send_untagged_line('FLAGS (\Answered \Flagged \Deleted \Seen \Draft)')
-        self.send_untagged_line('OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.')
-        self.send_untagged_line('{nb_messages} EXISTS'.format(nb_messages=len(mailbox)))
-        self.send_untagged_line('{nb_messages} RECENT'.format(nb_messages=0))
-        self.send_untagged_line('OK [UIDVALIDITY 1400426466] UIDs valid')
-        self.send_untagged_line('OK [UIDNEXT {next_uid}] Predicted next UID'.format(next_uid=len(mailbox) + 1))
-        self.send_tagged_line(tag, 'OK [READ] Select completed (0.000 secs).')
+        self.examine(tag, *args)
 
     @critical_section(next_state=IDLE)
     def idle(self, tag, *args):
@@ -201,6 +193,18 @@ class ImapProtocol(asyncio.Protocol):
     def wait(self, state):
         with (yield from self.state_condition):
             yield from self.state_condition.wait_for(lambda: self.state == state)
+
+    def examine(self, tag, *args):
+        mailbox_name = args[0]
+        self.server_state.create_mailbox_if_not_exists(self.user_login, mailbox_name)
+        mailbox = self.server_state.get_mailbox_messages(self.user_login, mailbox_name)
+        self.send_untagged_line('FLAGS (\Answered \Flagged \Deleted \Seen \Draft)')
+        self.send_untagged_line('OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.')
+        self.send_untagged_line('{nb_messages} EXISTS'.format(nb_messages=len(mailbox)))
+        self.send_untagged_line('{nb_messages} RECENT'.format(nb_messages=0))
+        self.send_untagged_line('OK [UIDVALIDITY 1400426466] UIDs valid')
+        self.send_untagged_line('OK [UIDNEXT {next_uid}] Predicted next UID'.format(next_uid=len(mailbox) + 1))
+        self.send_tagged_line(tag, 'OK [READ] Select completed (0.000 secs).')
 
     def search(self, tag, *args):
         keyword = None
