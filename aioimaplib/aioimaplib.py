@@ -180,6 +180,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.state not in Commands.get(command.name).valid_states:
             raise Abort('command %s illegal in state %s' % (command.name, self.state))
 
+        if self.pending_sync_command is not None:
+            yield from self.pending_sync_command.wait()
+
         self.send(str(command))
 
         if Commands.get(command.name).exec == Exec.sync:
