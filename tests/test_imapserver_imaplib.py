@@ -178,6 +178,14 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.select)), 1)))
 
     @asyncio.coroutine
+    def test_noop(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        self.assertEquals(('OK', [b'NOOP completed.']),
+                          (yield from asyncio.wait_for(self.loop.run_in_executor(None, imap_client.noop), 1)))
+
+
+    @asyncio.coroutine
     def test_copy_messages(self):
         imap_receive(Mail(['user']))
         imap_receive(Mail(['user']))
