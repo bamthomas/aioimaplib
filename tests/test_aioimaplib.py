@@ -269,6 +269,11 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(('OK', ['1']), (yield from asyncio.wait_for(examine, 1)))
 
     @asyncio.coroutine
+    def test_noop(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        self.assertEquals(('OK', ['NOOP completed.']), (yield from imap_client.noop()))
+
+    @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)

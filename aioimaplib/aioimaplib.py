@@ -314,6 +314,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.imap_version = version
 
     @asyncio.coroutine
+    def noop(self):
+        return (yield from self.execute(Command('NOOP', self.new_tag(), loop=self.loop)))
+
+    @asyncio.coroutine
     def wait_async_pending_commands(self):
         yield from asyncio.wait([asyncio.async(cmd.wait()) for cmd in self.pending_async_commands.values()])
 
@@ -471,6 +475,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def wait_server_push(self):
         return (yield from self.protocol.idle_queue.get())
+
+    @asyncio.coroutine
+    def noop(self):
+        return (yield from asyncio.wait_for(self.protocol.noop(), self.timeout))
 
 
 class IMAP4_SSL(IMAP4):
