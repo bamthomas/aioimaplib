@@ -314,6 +314,14 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(('OK', ['DELETE completed.']), (yield from imap_client.delete('MBOX')))
         self.assertEquals('NO', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
 
+    @asyncio.coroutine
+    def test_rename_mailbox(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        self.assertEquals('NO', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+
+        self.assertEquals(('OK', ['RENAME completed.']), (yield from imap_client.rename('INBOX', 'MBOX')))
+
+        self.assertEquals('OK', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
