@@ -295,6 +295,13 @@ class TestAioimaplib(WithImapServer):
                           (yield from imap_client.status('INBOX', '(MESSAGES UIDNEXT)')).lines[0])
 
     @asyncio.coroutine
+    def test_subscribe_unsubscribe(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        self.assertEquals(('OK', ['SUBSCRIBE completed.']), (yield from imap_client.subscribe('#fr.soc.feminisme')))
+        self.assertEquals(('OK', ['UNSUBSCRIBE completed.']), (yield from imap_client.unsubscribe('#fr.soc.feminisme')))
+
+    @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)

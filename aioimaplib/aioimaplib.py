@@ -334,6 +334,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return (yield from self.execute(Command('STATUS', self.new_tag(), *args, loop=self.loop)))
 
     @asyncio.coroutine
+    def subscribe(self, *args):
+        return (yield from self.execute(Command('SUBSCRIBE', self.new_tag(), *args, loop=self.loop)))
+
+    @asyncio.coroutine
+    def unsubscribe(self, *args):
+        return (yield from self.execute(Command('UNSUBSCRIBE', self.new_tag(), *args, loop=self.loop)))
+
+    @asyncio.coroutine
     def wait_async_pending_commands(self):
         yield from asyncio.wait([asyncio.async(cmd.wait()) for cmd in self.pending_async_commands.values()])
 
@@ -503,6 +511,14 @@ class IMAP4(object):
     @asyncio.coroutine
     def status(self, mailbox, names):
         return (yield from asyncio.wait_for(self.protocol.status(mailbox, names), self.timeout))
+
+    @asyncio.coroutine
+    def subscribe(self, mailbox):
+        return (yield from asyncio.wait_for(self.protocol.subscribe(mailbox), self.timeout))
+
+    @asyncio.coroutine
+    def unsubscribe(self, mailbox):
+        return (yield from asyncio.wait_for(self.protocol.unsubscribe(mailbox), self.timeout))
 
     @asyncio.coroutine
     def close(self):
