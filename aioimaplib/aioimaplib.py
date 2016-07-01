@@ -317,6 +317,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def noop(self):
         return (yield from self.execute(Command('NOOP', self.new_tag(), loop=self.loop)))
 
+    @asyncio.coroutine
+    def check(self):
+        return (yield from self.execute(Command('CHECK', self.new_tag(), loop=self.loop)))
+
     @change_state
     @asyncio.coroutine
     def close(self):
@@ -487,6 +491,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def noop(self):
         return (yield from asyncio.wait_for(self.protocol.noop(), self.timeout))
+
+    @asyncio.coroutine
+    def check(self):
+        return (yield from asyncio.wait_for(self.protocol.check(), self.timeout))
 
     @asyncio.coroutine
     def close(self):
