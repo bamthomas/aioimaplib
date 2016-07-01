@@ -89,6 +89,10 @@ class ServerState(object):
     def unsubscribe(self, user, mailbox):
         self.subcriptions[user].remove(mailbox)
 
+    def lsub(self, user, mailbox_search):
+        mb_re = re.compile(mailbox_search)
+        return [mb for mb in self.subcriptions[user] if mb_re.match(mb)]
+
     def remove(self, message, user, mailbox):
         self.mailboxes[user][mailbox].remove(message)
 
@@ -116,7 +120,7 @@ def critical_section(next_state):
 
     return decorator
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#"\(\)\+\-]+)?$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#\*"\(\)\+\-]+)?$)')
 
 
 class ImapProtocol(asyncio.Protocol):
@@ -306,6 +310,18 @@ class ImapProtocol(asyncio.Protocol):
         mailbox_name = args[0]
         self.server_state.unsubscribe(self.user_login, mailbox_name)
         self.send_tagged_line(tag, 'OK UNSUBSCRIBE completed.')
+
+    def lsub(self, tag, *args):
+        reference_name, mailbox_name = args
+
+        if not reference_name.endswith('.') and not mailbox_name.startswith('.'):
+            mailbox_search = '%s.%s' % (reference_name, mailbox_name)
+        else:
+            mailbox_search = reference_name + mailbox_name
+
+        for found_mb_name in self.server_state.lsub(self.user_login, mailbox_search):
+            self.send_untagged_line('LSUB () "." %s' % found_mb_name)
+        self.send_tagged_line(tag, 'OK LSUB completed.')
 
     def uid(self, tag, *args):
         self.by_uid = True
