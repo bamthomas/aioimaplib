@@ -133,8 +133,8 @@ class TestAioimaplib(WithImapServer):
         imap_receive(Mail(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=2
         imap_receive(Mail(['user']))  # id=2 uid=3
 
-        self.assertEqual('1 3', (yield from imap_client.uid_search('ALL')).text[0])
-        self.assertEqual('1 2', (yield from imap_client.search('ALL')).text[0])
+        self.assertEqual('1 3', (yield from imap_client.uid_search('ALL')).lines[0])
+        self.assertEqual('1 2', (yield from imap_client.search('ALL')).lines[0])
 
     @asyncio.coroutine
     def test_fetch(self):
@@ -158,7 +158,7 @@ class TestAioimaplib(WithImapServer):
         response = (yield from imap_client.uid('fetch', '1', '(RFC822)'))
 
         self.assertEqual('OK', response.result)
-        self.assertEquals(str(mail).encode(), response.text[0])
+        self.assertEquals(str(mail).encode(), response.lines[0])
 
     @asyncio.coroutine
     def test_idle(self):
@@ -181,12 +181,12 @@ class TestAioimaplib(WithImapServer):
         imap_receive(Mail(['user']))
         imap_receive(Mail(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        self.assertEqual('', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).text[0])
+        self.assertEqual('', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
 
         self.assertEquals('OK', (yield from imap_client.uid('store', '1', '+FLAGS FOO')).result)
 
-        self.assertEqual('1', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).text[0])
-        self.assertEqual('2', (yield from imap_client.uid_search('UNKEYWORD FOO', charset=None)).text[0])
+        self.assertEqual('1', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
+        self.assertEqual('2', (yield from imap_client.uid_search('UNKEYWORD FOO', charset=None)).lines[0])
 
     @asyncio.coroutine
     def test_expunge_messages(self):
@@ -255,7 +255,7 @@ class TestAioimaplib(WithImapServer):
         yield from asyncio.wait([store, copy, expunge])
         self.assertEquals(('OK', ['0']), (yield from imap_client.select()))
         self.assertEquals(('OK', ['1']), (yield from imap_client.select('MBOX')))
-        self.assertEqual('1', (yield from imap_client.search('KEYWORD FOO', charset=None)).text[0])
+        self.assertEqual('1', (yield from imap_client.search('KEYWORD FOO', charset=None)).lines[0])
 
     @asyncio.coroutine
     def test_concurrency_4_sync_command_waits_for_async_commands_to_finish(self):

@@ -72,7 +72,7 @@ Commands = {
     'UNSUBSCRIBE':  Cmd('UNSUBSCRIBE',  (AUTH, SELECTED),           Exec.sync),
 }
 
-Response = namedtuple('Response', 'result text')
+Response = namedtuple('Response', 'result lines')
 
 
 class Command(object):
@@ -97,7 +97,7 @@ class Command(object):
             self.response = Response(result, [line])
         else:
             old = self.response
-            self.response = Response(result, old.text + [line])
+            self.response = Response(result, old.lines + [line])
 
     @asyncio.coroutine
     def wait(self):
@@ -235,7 +235,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         if 'OK' == response.result:
             self.state = SELECTED
-        for line in response.text:
+        for line in response.lines:
             if 'EXISTS' in line:
                 return Response(response.result, [line.replace(' EXISTS', '')])
         return response
@@ -245,7 +245,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         response = yield from self.execute(
             Command('EXAMINE', self.new_tag(), mailbox, loop=self.loop))
 
-        for line in response.text:
+        for line in response.lines:
             if 'EXISTS' in line:
                 return Response(response.result, [line.replace(' EXISTS', '')])
         return response
@@ -306,7 +306,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def capability(self):
         response = yield from self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
-        self.capabilities = response.text[0].split()
+        self.capabilities = response.lines[0].split()
         version = self.capabilities[0].upper()
         if version not in AllowedVersions:
             raise Error('server not IMAP4 compliant')
@@ -471,7 +471,6 @@ class IMAP4(object):
     @asyncio.coroutine
     def wait_server_push(self):
         return (yield from self.protocol.idle_queue.get())
-
 
 
 class IMAP4_SSL(IMAP4):
