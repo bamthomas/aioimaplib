@@ -240,6 +240,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 return Response(response.result, [line.replace(' EXISTS', '')])
         return response
 
+    @change_state
+    @asyncio.coroutine
+    def close(self):
+        response = yield from self.execute(Command('CLOSE', self.new_tag(), loop=self.loop))
+        if response.result == 'OK':
+            self.state = AUTH
+        return response
+
     @asyncio.coroutine
     def examine(self, mailbox='INBOX'):
         response = yield from self.execute(
@@ -321,13 +329,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def check(self):
         return (yield from self.execute(Command('CHECK', self.new_tag(), loop=self.loop)))
 
-    @change_state
     @asyncio.coroutine
-    def close(self):
-        response = yield from self.execute(Command('CLOSE', self.new_tag(), loop=self.loop))
-        if response.result == 'OK':
-            self.state = AUTH
-        return response
+    def status(self, *args):
+        return (yield from self.execute(Command('STATUS', self.new_tag(), *args, loop=self.loop)))
 
     @asyncio.coroutine
     def wait_async_pending_commands(self):
@@ -495,6 +499,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def check(self):
         return (yield from asyncio.wait_for(self.protocol.check(), self.timeout))
+
+    @asyncio.coroutine
+    def status(self, mailbox, names):
+        return (yield from asyncio.wait_for(self.protocol.status(mailbox, names), self.timeout))
 
     @asyncio.coroutine
     def close(self):
