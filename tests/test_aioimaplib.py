@@ -324,6 +324,16 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals('OK', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
 
     @asyncio.coroutine
+    def test_list(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        self.assertEquals(('OK', ['() "/" INBOX', 'LIST completed.']), (yield from imap_client.list('', '.*')))
+
+        yield from imap_client.create('MYBOX')
+        self.assertEquals(('OK', ['() "/" INBOX', '() "/" MYBOX', 'LIST completed.']),
+                          (yield from imap_client.list('', '.*')))
+
+
+    @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)

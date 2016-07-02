@@ -321,12 +321,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             self.imap_version = version
 
-    simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME', 'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB'}
+    simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
+                       'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST'}
 
     @asyncio.coroutine
     def simple_command(self, name, *args):
         if name not in self.simple_commands:
-            raise NotImplemented('simple command only available for %s' % self.simple_command)
+            raise NotImplementedError('simple command only available for %s' % self.simple_commands)
         return (yield from self.execute(Command(name, self.new_tag(), *args, loop=self.loop)))
 
     @asyncio.coroutine
@@ -523,6 +524,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def rename(self, old_mailbox_name, new_mailbox_name):
         return (yield from asyncio.wait_for(self.protocol.simple_command('RENAME', old_mailbox_name, new_mailbox_name), self.timeout))
+
+    @asyncio.coroutine
+    def list(self, reference_name, mailbox_pattern):
+        return (yield from asyncio.wait_for(self.protocol.simple_command('LIST', reference_name, mailbox_pattern), self.timeout))
 
     @asyncio.coroutine
     def close(self):
