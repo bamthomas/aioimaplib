@@ -321,41 +321,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             self.imap_version = version
 
-    @asyncio.coroutine
-    def noop(self):
-        return (yield from self.execute(Command('NOOP', self.new_tag(), loop=self.loop)))
+    simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME', 'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB'}
 
     @asyncio.coroutine
-    def check(self):
-        return (yield from self.execute(Command('CHECK', self.new_tag(), loop=self.loop)))
-
-    @asyncio.coroutine
-    def status(self, *args):
-        return (yield from self.execute(Command('STATUS', self.new_tag(), *args, loop=self.loop)))
-
-    @asyncio.coroutine
-    def create(self, *args):
-        return (yield from self.execute(Command('CREATE', self.new_tag(), *args, loop=self.loop)))
-
-    @asyncio.coroutine
-    def delete(self, *args):
-        return (yield from self.execute(Command('DELETE', self.new_tag(), *args, loop=self.loop)))
-
-    @asyncio.coroutine
-    def rename(self, *args):
-        return (yield from self.execute(Command('RENAME', self.new_tag(), *args, loop=self.loop)))
-
-    @asyncio.coroutine
-    def subscribe(self, *args):
-        return (yield from self.execute(Command('SUBSCRIBE', self.new_tag(), *args, loop=self.loop)))
-
-    @asyncio.coroutine
-    def unsubscribe(self, *args):
-        return (yield from self.execute(Command('UNSUBSCRIBE', self.new_tag(), *args, loop=self.loop)))
-
-    @asyncio.coroutine
-    def lsub(self, *args):
-        return (yield from self.execute(Command('LSUB', self.new_tag(), *args, loop=self.loop)))
+    def simple_command(self, name, *args):
+        if name not in self.simple_commands:
+            raise NotImplemented('simple command only available for %s' % self.simple_command)
+        return (yield from self.execute(Command(name, self.new_tag(), *args, loop=self.loop)))
 
     @asyncio.coroutine
     def wait_async_pending_commands(self):
@@ -518,39 +490,39 @@ class IMAP4(object):
 
     @asyncio.coroutine
     def noop(self):
-        return (yield from asyncio.wait_for(self.protocol.noop(), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('NOOP'), self.timeout))
 
     @asyncio.coroutine
     def check(self):
-        return (yield from asyncio.wait_for(self.protocol.check(), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('CHECK'), self.timeout))
 
     @asyncio.coroutine
     def status(self, mailbox, names):
-        return (yield from asyncio.wait_for(self.protocol.status(mailbox, names), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('STATUS', mailbox, names), self.timeout))
 
     @asyncio.coroutine
     def subscribe(self, mailbox):
-        return (yield from asyncio.wait_for(self.protocol.subscribe(mailbox), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('SUBSCRIBE', mailbox), self.timeout))
 
     @asyncio.coroutine
     def unsubscribe(self, mailbox):
-        return (yield from asyncio.wait_for(self.protocol.unsubscribe(mailbox), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('UNSUBSCRIBE', mailbox), self.timeout))
 
     @asyncio.coroutine
     def lsub(self, reference_name, mailbox_name):
-        return (yield from asyncio.wait_for(self.protocol.lsub(reference_name, mailbox_name), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('LSUB', reference_name, mailbox_name), self.timeout))
 
     @asyncio.coroutine
     def create(self, mailbox_name):
-        return (yield from asyncio.wait_for(self.protocol.create(mailbox_name), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('CREATE', mailbox_name), self.timeout))
 
     @asyncio.coroutine
     def delete(self, mailbox_name):
-        return (yield from asyncio.wait_for(self.protocol.delete(mailbox_name), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('DELETE', mailbox_name), self.timeout))
 
     @asyncio.coroutine
     def rename(self, old_mailbox_name, new_mailbox_name):
-        return (yield from asyncio.wait_for(self.protocol.rename(old_mailbox_name, new_mailbox_name), self.timeout))
+        return (yield from asyncio.wait_for(self.protocol.simple_command('RENAME', old_mailbox_name, new_mailbox_name), self.timeout))
 
     @asyncio.coroutine
     def close(self):
