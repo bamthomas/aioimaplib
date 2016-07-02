@@ -349,6 +349,11 @@ class ImapProtocol(asyncio.Protocol):
         self.server_state.rename_mailbox(self.user_login, old_mb, new_mb)
         self.send_tagged_line(tag, 'OK RENAME completed.')
 
+    def list(self, tag, *args):
+        for mb in sorted(self.server_state.mailboxes[self.user_login].keys()):
+            self.send_untagged_line('LIST () "/" %s' % mb)
+        self.send_tagged_line(tag, 'OK LIST completed.')
+
     def uid(self, tag, *args):
         self.by_uid = True
         try:
