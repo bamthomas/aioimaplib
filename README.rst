@@ -1,22 +1,106 @@
-*****
 About
-*****
+=====
+.. _imaplib2: https://sourceforge.net/projects/imaplib2/
+.. _imaplib: https://docs.python.org/3/library/imaplib.html
 
-This library is based on imaplib2_.
+This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth.
 
-.. _imaplib2 https://sourceforge.net/projects/imaplib2/
-from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth.
+The aim is to port the imaplib with asycio, to benefit from the sleep or treat model.
+It runs with python 3.4 and python 3.5.
+
+Example
+-------
+
+::
+
+    import asyncio
+    from aioimaplib import aioimaplib
 
 
-***************
-Not unit tested
-***************
-- PREAUTH
-- SSL/STARTTLS
+    @asyncio.coroutine
+    def check_mailbox(host, user, password):
+        imap_client = aioimaplib.IMAP4_SSL(host=host)
+        yield from imap_client.wait_hello_from_server()
 
-*******
+        yield from imap_client.login(user, password)
+
+        res, data = yield from imap_client.select()
+        print('there is %s messages INBOX' % data[0])
+
+        yield from imap_client.logout()
+
+
+    if __name__ == '__main__':
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(check_mailbox('my.imap.server', 'user', 'pass'))
+
+IDLE command
+------------
+.. _RFC2177: https://tools.ietf.org/html/rfc2177
+
+The RFC2177_ is implemented, to be able to wait for new mail messages without using CPU. The responses are pushed in an async queue, and it is possible to read them in real time. To leave the IDLE mode, it is necessary to send a "DONE" command to the server.
+
+::
+
+    @asyncio.coroutine
+    def wait_for_new_message(host, user, password):
+        imap_client = aioimaplib.IMAP4_SSL(host=host)
+        yield from imap_client.wait_hello_from_server()
+
+        yield from imap_client.login(user, password)
+        yield from imap_client.select()
+
+        asyncio.async(imap_client.idle())
+        while True:
+            msg = yield from imap_client.wait_server_push()
+            print('--> received from server: %s' % msg)
+            if 'EXISTS' in msg:
+                imap_client.idle_done()
+                break
+
+        yield from imap_client.logout()
+
+    if __name__ == '__main__':
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(wait_for_new_message('my.imap.server', 'user', 'pass'))
+
+
+Threading
+---------
+.. _asyncio.Event: https://docs.python.org/3.4/library/asyncio-sync.html#event
+.. _asyncio.Condition: https://docs.python.org/3.4/library/asyncio-sync.html#condition
+.. _supervisor: http://supervisord.org/
+
+The IMAP4ClientProtocol class is not thread safe, it uses asyncio.Event_ and asyncio.Condition_ that are not thread safe, and state change for pending commands is not locked.
+
+It is possible to use threads but each IMAP4ClientProtocol instance should run in the same thread :
+
+.. image:: images/thread_imap_protocol.png
+
+Each color rectangle is an IMAP4ClientProtocol instance piece of code executed by the thread asyncio loop until it reaches a yield, waiting on I/O.
+
+For example, it is possible to launch 4 monothreaded mail-fetchers on a 4 cores server with supervisor_, and use a distribution function like len(email) % (process_num) or whatever to share equally a mail account list between the 4 processes.
+
+IMAP command concurrency
+------------------------
+
+IMAP protocol allows to run some commands in parallel. Four rules are implemented to ensure responses consistency:
+
+1. if a sync command is running, the following requests (sync or async) must wait
+2. if an async command is running, same async commands (or with the same untagged response type) must wait
+3. async commands can be executed in parallel
+4. sync command must wait pending async commands to finish
+
+
+Tested with
+-----------
+
+- dovecot 2.2.13 on debian Jessie
+
 Develop
-*******
+=======
+
+Developers are welcome ! If you want to improve it, fix bugs, test it with other IMAP servers, give feedback, thank you for it.
 
 To develop, just run::
 
@@ -24,4 +108,17 @@ To develop, just run::
     source venv/bin/activate
     python setup.py develop
     pip install -r dev-requirements.txt
+    nosetests
 
+Not unit tested
+---------------
+- PREAUTH
+- SSL
+
+TODO
+----
+- STARTTLS command
+- AUTHENTICATE command
+- APPEND commmand
+- tests with other servers
+- make it run with python 3.5
