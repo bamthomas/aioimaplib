@@ -10,8 +10,8 @@ import functools
 
 import asynctest
 import pytz
-from tests import imapserver
-from tests.imapserver import ServerState, Mail
+from aioimaplib.tests import imapserver
+from aioimaplib.tests.imapserver import ServerState, Mail
 
 
 class TestMailToString(unittest.TestCase):

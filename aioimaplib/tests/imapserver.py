@@ -4,13 +4,8 @@ import quopri
 import uuid
 from datetime import datetime
 from email._encoded_words import encode
-
 import re
-
-from functools import wraps, update_wrapper
-
-import tzlocal
-
+from functools import update_wrapper
 from copy import deepcopy
 
 log = logging.getLogger(__name__)

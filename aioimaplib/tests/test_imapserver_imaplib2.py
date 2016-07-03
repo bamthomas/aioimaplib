@@ -3,9 +3,9 @@ import asyncio
 import functools
 from imaplib2 import imaplib2
 from mock import Mock
-from tests import imapserver
-from tests.imapserver import imap_receive, Mail, get_imapconnection
-from tests.test_imapserver import WithImapServer
+from aioimaplib.tests import imapserver
+from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
+from aioimaplib.tests.test_imapserver import WithImapServer
 
 
 class TestImapServerIdle(WithImapServer):

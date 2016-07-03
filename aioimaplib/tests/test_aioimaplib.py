@@ -5,9 +5,9 @@ import unittest
 
 from aioimaplib import aioimaplib
 from aioimaplib.aioimaplib import Commands, _split_responses
-from tests import imapserver
-from tests.imapserver import imap_receive, Mail, get_imapconnection
-from tests.test_imapserver import WithImapServer
+from aioimaplib.tests import imapserver
+from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
+from aioimaplib.tests.test_imapserver import WithImapServer
 
 
 class TestAioimaplibUtils(unittest.TestCase):

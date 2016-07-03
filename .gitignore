@@ -13,3 +13,4 @@ __pycache__
 .tmux.conf
 .viminfo
 .vimrc
+dist

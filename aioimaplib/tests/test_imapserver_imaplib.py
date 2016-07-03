@@ -4,9 +4,9 @@ import email
 import imaplib
 
 import functools
-from tests import imapserver
-from tests.imapserver import Mail, imap_receive, get_imapconnection
-from tests.test_imapserver import WithImapServer
+from aioimaplib.tests import imapserver
+from aioimaplib.tests.imapserver import Mail, imap_receive, get_imapconnection
+from aioimaplib.tests.test_imapserver import WithImapServer
 
 
 class TestImapServerWithImaplib(WithImapServer):
