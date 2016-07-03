@@ -20,7 +20,7 @@ requires = [
 
 setup(
     name=NAME,
-    version='0.1',
+    version='0.5',
     description='aioimaplib',
     long_description=README + '\n\n' + CHANGES,
     classifiers=[
