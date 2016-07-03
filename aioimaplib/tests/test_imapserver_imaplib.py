@@ -31,14 +31,14 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_select_no_messages_in_mailbox(self):
-        imap_client = yield from self.login_user('user', 'pass')
+        imap_client = yield from self.login_user('user@mail', 'pass')
 
         result, data = yield from asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.select)), 1)
 
         self.assertEqual('OK', result)
         self.assertEqual([b'0'], data)
-        self.assertEquals(imapserver.SELECTED, get_imapconnection('user').state)
+        self.assertEquals(imapserver.SELECTED, get_imapconnection('user@mail').state)
 
     @asyncio.coroutine
     def test_select_one_message_in_mailbox(self):

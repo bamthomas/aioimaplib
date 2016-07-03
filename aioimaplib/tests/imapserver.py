@@ -128,7 +128,7 @@ def critical_section(next_state):
 
     return decorator
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#\*"\(\)\+\-]+)?$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@\*"\(\)\+\-]+)?$)')
 
 
 class ImapProtocol(asyncio.Protocol):
