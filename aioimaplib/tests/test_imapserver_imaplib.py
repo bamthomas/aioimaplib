@@ -80,7 +80,7 @@ class TestImapServerWithImaplib(WithImapServer):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         result, data = yield from asyncio.wait_for(
-            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'search', None, 'ALL')), 1)
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'search', 'utf-8', 'ALL')), 1)
 
         self.assertEqual('OK', result)
         self.assertEqual([b'1 2'], data)

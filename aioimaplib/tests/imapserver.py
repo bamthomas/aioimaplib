@@ -234,18 +234,34 @@ class ImapProtocol(asyncio.Protocol):
         self.send_untagged_line('OK [UIDNEXT {next_uid}] Predicted next UID'.format(next_uid=len(mailbox) + 1))
         self.send_tagged_line(tag, 'OK [READ] Select completed (0.000 secs).')
 
-    def search(self, tag, *args):
+    def search(self, tag, *args_param):
+        args = list(args_param)
+        args.reverse()
+        charset = None
+        if args and 'CHARSET' == args[-1].upper():
+            args.pop()
+            charset = args.pop()
         keyword = None
-        if 'keyword' in args[0].lower():
-            keyword = args[1]
-        unkeyword = args[0].lower() == 'unkeyword'
-        self.send_untagged_line('SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(keyword, unkeyword))))
+        if args and 'KEYWORD' == args[-1].upper():
+            args.pop()
+            keyword = args.pop()
+        unkeyword = None
+        if args and 'UNKEYWORD' == args[-1].upper():
+            args.pop()
+            unkeyword = args.pop()
+        all = 'ALL' in args
+
+        self.send_untagged_line('SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(all, keyword, unkeyword))))
         self.send_tagged_line(tag, 'OK %sSEARCH completed' % ('UID ' if self.by_uid else ''))
 
-    def memory_search(self, keyword, unkeyword=False):
+    def memory_search(self, all, keyword, unkeyword):
+        def item_match(msg):
+            return all or \
+                   (keyword is not None and keyword in msg.flags) or \
+                   (unkeyword is not None and unkeyword not in msg.flags)
         return [str(msg.uid if self.by_uid else msg.id)
                 for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
-                if keyword is None or ((keyword in msg.flags) != unkeyword)]
+                if item_match(msg)]
 
     def store(self, tag, *args):
         uid = int(args[0])  # args = ['12', '+FLAGS', 'FOO']
