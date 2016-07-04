@@ -3,6 +3,10 @@ About
 .. _imaplib2: https://sourceforge.net/projects/imaplib2/
 .. _imaplib: https://docs.python.org/3/library/imaplib.html
 
+.. image:: https://travis-ci.org/bamthomas/aioimaplib.png?branch=master
+   :alt: Build status
+   :target: https://travis-ci.org/bamthomas/aioimaplib
+
 This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth. Some utilities functions are taken from imaplib/imaplib2 thanks to them.
 
 The aim is to port the imaplib with asycio, to benefit from the sleep or treat model.
