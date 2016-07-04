@@ -410,7 +410,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 raise Abort('unexpected tagged (%s) response: %s' % (tag, response))
             elif len(cmds) > 1:
                 raise Error('inconsistent state : two commands have the same tag (%s)' % cmds)
-            command = cmds[0]
+            command = cmds.pop()
             self.pending_async_commands.pop(command.untagged_resp)
 
         response_result, _, response_text = response.partition(' ')
@@ -454,7 +454,7 @@ def _split_responses(data):
 
 
 class IMAP4(object):
-    TIMEOUT_SECONDS = 30
+    TIMEOUT_SECONDS = 10
 
     def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS):
         self.timeout = timeout
