@@ -119,6 +119,12 @@ TODO
 ----
 - STARTTLS command
 - AUTHENTICATE command
-- APPEND commmand
 - tests with other servers
 - make it run with python 3.5
+
+If it goes wrong
+----------------
+Sometimes you break things and you don't understand what's going on (I always do). For this library I have two related tools:
+
+- ngrep on the imap test port : sudo ngrep -d lo port 12345
+- activate debug logs changing INFO to DEBUG at the top of the mock server and the aioimaplib
