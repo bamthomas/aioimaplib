@@ -2,12 +2,14 @@
 import asyncio
 import email
 import unittest
+from datetime import datetime
 
 from aioimaplib import aioimaplib
 from aioimaplib.aioimaplib import Commands, _split_responses
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
+from pytz import utc
 
 
 class TestAioimaplibUtils(unittest.TestCase):
@@ -332,13 +334,24 @@ class TestAioimaplib(WithImapServer):
         self.assertEquals(('OK', ['() "/" INBOX', '() "/" MYBOX', 'LIST completed.']),
                           (yield from imap_client.list('', '.*')))
 
+    @asyncio.coroutine
+    def test_append(self):
+        imap_client = yield from self.login_user('user@mail', 'pass')
+        self.assertEquals(('OK', ['0']), (yield from imap_client.examine('INBOX')))
+
+        msg = Mail(['user@mail'], subject='append msg', content='do you see me ?')
+        self.assertEquals(('OK', ['APPEND completed.']),
+                          (yield from imap_client.append(str(msg).encode(), mailbox='INBOX',
+                                                         flags='FOO BAR', date=datetime.now(tz=utc),)))
+
+        self.assertEquals(('OK', ['1']), (yield from imap_client.examine('INBOX')))
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
-        yield from imap_client.login('user', 'password')
+        yield from imap_client.login(login, password)
 
         if select:
             yield from imap_client.select()

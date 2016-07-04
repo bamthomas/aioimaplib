@@ -2,6 +2,8 @@
 import asyncio
 import logging
 import ssl
+from datetime import datetime, timezone, timedelta
+import time
 from enum import Enum
 
 import re
@@ -144,6 +146,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.pending_sync_command = None
         self.idle_queue = asyncio.Queue()
         self.imap_version = None
+        self.literal_data = None
 
         self.tagnum = 0
         self.tagpre = int2ap(random.randint(4096, 65535))
@@ -321,6 +324,20 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             self.imap_version = version
 
+    @asyncio.coroutine
+    def append(self, message_bytes, mailbox='INBOX', flags=None, date=None):
+        args = [mailbox]
+        if flags is not None:
+            if (flags[0], flags[-1]) != ('(', ')'):
+                args.append('(%s)' % flags)
+            else:
+                args.append(flags)
+        if date is not None:
+            args.append(time2internaldate(date))
+        args.append('{%s}' % len(message_bytes))
+        self.literal_data = message_bytes
+        return (yield from self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop)))
+
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
                        'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST'}
 
@@ -384,9 +401,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         response_result, _, response_text = response.partition(' ')
         command.close(response_text, result=response_result)
 
-    def _continuation(self, *args):
-        # TODO What ?
-        pass
+    def _continuation(self, line):
+        if 'literal data' in line:
+            # APPEND case
+            if self.literal_data is None:
+                Abort('asked for literal data but have no literal data to send')
+            self.transport.write(self.literal_data)
+            self.transport.write(CRLF)
+            self.literal_data = None
 
     def new_tag(self):
         tag = self.tagpre + str(self.tagnum)
@@ -530,6 +552,10 @@ class IMAP4(object):
         return (yield from asyncio.wait_for(self.protocol.simple_command('LIST', reference_name, mailbox_pattern), self.timeout))
 
     @asyncio.coroutine
+    def append(self, message_bytes, mailbox='INBOX', flags=None, date=None):
+        return (yield from asyncio.wait_for(self.protocol.append(message_bytes, mailbox, flags, date), self.timeout))
+
+    @asyncio.coroutine
     def close(self):
         return (yield from asyncio.wait_for(self.protocol.close(), self.timeout))
 
@@ -545,6 +571,7 @@ class IMAP4_SSL(IMAP4):
         loop.create_task(loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 
 
+# functions from imaplib
 def int2ap(num):
     """Convert integer to A-P string representation."""
     val = ''
@@ -554,3 +581,43 @@ def int2ap(num):
         num, mod = divmod(num, 16)
         val += ap[mod:mod + 1]
     return val
+
+Months = ' Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')
+Mon2num = {s.encode():n+1 for n, s in enumerate(Months[1:])}
+
+def time2internaldate(date_time):
+    """Convert date_time to IMAP4 INTERNALDATE representation.
+
+    Return string in form: '"DD-Mmm-YYYY HH:MM:SS +HHMM"'.  The
+    date_time argument can be a number (int or float) representing
+    seconds since epoch (as returned by time.time()), a 9-tuple
+    representing local time, an instance of time.struct_time (as
+    returned by time.localtime()), an aware datetime instance or a
+    double-quoted string.  In the last case, it is assumed to already
+    be in the correct format.
+    """
+    if isinstance(date_time, (int, float)):
+        dt = datetime.fromtimestamp(date_time, timezone.utc).astimezone()
+    elif isinstance(date_time, tuple):
+        try:
+            gmtoff = date_time.tm_gmtoff
+        except AttributeError:
+            if time.daylight:
+                dst = date_time[8]
+                if dst == -1:
+                    dst = time.localtime(time.mktime(date_time))[8]
+                gmtoff = -(time.timezone, time.altzone)[dst]
+            else:
+                gmtoff = -time.timezone
+        delta = timedelta(seconds=gmtoff)
+        dt = datetime(*date_time[:6], tzinfo=timezone(delta))
+    elif isinstance(date_time, datetime):
+        if date_time.tzinfo is None:
+            raise ValueError("date_time must be aware")
+        dt = date_time
+    elif isinstance(date_time, str) and (date_time[0],date_time[-1]) == ('"','"'):
+        return date_time        # Assume in correct format
+    else:
+        raise ValueError("date_time not of a known type")
+    fmt = '"%d-{}-%Y %H:%M:%S %z"'.format(Months[dt.month])
+    return dt.strftime(fmt)
