@@ -10,7 +10,7 @@ About
 This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth. Some utilities functions are taken from imaplib/imaplib2 thanks to them.
 
 The aim is to port the imaplib with asycio, to benefit from the sleep or treat model.
-It runs with python 3.4 maybe soon in python 3.5.
+It runs with python 3.4 and 3.5.
 
 Example
 -------
@@ -130,7 +130,6 @@ TODO
 - AUTHENTICATE command
 - other commands listed in the aioimaplib Commands list
 - tests with other servers
-- make it run with python 3.5
 
 If it goes wrong
 ----------------
