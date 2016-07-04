@@ -3,10 +3,10 @@ About
 .. _imaplib2: https://sourceforge.net/projects/imaplib2/
 .. _imaplib: https://docs.python.org/3/library/imaplib.html
 
-This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth.
+This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth. Some utilities functions are taken from imaplib/imaplib2 thanks to them.
 
 The aim is to port the imaplib with asycio, to benefit from the sleep or treat model.
-It runs with python 3.4 and python 3.5.
+It runs with python 3.4 maybe soon in python 3.5.
 
 Example
 -------
@@ -79,7 +79,7 @@ It is possible to use threads but each IMAP4ClientProtocol instance should run i
 
 Each color rectangle is an IMAP4ClientProtocol instance piece of code executed by the thread asyncio loop until it reaches a yield, waiting on I/O.
 
-For example, it is possible to launch 4 monothreaded mail-fetchers on a 4 cores server with supervisor_, and use a distribution function like len(email) % (process_num) or whatever to share equally a mail account list between the 4 processes.
+For example, it is possible to launch 4 mono-threaded mail-fetcher processes on a 4 cores server with supervisor_, and use a distribution function like len(email) % (process_num) or whatever to share equally a mail account list between the 4 processes.
 
 IMAP command concurrency
 ------------------------
@@ -110,6 +110,11 @@ To develop, just run::
     pip install -r dev-requirements.txt
     nosetests
 
+To add a imaplib or imaplib2 command you can :
+
+- add the function to the testing imapserver with a new imaplib or imaplib2 server test, i.e. test_imapserver_imaplib.py or test_imapserver_imaplib2.py respectively;
+- then add the function to the aioimaplib doing almost the same test than above but the async way in test_aioimaplib.py.
+
 Not unit tested
 ---------------
 - PREAUTH
@@ -119,6 +124,7 @@ TODO
 ----
 - STARTTLS command
 - AUTHENTICATE command
+- other commands listed in the aioimaplib Commands list
 - tests with other servers
 - make it run with python 3.5
 
