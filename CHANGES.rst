@@ -1,6 +1,11 @@
 Changes
 =======
 
+V0.5.2
+------
+- build CI environment
+- license GPL v3.0
+
 V0.5.1
 ------
 - added APPEND command
