@@ -148,6 +148,7 @@ def change_state(coro):
 # untagged responses types
 fetch_message_with_literal_data_re = re.compile(rb'\* [0-9]+ FETCH [\w \(]+ \{(?P<size>\d+)\}\r\n')
 message_data_without_literal_re = re.compile(r'[0-9]+ ((FETCH)|(EXPUNGE))([\w \(\)]+)?')
+tagged_status_response_re = re.compile(r'[A-Z0-9]+ ((OK)|(NO)|(BAD))')
 
 
 class IMAP4ClientProtocol(asyncio.Protocol):
@@ -184,8 +185,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                     self._untagged_response(response_line.replace('* ', ''))
                 elif response_line.startswith('+'):
                     self._continuation(response_line.replace('+ ', ''))
-                else:
+                elif tagged_status_response_re.match(response_line):
                     self._response_done(response_line)
+                else:
+                    log.info('unknown data received %s' % response_line)
 
     def connection_lost(self, exc):
         self.transport.close()
@@ -424,6 +427,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.transport.write(self.literal_data)
             self.transport.write(CRLF)
             self.literal_data = None
+        else:
+            log.info('continuation not handled : %s' % line)
 
     def new_tag(self):
         tag = self.tagpre + str(self.tagnum)
@@ -435,6 +440,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
 
 def _split_responses(data):
+    if not data:
+        return []
     match_fetch_message = fetch_message_with_literal_data_re.match(data)
     if match_fetch_message:
         head, _, tail = data.partition(CRLF)
@@ -450,7 +457,8 @@ def _split_responses(data):
 
         return [fetch_line] + _split_responses(after_fetch)
     else:
-        return data.strip().splitlines()
+        line, _, tail = data.partition(CRLF)
+        return [line] + _split_responses(tail)
 
 
 class IMAP4(object):

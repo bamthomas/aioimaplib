@@ -44,10 +44,12 @@ class TestAioimaplibUtils(unittest.TestCase):
 
     def test_split_responses_with_two_messages_data(self):
         self.assertEquals([b'* FETCH mail 1\r\n)',
+                           b'* 1 FETCH (UID 10 FLAGS (FOO))',
                            b'* FETCH mail 2\r\n)',
                            b'TAG OK FETCH completed.'],
                           _split_responses(
                               b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
+                              b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n' # could be from a previous store cmd cf https://tools.ietf.org/html/rfc3501#section-5.5
                               b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
                               b'TAG OK FETCH completed.'))
 
