@@ -1,4 +1,5 @@
 import asyncio
+import email
 import logging
 import quopri
 import uuid
@@ -128,7 +129,7 @@ def critical_section(next_state):
 
     return decorator
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@\*"\(\)\+\-]+)?$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\+\-]+)?$)')
 
 
 class ImapProtocol(asyncio.Protocol):
@@ -141,23 +142,27 @@ class ImapProtocol(asyncio.Protocol):
         self.idle_tag = None
         self.state = NONAUTH
         self.state_condition = asyncio.Condition()
+        self.append_literal_command = None
 
     def connection_made(self, transport):
         self.transport = transport
         transport.write('* OK IMAP4rev1 MockIMAP Server ready\r\n'.encode())
 
     def data_received(self, data):
+        if self.append_literal_command is not None:
+            self.append_literal(data)
+            return
         for cmd_line in data.splitlines():
             if command_re.match(cmd_line) is None:
                 self.send_untagged_line('BAD Error in IMAP command : Unknown command (%r).' % cmd_line)
-                return
-            command_array = cmd_line.decode().rstrip().split()
-            if self.state is not IDLE:
-                tag = command_array[0]
-                self.by_uid = False
-                self.exec_command(tag, command_array[1:])
             else:
-                self.exec_command(None, command_array)
+                command_array = cmd_line.decode().rstrip().split()
+                if self.state is not IDLE:
+                    tag = command_array[0]
+                    self.by_uid = False
+                    self.exec_command(tag, command_array[1:])
+                else:
+                    self.exec_command(None, command_array)
 
     def connection_lost(self, error):
         if error:
@@ -284,6 +289,26 @@ class ImapProtocol(asyncio.Protocol):
                                                                  message_body=message_body),
                                         encoding=message.encoding)
         self.send_tagged_line(tag, 'OK FETCH completed.')
+
+    def append(self, tag, *args):
+        mailbox_name = args[0]
+        size = args[-1].strip('{}')
+        self.append_literal_command = (tag, mailbox_name, int(size))
+        self.send_untagged_line('Ready for literal data', continuation=True)
+
+    def append_literal(self, data):
+        tag, mailbox_name, size = self.append_literal_command
+        if data == b'\r\n':
+            self.send_tagged_line(tag, 'OK APPEND completed.')
+            self.append_literal_command = None
+            return
+
+        if len(data) != size:
+            self.send_tagged_line(self.append_literal_command[0], 'BAD literal length : expected %s but was %s' % (size, len(data)))
+            self.append_literal_command = None
+        else:
+            m = email.message_from_bytes(data)
+            self.server_state.add_mail(m.get('To'), Mail.from_python_email(m), mailbox_name)
 
     def expunge(self, tag, *args):
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox).copy():
@@ -480,6 +505,16 @@ class Mail(object):
         else:
             return self.subject
 
+    @staticmethod
+    def from_python_email(m):
+        content = ''
+        for part in m.walk():
+            if part.get_content_maintype() == 'multipart':
+                raise NotImplementedError('multipart is not implemented')
+            if part.get_content_maintype() == 'text' and 'attachment' not in part.get('Content-Disposition', ''):
+                content = part.get_payload(decode=True).decode(part.get_param('charset', 'ascii')).strip()
+
+        return Mail(m.get('To'), m.get('From'), m.get('Subject'), content=content)
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()

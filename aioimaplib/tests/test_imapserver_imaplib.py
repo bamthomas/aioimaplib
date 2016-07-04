@@ -2,11 +2,13 @@
 import asyncio
 import email
 import imaplib
+from datetime import datetime
 
 import functools
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail, imap_receive, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
+from pytz import utc
 
 
 class TestImapServerWithImaplib(WithImapServer):
@@ -301,6 +303,22 @@ class TestImapServerWithImaplib(WithImapServer):
         self.assertEquals(('OK', [b'() "/" INBOX', b'() "/" MYBOX']),
                           (yield from asyncio.wait_for(
                               self.loop.run_in_executor(None, functools.partial(imap_client.list, '', '.*')), 1)))
+
+    @asyncio.coroutine
+    def test_append(self):
+        imap_client = yield from self.login_user('user@mail', 'pass')
+
+        self.assertEquals(('OK', [b'0']), (yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.select, 'INBOX', readonly=True)), 2)))
+
+        msg = Mail(['user@mail'], subject='append msg', content='do you see me ?')
+        self.assertEquals(('OK', [b'APPEND completed.']),
+                          (yield from asyncio.wait_for(
+                              self.loop.run_in_executor(None, functools.partial(
+                                  imap_client.append, 'INBOX', 'FOO BAR', datetime.now(tz=utc), str(msg).encode())), 2)))
+
+        self.assertEquals(('OK', [b'1']), (yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.select, 'INBOX', readonly=True)), 2)))
 
     @asyncio.coroutine
     def test_logout(self):
