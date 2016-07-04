@@ -20,6 +20,9 @@ import quopri
 import uuid
 from datetime import datetime
 from email._encoded_words import encode
+
+from math import ceil
+
 import re
 from functools import update_wrapper
 from copy import deepcopy
@@ -193,10 +196,16 @@ class ImapProtocol(asyncio.Protocol):
             return self.error(tag, 'Command "%s" not implemented' % command)
         getattr(self, command)(tag, *command_array[1:])
 
-    def send_untagged_line(self, response, encoding='utf-8', continuation=False):
+    def send_untagged_line(self, response, encoding='utf-8', continuation=False, max_chunk_size=0):
         log.debug("Sending %s", response)
         prefix = '+' if continuation else '*'
-        self.transport.write('{prefix} {response}\r\n'.format(response=response, prefix=prefix).encode(encoding))
+        raw_response = '{prefix} {response}\r\n'.format(response=response, prefix=prefix).encode(encoding)
+        if max_chunk_size:
+            for nb_chunk in range(ceil(len(raw_response) / max_chunk_size)):
+                chunk_start_index = nb_chunk * max_chunk_size
+                self.transport.write(raw_response[chunk_start_index:chunk_start_index + max_chunk_size])
+        else:
+            self.transport.write(raw_response)
 
     def send_tagged_line(self, tag, response):
         log.debug("Sending %s", response)
