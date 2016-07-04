@@ -444,7 +444,7 @@ def _split_responses(data):
         return []
     match_fetch_message = fetch_message_with_literal_data_re.match(data)
     if match_fetch_message:
-        head, _, tail = data.partition(CRLF)
+        head, crlf, tail = data.partition(CRLF)
         msg_size = match_fetch_message.group('size')
         # we want to cut -----------------------
         #                              ...here |
@@ -452,7 +452,7 @@ def _split_responses(data):
         # b'* 3 FETCH (UID 3 RFC822 {4}\r\nmail)\r\n...
         end_message_index_with_parenthesis = int(msg_size) + 1
 
-        fetch_line = b'* FETCH ' + tail[0:end_message_index_with_parenthesis]
+        fetch_line = head + crlf + tail[0:end_message_index_with_parenthesis]
         after_fetch = tail[end_message_index_with_parenthesis:].strip()
 
         return [fetch_line] + _split_responses(after_fetch)

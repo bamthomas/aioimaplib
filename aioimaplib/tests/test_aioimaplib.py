@@ -36,16 +36,16 @@ class TestAioimaplibUtils(unittest.TestCase):
                           _split_responses(b'* BYE Logging out\r\nCAPB2 OK LOGOUT completed\r\n'))
 
     def test_split_responses_with_message_data(self):
-        self.assertEquals([b'* FETCH ...\r\n(mail content)\r\n...\r\n)',
+        self.assertEquals([b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)',
                            b'TAG OK FETCH completed.'],
                           _split_responses(
                               b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)\r\n'
                               b'TAG OK FETCH completed.'))
 
     def test_split_responses_with_two_messages_data(self):
-        self.assertEquals([b'* FETCH mail 1\r\n)',
+        self.assertEquals([b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)',
                            b'* 1 FETCH (UID 10 FLAGS (FOO))',
-                           b'* FETCH mail 2\r\n)',
+                           b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)',
                            b'TAG OK FETCH completed.'],
                           _split_responses(
                               b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
