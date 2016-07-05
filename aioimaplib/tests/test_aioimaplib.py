@@ -18,6 +18,7 @@ import asyncio
 import email
 import unittest
 from datetime import datetime
+from functools import partial
 
 from aioimaplib import aioimaplib
 from aioimaplib.aioimaplib import Commands, _split_responses
@@ -67,6 +68,10 @@ class TestAioimaplibUtils(unittest.TestCase):
 
 
 class TestAioimaplib(WithImapServer):
+    def setUp(self):
+        factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64), 'localhost', 12345)
+        self.server = self.loop.run_until_complete(factory)
+
     @asyncio.coroutine
     def test_capabilities(self):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop)

@@ -151,7 +151,8 @@ command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\
 
 
 class ImapProtocol(asyncio.Protocol):
-    def __init__(self, server_state):
+    def __init__(self, server_state, fetch_chunk_size=0):
+        self.fetch_chunk_size = fetch_chunk_size
         self.transport = None
         self.server_state = server_state
         self.user_login = None
@@ -311,7 +312,7 @@ class ImapProtocol(asyncio.Protocol):
                                         '{message_body})'.format(msg_uid=message.uid,
                                                                  size=len(message_body.encode(message.encoding)),
                                                                  message_body=message_body),
-                                        encoding=message.encoding)
+                                        encoding=message.encoding, max_chunk_size=self.fetch_chunk_size)
         self.send_tagged_line(tag, 'OK FETCH completed.')
 
     def append(self, tag, *args):
@@ -458,8 +459,8 @@ def get_imapconnection(user):
     return _SERVER_STATE.get_connection(user)
 
 
-def create_imap_protocol():
-    protocol = ImapProtocol(_SERVER_STATE)
+def create_imap_protocol(fetch_chunk_size=0):
+    protocol = ImapProtocol(_SERVER_STATE, fetch_chunk_size)
     return protocol
 
 

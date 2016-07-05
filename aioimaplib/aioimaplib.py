@@ -101,6 +101,8 @@ class Command(object):
         self.response = None
         self.event = asyncio.Event(loop=loop)
         self.tag = tag
+        self.literal_data = None
+        self.expected_size = 0
 
     def __repr__(self):
         return '%s %s%s %s' % (self.tag, self.prefix, self.name, ' '.join(self.args))
@@ -108,6 +110,23 @@ class Command(object):
     def close(self, line, result):
         self.append_to_resp(line, result=result)
         self.event.set()
+
+    def begin_literal_data(self, data, expected_size):
+        self.literal_data = data
+        self.expected_size = expected_size
+
+    def end_literal_data(self):
+        self.append_to_resp(self.literal_data.rstrip(b')'))
+        self.expected_size = 0
+        self.literal_data = None
+
+    def has_literal_data(self):
+        return self.expected_size != 0 and len(self.literal_data) != self.expected_size
+
+    def append_literal_data(self, data):
+        nb_bytes_to_add = self.expected_size - len(self.literal_data)
+        self.literal_data += data[0:nb_bytes_to_add]
+        return data[nb_bytes_to_add:]
 
     def append_to_resp(self, line, result='Pending'):
         if self.response is None:
@@ -171,16 +190,23 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport = transport
         self.state = CONNECTED
 
-    def data_received(self, data):
-        log.debug('Received : %s' % data)
+    def data_received(self, d):
+        log.debug('Received : %s' % d)
+        if self.uncomplete_fetch_literal():
+            data = self.append_fetch_data(d)
+            if not data:
+                return
+        else:
+            data = d
         lines = _split_responses(data)
         for line in lines:
             response_line = line.decode()
             if self.state == CONNECTED:
                 asyncio.async(self.welcome(response_line))
             else:
-                if response_line.startswith('* FETCH'):
-                    self._untagged_fetch_with_literal(line)
+                match_fetch_with_literal = fetch_message_with_literal_data_re.match(line)
+                if match_fetch_with_literal:
+                    self._untagged_fetch_with_literal(line, int(match_fetch_with_literal.group('size')))
                 elif response_line.startswith('*'):
                     self._untagged_response(response_line.replace('* ', ''))
                 elif response_line.startswith('+'):
@@ -375,12 +401,27 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         with (yield from self.state_condition):
             yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
 
-    def _untagged_fetch_with_literal(self, raw_line):
+    def _untagged_fetch_with_literal(self, raw_line, msg_size):
         pending_fetch = self.pending_async_commands.get('FETCH')
         if pending_fetch is None:
             raise Abort('unexpected fetch message (%r) response:' % raw_line)
-        _, _, email_binary = raw_line.strip(b'* ').partition(b' ')
-        pending_fetch.append_to_resp(email_binary.rstrip(b')'))
+        msg_header, _, msg = raw_line.partition(CRLF)
+        if len(msg) < msg_size + 1:
+            # email message is not complete we should wait the future chunks
+            pending_fetch.begin_literal_data(msg, msg_size + 1)
+        else:
+            pending_fetch.append_to_resp(msg.rstrip(b')'))
+
+    def uncomplete_fetch_literal(self):
+        return 'FETCH' in self.pending_async_commands and \
+               self.pending_async_commands.get('FETCH').has_literal_data()
+
+    def append_fetch_data(self, data):
+        pending_fetch = self.pending_async_commands.get('FETCH')
+        rest = pending_fetch.append_literal_data(data)
+        if not pending_fetch.has_literal_data():
+            pending_fetch.end_literal_data()
+        return rest
 
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
