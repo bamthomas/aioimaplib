@@ -20,7 +20,7 @@ from datetime import datetime
 from functools import partial
 
 from aioimaplib import aioimaplib
-from aioimaplib.aioimaplib import Commands, _split_responses
+from aioimaplib.aioimaplib import Commands, _split_responses, fetch_message_with_literal_data_re
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
@@ -64,6 +64,12 @@ class TestAioimaplibUtils(unittest.TestCase):
     def test_split_responses_with_message_data_expunge(self):
         self.assertEquals([b'* 123 EXPUNGE', b'TAG OK SELECT completed.'],
                           _split_responses(b'* 123 EXPUNGE\r\nTAG OK SELECT completed.\r\n'))
+
+    def test_fetch_message_with_literal_data_re(self):
+        self.assertIsNotNone(
+            fetch_message_with_literal_data_re.match(b'* 95 FETCH (FLAGS (\\Seen \\Recent) RFC822 {424635}\r\n...'))
+        self.assertIsNotNone(
+            fetch_message_with_literal_data_re.match(b'* 12 FETCH (BODY[HEADER] {342}\r\n...'))
 
 
 class AioWithImapServer(WithImapServer):

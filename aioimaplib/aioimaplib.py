@@ -165,7 +165,7 @@ def change_state(coro):
 
 # cf https://tools.ietf.org/html/rfc3501#section-9
 # untagged responses types
-fetch_message_with_literal_data_re = re.compile(rb'\* [0-9]+ FETCH [\w \(]+ \{(?P<size>\d+)\}\r\n')
+fetch_message_with_literal_data_re = re.compile(rb'\* [0-9]+ FETCH [\w \\\[\]\(\)]+ \{(?P<size>\d+)\}\r\n')
 message_data_without_literal_re = re.compile(r'[0-9]+ ((FETCH)|(EXPUNGE))([\w \(\)]+)?')
 tagged_status_response_re = re.compile(r'[A-Z0-9]+ ((OK)|(NO)|(BAD))')
 
