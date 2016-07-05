@@ -15,7 +15,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
-import email
 import unittest
 from datetime import datetime
 from functools import partial
@@ -67,7 +66,20 @@ class TestAioimaplibUtils(unittest.TestCase):
                           _split_responses(b'* 123 EXPUNGE\r\nTAG OK SELECT completed.\r\n'))
 
 
-class TestAioimaplib(WithImapServer):
+class AioWithImapServer(WithImapServer):
+    @asyncio.coroutine
+    def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
+        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+
+        yield from imap_client.login(login, password)
+
+        if select:
+            yield from imap_client.select()
+        return imap_client
+
+
+class TestAioimaplib(AioWithImapServer):
     def setUp(self):
         factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64), 'localhost', 12345)
         self.server = self.loop.run_until_complete(factory)
@@ -365,14 +377,3 @@ class TestAioimaplib(WithImapServer):
                                                          flags='FOO BAR', date=datetime.now(tz=utc),)))
 
         self.assertEquals(('OK', ['1']), (yield from imap_client.examine('INBOX')))
-
-    @asyncio.coroutine
-    def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
-        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
-        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
-
-        yield from imap_client.login(login, password)
-
-        if select:
-            yield from imap_client.select()
-        return imap_client
