@@ -192,8 +192,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def data_received(self, d):
         log.debug('Received : %s' % d)
-        if self.uncomplete_fetch_literal():
-            data = self.append_fetch_data(d)
+        if self._uncomplete_fetch_literal():
+            data = self._append_fetch_data(d)
             if not data:
                 return
         else:
@@ -412,11 +412,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             pending_fetch.append_to_resp(msg.rstrip(b')'))
 
-    def uncomplete_fetch_literal(self):
+    def _uncomplete_fetch_literal(self):
         return 'FETCH' in self.pending_async_commands and \
                self.pending_async_commands.get('FETCH').has_literal_data()
 
-    def append_fetch_data(self, data):
+    def _append_fetch_data(self, data):
         pending_fetch = self.pending_async_commands.get('FETCH')
         rest = pending_fetch.append_literal_data(data)
         if not pending_fetch.has_literal_data():
