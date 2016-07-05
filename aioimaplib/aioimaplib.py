@@ -436,7 +436,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 command, _, text = line.partition(' ')
             pending_async_command = self.pending_async_commands.get(command.upper())
             if pending_async_command is None:
-                raise Abort('unexpected untagged (%s) response:' % line)
+                log.info('ignored unetagged response : %s' % line)
             pending_async_command.append_to_resp(text)
 
     def _response_done(self, line):
