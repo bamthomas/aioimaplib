@@ -59,7 +59,7 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_select_one_message_in_mailbox(self):
-        imap_receive(Mail(to=['user'], mail_from='me', subject='hello'))
+        imap_receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
         imap_client = yield from self.login_user('user', 'pass')
 
         result, data = yield from asyncio.wait_for(
@@ -70,7 +70,7 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_select_one_message_in_INBOX_zero_in_OTHER(self):
-        imap_receive(Mail(to=['user'], mail_from='me', subject='hello'))
+        imap_receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
         imap_client = yield from self.login_user('user', 'pass')
 
         _, data = yield from asyncio.wait_for(
@@ -92,8 +92,8 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_search_by_uid_two_messages(self):
-        imap_receive(Mail(['user']))
-        imap_receive(Mail(['user']))
+        imap_receive(Mail.create(['user']))
+        imap_receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         result, data = yield from asyncio.wait_for(
@@ -104,7 +104,7 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_search_by_uid_one_message_two_recipients(self):
-        imap_receive(Mail(['user1', 'user2']))
+        imap_receive(Mail.create(['user1', 'user2']))
         imap_client = yield from self.login_user('user1', 'pass', select=True)
 
         result, data = yield from asyncio.wait_for(
@@ -123,7 +123,7 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_fetch_one_messages_by_uid(self):
-        mail = Mail(['user'], mail_from='me', subject='hello', content='pleased to meet you, wont you guess my name ?')
+        mail = Mail.create(['user'], mail_from='me', subject='hello', content='pleased to meet you, wont you guess my name ?')
         imap_receive(mail)
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
@@ -131,11 +131,11 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(RFC822)')), 1)
 
         self.assertEqual('OK', result)
-        self.assertEqual([(b'1 (UID 1 RFC822 {368}', str(mail).encode()), b')'], data)
+        self.assertEqual([(b'1 (UID 1 RFC822 {354}', mail.as_bytes()), b')'], data)
 
     @asyncio.coroutine
     def test_fetch_one_messages_by_uid_encoding_cp1252(self):
-        imap_receive(Mail(['user'], mail_from='me', subject='hello', content='maître', encoding='cp1252'))
+        imap_receive(Mail.create(['user'], mail_from='me', subject='hello', content='maître', encoding='cp1252'))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         _, data = yield from asyncio.wait_for(
@@ -148,8 +148,8 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_fetch_one_message_with_UID(self):
-        imap_receive(Mail(['user'], mail_from='me', subject='hello', content='maître'))
-        imap_receive(Mail(['user'], mail_from='you', subject='yo', content='bro'))
+        imap_receive(Mail.create(['user'], mail_from='me', subject='hello', content='maître'))
+        imap_receive(Mail.create(['user'], mail_from='you', subject='yo', content='bro'))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         _, data = yield from asyncio.wait_for(
@@ -159,8 +159,8 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_store_and_search_by_keyword(self):
-        imap_receive(Mail(['user']))
-        imap_receive(Mail(['user']))
+        imap_receive(Mail.create(['user']))
+        imap_receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         result, data = yield from asyncio.wait_for(
@@ -185,8 +185,8 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_expunge_messages(self):
-        imap_receive(Mail(['user']))
-        imap_receive(Mail(['user']))
+        imap_receive(Mail.create(['user']))
+        imap_receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         yield from asyncio.wait_for(self.loop.run_in_executor(None, imap_client.expunge), 1)
@@ -253,8 +253,8 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_copy_messages(self):
-        imap_receive(Mail(['user']))
-        imap_receive(Mail(['user']))
+        imap_receive(Mail.create(['user']))
+        imap_receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         result, _ = yield from asyncio.wait_for(
@@ -290,7 +290,7 @@ class TestImapServerWithImaplib(WithImapServer):
 
     @asyncio.coroutine
     def test_rename_mailbox(self):
-        imap_receive(Mail(['user']))
+        imap_receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass')
 
         self.assertEquals(('NO', [b'STATUS completed.']),
@@ -326,11 +326,11 @@ class TestImapServerWithImaplib(WithImapServer):
         self.assertEquals(('OK', [b'0']), (yield from asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.select, 'INBOX', readonly=True)), 2)))
 
-        msg = Mail(['user@mail'], subject='append msg', content='do you see me ?')
+        msg = Mail.create(['user@mail'], subject='append msg', content='do you see me ?')
         self.assertEquals(('OK', [b'APPEND completed.']),
                           (yield from asyncio.wait_for(
                               self.loop.run_in_executor(None, functools.partial(
-                                  imap_client.append, 'INBOX', 'FOO BAR', datetime.now(tz=utc), str(msg).encode())), 2)))
+                                  imap_client.append, 'INBOX', 'FOO BAR', datetime.now(tz=utc), msg.as_bytes())), 2)))
 
         self.assertEquals(('OK', [b'1']), (yield from asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.select, 'INBOX', readonly=True)), 2)))

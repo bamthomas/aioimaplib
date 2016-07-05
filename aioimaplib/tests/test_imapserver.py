@@ -33,26 +33,26 @@ class TestMailToString(unittest.TestCase):
     def test_message_date_string(self):
         now = pytz.timezone('Europe/Paris').localize(datetime(2016, 2, 2, 12, 13, 14, 151))
 
-        mail = imapserver.Mail(['user'], date=now)
+        mail = imapserver.Mail.create(['user'], date=now)
 
-        self.assertEqual(email.message_from_string(str(mail)).get('Date'), 'Tue, 02 Feb 2016 12:13:14 +0100')
+        self.assertEqual(mail.email.get('Date'), 'Tue, 02 Feb 2016 12:13:14 +0100')
 
     def test_message_title_string_without_accents_isnot_encoded(self):
         now = pytz.timezone('Europe/Paris').localize(datetime(2016, 2, 2, 12, 13, 14, 151))
 
-        mail = imapserver.Mail(['user'], subject='subject', date=now)
+        mail = imapserver.Mail.create(['user'], subject='subject', date=now)
 
-        self.assertEqual(email.message_from_string(str(mail)).get('Subject'), 'subject')
+        self.assertEqual(mail.email.get('Subject'), 'subject')
 
     def test_message_title_string_with_accents_is_base64encoded(self):
-        mail = imapserver.Mail(['user'], subject='Classé ?')
+        mail = imapserver.Mail.create(['user'], subject='Classé ?')
 
-        self.assertEqual(email.message_from_string(str(mail)).get('Subject'), '=?utf-8?b?Q2xhc3PDqSA/?=')
+        self.assertEqual(mail.email.get('Subject'), '=?utf-8?b?Q2xhc3PDqSA/?=')
 
     def test_message_quoted_printable(self):
-        mail = imapserver.Mail(['user'], content='Bonjour à vous', content_transfer_encoding='quoted-printable')
+        mail = imapserver.Mail.create(['user'], content='Bonjour à vous', content_transfer_encoding='quoted-printable')
 
-        self.assertTrue('Bonjour =C3=A0 vous' in str(mail), msg='"=C3=A0" not found in %s' % str(mail))
+        self.assertTrue('Bonjour =C3=A0 vous' in mail.as_string(), msg='"=C3=A0" not found in %s' % mail.as_string())
 
 
 class TestServerState(unittest.TestCase):
@@ -62,7 +62,7 @@ class TestServerState(unittest.TestCase):
 
     def test_max_ids_one_user_one_mail(self):
         server_state = ServerState()
-        server_state.add_mail('user', Mail(['user']))
+        server_state.add_mail('user', Mail.create(['user']))
 
         self.assertEquals(1, server_state.max_id('user', 'INBOX'))
         self.assertEquals(1, server_state.max_uid('user'))
@@ -70,8 +70,8 @@ class TestServerState(unittest.TestCase):
 
     def test_max_ids_one_user_two_mails_one_per_mailbox(self):
         server_state = ServerState()
-        server_state.add_mail('user', Mail(['user']), mailbox='INBOX')
-        server_state.add_mail('user', Mail(['user']), mailbox='OUTBOX')
+        server_state.add_mail('user', Mail.create(['user']), mailbox='INBOX')
+        server_state.add_mail('user', Mail.create(['user']), mailbox='OUTBOX')
 
         self.assertEquals(1, server_state.max_id('user', 'INBOX'))
         self.assertEquals(1, server_state.max_id('user', 'OUTBOX'))

@@ -147,6 +147,7 @@ def critical_section(next_state):
 
     return decorator
 
+
 command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\+\-]+)?$)')
 
 
@@ -198,15 +199,18 @@ class ImapProtocol(asyncio.Protocol):
         getattr(self, command)(tag, *command_array[1:])
 
     def send_untagged_line(self, response, encoding='utf-8', continuation=False, max_chunk_size=0):
-        log.debug("Sending %s", response)
-        prefix = '+' if continuation else '*'
-        raw_response = '{prefix} {response}\r\n'.format(response=response, prefix=prefix).encode(encoding)
+        self.send_raw_untagged_line(response.encode(encoding=encoding), continuation, max_chunk_size)
+
+    def send_raw_untagged_line(self, raw_response, continuation=False, max_chunk_size=0):
+        log.debug("Sending %r", raw_response)
+        prefix = b'+ ' if continuation else b'* '
+        raw_line = prefix + raw_response + b'\r\n'
         if max_chunk_size:
-            for nb_chunk in range(ceil(len(raw_response) / max_chunk_size)):
+            for nb_chunk in range(ceil(len(raw_line) / max_chunk_size)):
                 chunk_start_index = nb_chunk * max_chunk_size
-                self.transport.write(raw_response[chunk_start_index:chunk_start_index + max_chunk_size])
+                self.transport.write(raw_line[chunk_start_index:chunk_start_index + max_chunk_size])
         else:
-            self.transport.write(raw_response)
+            self.transport.write(raw_line)
 
     def send_tagged_line(self, tag, response):
         log.debug("Sending %s", response)
@@ -281,7 +285,8 @@ class ImapProtocol(asyncio.Protocol):
             unkeyword = args.pop()
         all = 'ALL' in args
 
-        self.send_untagged_line('SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(all, keyword, unkeyword))))
+        self.send_untagged_line(
+            'SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(all, keyword, unkeyword))))
         self.send_tagged_line(tag, 'OK %sSEARCH completed' % ('UID ' if self.by_uid else ''))
 
     def memory_search(self, all, keyword, unkeyword):
@@ -289,6 +294,7 @@ class ImapProtocol(asyncio.Protocol):
             return all or \
                    (keyword is not None and keyword in msg.flags) or \
                    (unkeyword is not None and unkeyword not in msg.flags)
+
         return [str(msg.uid if self.by_uid else msg.id)
                 for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
                 if item_match(msg)]
@@ -306,13 +312,12 @@ class ImapProtocol(asyncio.Protocol):
     def fetch(self, tag, *args):
         uid = int(args[0])
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
-            message_body = str(message)
             if message.uid == uid:
-                self.send_untagged_line('{msg_uid} FETCH (UID {msg_uid} RFC822 {{{size}}}\r\n'
-                                        '{message_body})'.format(msg_uid=message.uid,
-                                                                 size=len(message_body.encode(message.encoding)),
-                                                                 message_body=message_body),
-                                        encoding=message.encoding, max_chunk_size=self.fetch_chunk_size)
+                message_body = message.as_bytes()
+                uid_bytes = ('%d' % message.uid).encode()
+                self.send_raw_untagged_line(uid_bytes + b' FETCH (UID ' + uid_bytes + b' RFC822 {' +
+                                            ('%d' % len(message_body)).encode() + b'}\r\n' + message_body + b')',
+                                            max_chunk_size=self.fetch_chunk_size)
         self.send_tagged_line(tag, 'OK FETCH completed.')
 
     def append(self, tag, *args):
@@ -329,11 +334,12 @@ class ImapProtocol(asyncio.Protocol):
             return
 
         if len(data) != size:
-            self.send_tagged_line(self.append_literal_command[0], 'BAD literal length : expected %s but was %s' % (size, len(data)))
+            self.send_tagged_line(self.append_literal_command[0],
+                                  'BAD literal length : expected %s but was %s' % (size, len(data)))
             self.append_literal_command = None
         else:
             m = email.message_from_bytes(data)
-            self.server_state.add_mail(m.get('To'), Mail.from_python_email(m), mailbox_name)
+            self.server_state.add_mail(m.get('To'), Mail(m), mailbox_name)
 
     def expunge(self, tag, *args):
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox).copy():
@@ -470,76 +476,75 @@ def reset():
 
 
 class Mail(object):
-    def __init__(self, to, mail_from='', subject='', content='', encoding='utf-8',
-                 content_transfer_encoding='7bit',
-                 date=None,
-                 in_reply_to=None):
+    def __init__(self, email, encoding='utf-8'):
+        self.encoding = encoding
+        self.email = email
+        self.uid = 0
+        self.id = 0
+        self.flags = []
+
+    def as_bytes(self):
+        return self.email.as_bytes()
+
+    def as_string(self):
+        return self.email.as_string()
+
+    @property
+    def to(self):
+        return self.email.get('To').split(', ')
+
+    @staticmethod
+    def create(to, mail_from='', subject='', content='', encoding='utf-8',
+               content_transfer_encoding='7bit',
+               date=None,
+               in_reply_to=None):
         """
         :type to: list
         :type mail_from: str
         :type subject: unicode
         :type content: unicode
-        :type date: datetime
         :type encoding: str
         :type content_transfer_encoding: str
+        :type date: datetime
+        :param in_reply_to:
         """
-        self.in_reply_to = in_reply_to
-        self.content_transfer_encoding = content_transfer_encoding
-        self.encoding = encoding
-        self.date = datetime.now() if date is None else date
-        self.content = content
-        self.message_id = str(uuid.uuid1())
-        self.uid = 0
-        self.id = 0
-        self.flags = []
-        self.to = to
-        self.subject = subject
-        self.mail_from = mail_from
+        date = datetime.now() if date is None else date
+        message_id = str(uuid.uuid1())
+        if content_transfer_encoding == 'quoted-printable':
+            content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')
 
-    def __str__(self):
-        if self.content_transfer_encoding == 'quoted-printable':
-            content = quopri.encodestring(self.content.encode(encoding=self.encoding)).decode('ascii')
-        else:
-            content = self.content
-        return ('Return-Path: <{mail_from}>\r\n'
-                'Delivered-To: <{to}>\r\n'
-                'Received: from Mock IMAP Server\r\n'
-                'Message-ID: <{message_id}@mockimap>\r\n'
-                'Date: {date}\r\n'
-                'From: {mail_from}\r\n'
-                'User-Agent: python3\r\n'
-                'MIME-Version: 1.0\r\n'
-                'To: {to}\r\n'
-                'Subject: {subject}\r\n'
-                '{reply_to_header}'
-                'Content-Type: text/plain; charset={charset}\r\n'
-                'Content-Transfer-Encoding: {content_transfer_encoding}\r\n'
-                '\r\n'
-                '{content}\r\n').format(mail_from=self.mail_from, to=', '.join(self.to), message_id=self.message_id,
-                                        date=self.date.strftime('%a, %d %b %Y %H:%M:%S %z'), subject=self.get_subject(),
-                                        content=content, charset=self.encoding,
-                                        content_transfer_encoding=self.content_transfer_encoding,
-                                        reply_to_header='' if self.in_reply_to is None else 'In-Reply-To: <%s>\r\n' %
-                                                                                            self.in_reply_to)
-
-    def get_subject(self):
-        try:
-            self.subject.encode('ascii')
-        except UnicodeEncodeError:
-            return encode(self.subject, encoding='b')
-        else:
-            return self.subject
+        return Mail(email.message_from_bytes(
+            'Return-Path: <{mail_from}>\r\n'
+            'Delivered-To: <{to}>\r\n'
+            'Received: from Mock IMAP Server\r\n'
+            'Message-ID: <{message_id}@mockimap>\r\n'
+            'Date: {date}\r\n'
+            'From: {mail_from}\r\n'
+            'User-Agent: python3\r\n'
+            'MIME-Version: 1.0\r\n'
+            'To: {to}\r\n'
+            'Subject: {subject}\r\n'
+            '{reply_to_header}'
+            'Content-Type: text/plain; charset={charset}\r\n'
+            'Content-Transfer-Encoding: {content_transfer_encoding}\r\n'
+            '\r\n'
+            '{content}\r\n'.format(mail_from=mail_from, to=', '.join(to), message_id=message_id,
+                                   date=date.strftime('%a, %d %b %Y %H:%M:%S %z'),
+                                   subject=Mail.get_encoded_subject(subject),
+                                   content=content, charset=encoding,
+                                   content_transfer_encoding=content_transfer_encoding,
+                                   reply_to_header='' if in_reply_to is None
+                                   else 'In-Reply-To: <%s>\r\n' % in_reply_to).encode(encoding=encoding)))
 
     @staticmethod
-    def from_python_email(m):
-        content = ''
-        for part in m.walk():
-            if part.get_content_maintype() == 'multipart':
-                raise NotImplementedError('multipart is not implemented')
-            if part.get_content_maintype() == 'text' and 'attachment' not in part.get('Content-Disposition', ''):
-                content = part.get_payload(decode=True).decode(part.get_param('charset', 'ascii')).strip()
+    def get_encoded_subject(subject):
+        try:
+            subject.encode('ascii')
+        except UnicodeEncodeError:
+            return encode(subject, encoding='b')
+        else:
+            return subject
 
-        return Mail(m.get('To'), m.get('From'), m.get('Subject'), content=content)
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
