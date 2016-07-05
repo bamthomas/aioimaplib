@@ -21,13 +21,14 @@ requires = [
 setup(
     name=NAME,
     version='0.5.3',
-    description='aioimaplib',
+    description='Python asyncio IMAP4rev1 client library',
     long_description=README + '\n\n' + CHANGES,
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
-        "Topic :: Internet :: IMAP/Library"
+        "Topic :: Communications :: Email :: Post-Office :: IMAP",
+        "Topic :: Internet" 
     ],
     author='Bruno Thomas',
     author_email='bruno@barreverte.fr',
