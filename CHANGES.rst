@@ -1,6 +1,12 @@
 Changes
 =======
 
+
+V0.5.3
+------
+- fix aioimaplib bug when receiving chunked fetch data
+- do not abort when receiving unsollicited data from server
+
 V0.5.2
 ------
 - build CI environment
