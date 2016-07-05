@@ -193,28 +193,43 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def data_received(self, d):
         log.debug('Received : %s' % d)
         if self._uncomplete_fetch_literal():
-            data = self._append_fetch_data(d)
-            if not data:
-                return
+            after_literal = self._append_fetch_data(d)
+            self._handle_responses(after_literal, self._handle_line, self._untagged_fetch_with_literal)
         else:
-            data = d
-        lines = _split_responses(data)
-        for line in lines:
-            response_line = line.decode()
-            if self.state == CONNECTED:
-                asyncio.async(self.welcome(response_line))
-            else:
-                match_fetch_with_literal = fetch_message_with_literal_data_re.match(line)
-                if match_fetch_with_literal:
-                    self._untagged_fetch_with_literal(line, int(match_fetch_with_literal.group('size')))
-                elif response_line.startswith('*'):
-                    self._untagged_response(response_line.replace('* ', ''))
-                elif response_line.startswith('+'):
-                    self._continuation(response_line.replace('+ ', ''))
-                elif tagged_status_response_re.match(response_line):
-                    self._response_done(response_line)
-                else:
-                    log.info('unknown data received %s' % response_line)
+            self._handle_responses(d, self._handle_line, self._untagged_fetch_with_literal)
+
+    def _handle_responses(self, data, line_handler, fetch_handler):
+        if not data:
+            return
+        match_fetch_message = fetch_message_with_literal_data_re.match(data)
+        if match_fetch_message:
+            head, crlf, tail = data.partition(CRLF)
+            msg_size = match_fetch_message.group('size')
+            # we want to cut -----------------------
+            #                              ...here |
+            #                               so 4+1 v
+            # b'* 3 FETCH (UID 3 RFC822 {4}\r\nmail)\r\n...
+            end_message_index_with_parenthesis = int(msg_size) + 1
+
+            fetch_handler(head + crlf + tail[0:end_message_index_with_parenthesis], end_message_index_with_parenthesis)
+            after_fetch = tail[end_message_index_with_parenthesis:].strip()
+            self._handle_responses(after_fetch, line_handler, fetch_handler)
+        else:
+            line, _, tail = data.partition(CRLF)
+            line_handler(line.decode())
+            self._handle_responses(tail, line_handler, fetch_handler)
+
+    def _handle_line(self, line):
+        if self.state == CONNECTED:
+            asyncio.async(self.welcome(line))
+        elif line.startswith('*'):
+            self._untagged_response(line.replace('* ', ''))
+        elif line.startswith('+'):
+            self._continuation(line.replace('+ ', ''))
+        elif tagged_status_response_re.match(line):
+            self._response_done(line)
+        else:
+            log.info('unknown data received %s' % line)
 
     def connection_lost(self, exc):
         self.transport.close()
@@ -406,9 +421,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if pending_fetch is None:
             raise Abort('unexpected fetch message (%r) response:' % raw_line)
         msg_header, _, msg = raw_line.partition(CRLF)
-        if len(msg) < msg_size + 1:
+        if len(msg) < msg_size:
             # email message is not complete we should wait the future chunks
-            pending_fetch.begin_literal_data(msg, msg_size + 1)
+            pending_fetch.begin_literal_data(msg, msg_size)
         else:
             pending_fetch.append_to_resp(msg.rstrip(b')'))
 
@@ -469,7 +484,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.transport.write(CRLF)
             self.literal_data = None
         else:
-            log.info('continuation not handled : %s' % line)
+            log.info('server says %s (ignored)' % line)
 
     def new_tag(self):
         tag = self.tagpre + str(self.tagnum)
@@ -478,28 +493,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def _find_pending_async_cmd_by_tag(self, tag):
         return [c for c in self.pending_async_commands.values() if c is not None and c.tag == tag]
-
-
-def _split_responses(data):
-    if not data:
-        return []
-    match_fetch_message = fetch_message_with_literal_data_re.match(data)
-    if match_fetch_message:
-        head, crlf, tail = data.partition(CRLF)
-        msg_size = match_fetch_message.group('size')
-        # we want to cut -----------------------
-        #                              ...here |
-        #                               so 4+1 v
-        # b'* 3 FETCH (UID 3 RFC822 {4}\r\nmail)\r\n...
-        end_message_index_with_parenthesis = int(msg_size) + 1
-
-        fetch_line = head + crlf + tail[0:end_message_index_with_parenthesis]
-        after_fetch = tail[end_message_index_with_parenthesis:].strip()
-
-        return [fetch_line] + _split_responses(after_fetch)
-    else:
-        line, _, tail = data.partition(CRLF)
-        return [line] + _split_responses(tail)
 
 
 class IMAP4(object):

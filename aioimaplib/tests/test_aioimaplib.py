@@ -20,50 +20,63 @@ from datetime import datetime
 from functools import partial
 
 from aioimaplib import aioimaplib
-from aioimaplib.aioimaplib import Commands, _split_responses, fetch_message_with_literal_data_re
+from aioimaplib.aioimaplib import Commands, fetch_message_with_literal_data_re, IMAP4ClientProtocol
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
+from mock import Mock, call
 from pytz import utc
 
 
 class TestAioimaplibUtils(unittest.TestCase):
+    def setUp(self):
+        self.imap_protocol = IMAP4ClientProtocol(None)
+        self.line_handler = Mock()
+        self.fetch_handler = Mock()
+
     def test_split_responses_no_data(self):
-        self.assertEquals([], _split_responses(b''))
+        self.imap_protocol._handle_responses(b'', self.line_handler, self.fetch_handler)
+        self.line_handler.assert_not_called()
+        self.fetch_handler.assert_not_called()
 
     def test_split_responses_regular_lines(self):
-        self.assertEquals([b'* BYE Logging out', b'CAPB2 OK LOGOUT completed'],
-                          _split_responses(b'* BYE Logging out\r\nCAPB2 OK LOGOUT completed\r\n'))
+        self.imap_protocol._handle_responses(b'* BYE Logging out\r\nCAPB2 OK LOGOUT completed\r\n', self.line_handler,
+                                             self.fetch_handler)
+        self.line_handler.assert_has_calls([call('* BYE Logging out'), call('CAPB2 OK LOGOUT completed')])
+        self.fetch_handler.assert_not_called()
 
     def test_split_responses_with_message_data(self):
-        self.assertEquals([b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)',
-                           b'TAG OK FETCH completed.'],
-                          _split_responses(
-                              b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)\r\n'
-                              b'TAG OK FETCH completed.'))
+        self.imap_protocol._handle_responses(b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)\r\n'
+                                             b'TAG OK FETCH completed.', self.line_handler, self.fetch_handler)
+        self.fetch_handler.assert_called_once_with(b'* 1 FETCH (UID 1 RFC822 {26}\r\n'
+                                                   b'...\r\n(mail content)\r\n...\r\n)', 27)
+        self.line_handler.assert_called_once_with('TAG OK FETCH completed.')
 
     def test_split_responses_with_two_messages_data(self):
-        self.assertEquals([b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)',
-                           b'* 1 FETCH (UID 10 FLAGS (FOO))',
-                           b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)',
-                           b'TAG OK FETCH completed.'],
-                          _split_responses(
-                              b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
-                              b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n' # could be from a previous store cmd cf https://tools.ietf.org/html/rfc3501#section-5.5
-                              b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
-                              b'TAG OK FETCH completed.'))
+        self.imap_protocol._handle_responses(b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
+                                             b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n'  # could be from a previous store
+                                             # cmd cf https://tools.ietf.org/html/rfc3501#section-5.5
+                                             b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
+                                             b'TAG OK FETCH completed.', self.line_handler, self.fetch_handler)
+
+        self.line_handler.assert_has_calls([call('* 1 FETCH (UID 10 FLAGS (FOO))'),
+                                            call('TAG OK FETCH completed.')])
+        self.fetch_handler.assert_has_calls([call(b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)', 9),
+                                             call(b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)', 9)])
 
     def test_split_responses_with_flag_fetch_message_data(self):
-        self.assertEquals([b'* 1 FETCH (UID 10 FLAGS (FOO))',
-                           b'* 1 FETCH (UID 15 FLAGS (BAR))',
-                           b'TAG OK STORE completed.'],
-                          _split_responses(b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n'
-                                           b'* 1 FETCH (UID 15 FLAGS (BAR))\r\n'
-                                           b'TAG OK STORE completed.'))
+        self.imap_protocol._handle_responses(b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n'
+                                             b'* 1 FETCH (UID 15 FLAGS (BAR))\r\n'
+                                             b'TAG OK STORE completed.', self.line_handler, self.fetch_handler)
+        self.line_handler.assert_has_calls([call('* 1 FETCH (UID 10 FLAGS (FOO))'),
+                                            call('* 1 FETCH (UID 15 FLAGS (BAR))'),
+                                            call('TAG OK STORE completed.')])
 
     def test_split_responses_with_message_data_expunge(self):
-        self.assertEquals([b'* 123 EXPUNGE', b'TAG OK SELECT completed.'],
-                          _split_responses(b'* 123 EXPUNGE\r\nTAG OK SELECT completed.\r\n'))
+        self.imap_protocol._handle_responses(b'* 123 EXPUNGE\r\nTAG OK SELECT completed.\r\n',
+                                             self.line_handler, self.fetch_handler)
+        self.line_handler.assert_has_calls([call('* 123 EXPUNGE'),
+                                            call('TAG OK SELECT completed.')])
 
     def test_fetch_message_with_literal_data_re(self):
         self.assertIsNotNone(
@@ -87,7 +100,8 @@ class AioWithImapServer(WithImapServer):
 
 class TestAioimaplib(AioWithImapServer):
     def setUp(self):
-        factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64), 'localhost', 12345)
+        factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64), 'localhost',
+                                          12345)
         self.server = self.loop.run_until_complete(factory)
 
     @asyncio.coroutine
@@ -181,7 +195,8 @@ class TestAioimaplib(AioWithImapServer):
     @asyncio.coroutine
     def test_fetch(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        mail = Mail.create(['user'], mail_from='me', subject='hello', content='pleased to meet you, wont you guess my name ?')
+        mail = Mail.create(['user'], mail_from='me', subject='hello',
+                           content='pleased to meet you, wont you guess my name ?')
         imap_receive(mail)
 
         result, data = yield from imap_client.fetch('1', '(RFC822)')
@@ -192,7 +207,8 @@ class TestAioimaplib(AioWithImapServer):
     @asyncio.coroutine
     def test_fetch_by_uid(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        mail = Mail.create(['user'], mail_from='me', subject='hello', content='pleased to meet you, wont you guess my name ?')
+        mail = Mail.create(['user'], mail_from='me', subject='hello',
+                           content='pleased to meet you, wont you guess my name ?')
         imap_receive(mail)
 
         response = (yield from imap_client.uid('fetch', '1', '(RFC822)'))
@@ -284,7 +300,7 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_concurrency_3_executing_async_commands_in_parallel(self):
-         # cf valid example in https://tools.ietf.org/html/rfc3501#section-5.5
+        # cf valid example in https://tools.ietf.org/html/rfc3501#section-5.5
         imap_receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
@@ -339,7 +355,8 @@ class TestAioimaplib(AioWithImapServer):
         imap_client = yield from self.login_user('user', 'pass')
 
         self.assertEquals(('OK', ['SUBSCRIBE completed.']), (yield from imap_client.subscribe('#fr.soc.feminisme')))
-        self.assertEquals(('OK', ['() "." #fr.soc.feminisme', 'LSUB completed.']), (yield from imap_client.lsub('#fr.', 'soc.*')))
+        self.assertEquals(('OK', ['() "." #fr.soc.feminisme', 'LSUB completed.']),
+                          (yield from imap_client.lsub('#fr.', 'soc.*')))
         self.assertEquals(('OK', ['UNSUBSCRIBE completed.']), (yield from imap_client.unsubscribe('#fr.soc.feminisme')))
         self.assertEquals(('OK', ['LSUB completed.']), (yield from imap_client.lsub('#fr', '.*')))
 
@@ -380,6 +397,6 @@ class TestAioimaplib(AioWithImapServer):
         msg = Mail.create(['user@mail'], subject='append msg', content='do you see me ?')
         self.assertEquals(('OK', ['APPEND completed.']),
                           (yield from imap_client.append(msg.as_bytes(), mailbox='INBOX',
-                                                         flags='FOO BAR', date=datetime.now(tz=utc),)))
+                                                         flags='FOO BAR', date=datetime.now(tz=utc), )))
 
         self.assertEquals(('OK', ['1']), (yield from imap_client.examine('INBOX')))
