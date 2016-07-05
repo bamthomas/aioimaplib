@@ -37,6 +37,11 @@ class TestMailToString(unittest.TestCase):
 
         self.assertEqual(mail.email.get('Date'), 'Tue, 02 Feb 2016 12:13:14 +0100')
 
+    def test_message_default_date_string_is_utc(self):
+        mail = imapserver.Mail.create(['user'])
+
+        self.assertTrue(mail.email.get('Date').endswith('+0000'))
+
     def test_message_title_string_without_accents_isnot_encoded(self):
         now = pytz.timezone('Europe/Paris').localize(datetime(2016, 2, 2, 12, 13, 14, 151))
 

@@ -20,12 +20,12 @@ import quopri
 import uuid
 from datetime import datetime
 from email._encoded_words import encode
-
 from math import ceil
 
 import re
-from functools import update_wrapper
 from copy import deepcopy
+from functools import update_wrapper
+from pytz import utc
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -508,7 +508,7 @@ class Mail(object):
         :type date: datetime
         :param in_reply_to:
         """
-        date = datetime.now() if date is None else date
+        date = datetime.now(tz=utc) if date is None else date
         message_id = str(uuid.uuid1())
         if content_transfer_encoding == 'quoted-printable':
             content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')
