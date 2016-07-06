@@ -43,6 +43,9 @@ Example
         loop = asyncio.get_event_loop()
         loop.run_until_complete(check_mailbox('my.imap.server', 'user', 'pass'))
 
+**Beware** that the IMAP4.close() function is an IMAP function that is closing the selected mailbox, thus passing from SELECTED state to AUTH state. It **does not close** the TCP connection.
+The way close TCP connection properly is to logout.
+
 IDLE command
 ------------
 .. _RFC2177: https://tools.ietf.org/html/rfc2177
