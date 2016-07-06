@@ -1,6 +1,13 @@
 Changes
 =======
 
+V0.5.4
+------
+- refactor: treating response as we read the imap server responses for a better reading
+- doc
+- removing tests from package
+- publish on pypi
+- added coverall
 
 V0.5.3
 ------
