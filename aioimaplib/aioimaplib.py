@@ -355,11 +355,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             raise Abort('command UID illegal in state %s' % self.state)
 
         if command.upper() == 'FETCH':
-            return self.fetch(criteria[0], criteria[1], by_uid=True)
+            return (yield from self.fetch(criteria[0], criteria[1], by_uid=True))
         if command.upper() == 'STORE':
-            return self.store(*criteria, by_uid=True)
+            return (yield from self.store(*criteria, by_uid=True))
         if command.upper() == 'COPY':
-            return self.copy(*criteria, by_uid=True)
+            return (yield from self.copy(*criteria, by_uid=True))
         else:
             raise Abort('command UID only possible with COPY, FETCH or STORE (was %s)' % command.upper())
 

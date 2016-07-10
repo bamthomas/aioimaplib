@@ -141,7 +141,7 @@ def critical_section(next_state):
 
     def decorator(func):
         def wrapper(self, *args, **kwargs):
-            asyncio.wait(asyncio.async(execute_section(self, next_state, func, *args, **kwargs)))
+            self.loop.run_until_complete(execute_section(self, next_state, func, *args, **kwargs))
 
         return update_wrapper(wrapper, func)
 
@@ -152,7 +152,8 @@ command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\
 
 
 class ImapProtocol(asyncio.Protocol):
-    def __init__(self, server_state, fetch_chunk_size=0):
+    def __init__(self, server_state, fetch_chunk_size=0, loop=asyncio.get_event_loop()):
+        self.loop = loop
         self.fetch_chunk_size = fetch_chunk_size
         self.transport = None
         self.server_state = server_state
@@ -465,8 +466,8 @@ def get_imapconnection(user):
     return _SERVER_STATE.get_connection(user)
 
 
-def create_imap_protocol(fetch_chunk_size=0):
-    protocol = ImapProtocol(_SERVER_STATE, fetch_chunk_size)
+def create_imap_protocol(fetch_chunk_size=0, loop=asyncio.get_event_loop()):
+    protocol = ImapProtocol(_SERVER_STATE, fetch_chunk_size, loop)
     return protocol
 
 
@@ -550,4 +551,3 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     factory = loop.create_server(create_imap_protocol, 'localhost', 1143)
     server = loop.run_until_complete(factory)
-    loop.run_forever()

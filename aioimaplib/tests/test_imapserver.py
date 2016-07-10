@@ -92,7 +92,7 @@ class WithImapServer(asynctest.TestCase):
     def tearDown(self):
         imapserver.reset()
         self.server.close()
-        asyncio.wait_for(self.server.wait_closed(), 1)
+        yield from asyncio.wait_for(self.server.wait_closed(), 1)
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=imaplib.IMAP4):
