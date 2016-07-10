@@ -1,6 +1,11 @@
 Changes
 =======
 
+V0.5.5
+- fix issues with coroutines in uid command
+- documentation
+- remove PARTIAL, PROXYAUTH, SETANNOTATION and GETANNOTATION commands
+
 V0.5.4
 ------
 - refactor: treating response as we read the imap server responses for a better reading
