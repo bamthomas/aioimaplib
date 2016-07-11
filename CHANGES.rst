@@ -1,6 +1,11 @@
 Changes
 =======
 
+V0.5.6
+------
+- fix doc
+- fix imapserver main (needs a asyncio.loop.run_forever())
+
 V0.5.5
 ------
 - fix issues with coroutines in uid command
