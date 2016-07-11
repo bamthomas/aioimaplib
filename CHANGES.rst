@@ -1,6 +1,11 @@
 Changes
 =======
 
+V0.5.7
+------
+- server send still here every IDLE_STILL_HERE_PERIOD_SECONDS to client when idle
+- fix when server was lauched with main, loop is already running
+
 V0.5.6
 ------
 - fix doc
