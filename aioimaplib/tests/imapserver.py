@@ -152,6 +152,8 @@ command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\
 
 
 class ImapProtocol(asyncio.Protocol):
+    IDLE_STILL_HERE_PERIOD_SECONDS = 10
+
     def __init__(self, server_state, fetch_chunk_size=0, loop=asyncio.get_event_loop()):
         self.loop = loop
         self.fetch_chunk_size = fetch_chunk_size
@@ -161,6 +163,7 @@ class ImapProtocol(asyncio.Protocol):
         self.user_mailbox = None
         self.by_uid = False
         self.idle_tag = None
+        self.idle_task = None
         self.state = NONAUTH
         self.state_condition = asyncio.Condition()
         self.append_literal_command = None
@@ -188,10 +191,10 @@ class ImapProtocol(asyncio.Protocol):
     def connection_lost(self, error):
         if error:
             log.error(error)
-        else:
-            log.debug('closing')
-            self.transport.close()
-        super().connection_lost(error)
+
+        if self.idle_task is not None:
+            self.idle_task.cancel()
+        self.transport.close()
 
     def exec_command(self, tag, command_array):
         command = command_array[0].lower()
@@ -240,11 +243,19 @@ class ImapProtocol(asyncio.Protocol):
     def idle(self, tag, *args):
         log.debug("Entering idle for '%s'", self.user_login)
         self.idle_tag = tag
+
+        def still_here():
+            self.send_untagged_line('OK Still here')
+            self.idle_task = self.loop.call_later(self.IDLE_STILL_HERE_PERIOD_SECONDS, still_here)
+
+        self.idle_task = self.loop.call_later(self.IDLE_STILL_HERE_PERIOD_SECONDS, still_here)
         self.send_untagged_line('idling', continuation=True)
 
     @critical_section(next_state=SELECTED)
     def done(self, _, *args):
         self.send_tagged_line(self.idle_tag, 'OK IDLE terminated')
+        self.idle_task.cancel()
+        self.idle_task = None
         self.idle_tag = None
 
     @critical_section(next_state=AUTH)
