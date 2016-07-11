@@ -551,3 +551,4 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     factory = loop.create_server(create_imap_protocol, 'localhost', 1143)
     server = loop.run_until_complete(factory)
+    loop.run_forever()
