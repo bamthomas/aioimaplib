@@ -142,7 +142,6 @@ TODO
 .. _rfc2971: https://tools.ietf.org/html/rfc2971
 .. _rfc2342: https://tools.ietf.org/html/rfc2342
 .. _rfc4469: https://tools.ietf.org/html/rfc4469
-.. _rfc5032: https://tools.ietf.org/html/rfc5032
 
 - 23/25 IMAP4rev1 commands are implemented from the main rfc3501_. 'STARTTLS' and 'AUTHENTICATE' are still missing.
 - 'COMPRESS' from rfc4978_
@@ -152,7 +151,6 @@ TODO
 - 'ID' from the rfc2971_
 - 'NAMESPACE' from rfc2342_
 - 'CATENATE' from rfc4469_
-- 'WITHIN' from rfc5032_
 - tests with other servers
 
 If it goes wrong
