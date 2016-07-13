@@ -17,7 +17,7 @@
 import asyncio
 import email
 import imaplib
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import functools
 from aioimaplib.tests import imapserver
@@ -131,7 +131,7 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(RFC822)')), 1)
 
         self.assertEqual('OK', result)
-        self.assertEqual([(b'1 (UID 1 RFC822 {359}', mail.as_bytes()), b')'], data)
+        self.assertEqual([(b'1 (UID 1 RFC822 {354}', mail.as_bytes()), b')'], data)
 
     @asyncio.coroutine
     def test_fetch_one_messages_by_uid_encoding_cp1252(self):
@@ -344,3 +344,16 @@ class TestImapServerWithImaplib(WithImapServer):
         self.assertEqual('BYE', result)  # uhh ?
         self.assertEqual([b'Logging out'], data)
         self.assertEquals(imapserver.LOGOUT, get_imapconnection('user').state)
+
+    @asyncio.coroutine
+    def test_rfc5032_within(self):
+        imap_receive(Mail.create(['user'], date=datetime.now() - timedelta(seconds=84600*3))) # 1
+        imap_receive(Mail.create(['user'], date=datetime.now() - timedelta(seconds=84600))) # 2
+        imap_receive(Mail.create(['user'])) # 3
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        self.assertEquals([b'2 3'], (yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.search, 'utf-8', 'YOUNGER', '84700')), 1))[1])
+
+        self.assertEquals([b'1'], (yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.search, 'utf-8', 'OLDER', '84700')), 1))[1])

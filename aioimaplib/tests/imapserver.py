@@ -18,7 +18,7 @@ import email
 import logging
 import quopri
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from email._encoded_words import encode
 from math import ceil
 
@@ -283,29 +283,35 @@ class ImapProtocol(asyncio.Protocol):
     def search(self, tag, *args_param):
         args = list(args_param)
         args.reverse()
-        charset = None
+        charset, keyword, unkeyword, older, younger = None, None, None, None, None
         if args and 'CHARSET' == args[-1].upper():
             args.pop()
             charset = args.pop()
-        keyword = None
         if args and 'KEYWORD' == args[-1].upper():
             args.pop()
             keyword = args.pop()
-        unkeyword = None
         if args and 'UNKEYWORD' == args[-1].upper():
             args.pop()
             unkeyword = args.pop()
+        if args and 'OLDER' == args[-1].upper():
+            args.pop()
+            older = int(args.pop())
+        if args and 'YOUNGER' == args[-1].upper():
+            args.pop()
+            younger = int(args.pop())
         all = 'ALL' in args
 
         self.send_untagged_line(
-            'SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(all, keyword, unkeyword))))
+            'SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(all, keyword, unkeyword, older, younger))))
         self.send_tagged_line(tag, 'OK %sSEARCH completed' % ('UID ' if self.by_uid else ''))
 
-    def memory_search(self, all, keyword, unkeyword):
+    def memory_search(self, all, keyword, unkeyword, older, younger):
         def item_match(msg):
             return all or \
                    (keyword is not None and keyword in msg.flags) or \
-                   (unkeyword is not None and unkeyword not in msg.flags)
+                   (unkeyword is not None and unkeyword not in msg.flags) or \
+                   (older is not None and datetime.utcnow() - timedelta(seconds=older) > msg.date) or \
+                   (younger is not None and datetime.utcnow() - timedelta(seconds=younger) < msg.date)
 
         return [str(msg.uid if self.by_uid else msg.id)
                 for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
@@ -488,7 +494,8 @@ def reset():
 
 
 class Mail(object):
-    def __init__(self, email, encoding='utf-8'):
+    def __init__(self, email, encoding='utf-8', date=datetime.now()):
+        self.date = date
         self.encoding = encoding
         self.email = email
         self.uid = 0
@@ -520,7 +527,7 @@ class Mail(object):
         :type date: datetime
         :param in_reply_to:
         """
-        date = datetime.now(tz=utc) if date is None else date
+        date = datetime.utcnow() if date is None else date
         message_id = str(uuid.uuid1())
         if content_transfer_encoding == 'quoted-printable':
             content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')
@@ -546,7 +553,7 @@ class Mail(object):
                                    content=content, charset=encoding,
                                    content_transfer_encoding=content_transfer_encoding,
                                    reply_to_header='' if in_reply_to is None
-                                   else 'In-Reply-To: <%s>\r\n' % in_reply_to).encode(encoding=encoding)))
+                                   else 'In-Reply-To: <%s>\r\n' % in_reply_to).encode(encoding=encoding)), date=date)
 
     @staticmethod
     def get_encoded_subject(subject):
