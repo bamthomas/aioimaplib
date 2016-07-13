@@ -1,6 +1,11 @@
 Changes
 =======
 
+
+V0.5.9
+------
+-  pushing continuation in the queue when idled
+
 V0.5.8
 ------
 - added a stop waiting server push function to interupt yield from queue.get
