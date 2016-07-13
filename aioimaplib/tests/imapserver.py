@@ -310,8 +310,8 @@ class ImapProtocol(asyncio.Protocol):
             return all or \
                    (keyword is not None and keyword in msg.flags) or \
                    (unkeyword is not None and unkeyword not in msg.flags) or \
-                   (older is not None and datetime.utcnow() - timedelta(seconds=older) > msg.date) or \
-                   (younger is not None and datetime.utcnow() - timedelta(seconds=younger) < msg.date)
+                   (older is not None and datetime.now(tz=utc) - timedelta(seconds=older) > msg.date) or \
+                   (younger is not None and datetime.now(tz=utc) - timedelta(seconds=younger) < msg.date)
 
         return [str(msg.uid if self.by_uid else msg.id)
                 for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
@@ -527,7 +527,7 @@ class Mail(object):
         :type date: datetime
         :param in_reply_to:
         """
-        date = datetime.utcnow() if date is None else date
+        date = datetime.now(tz=utc) if date is None else date
         message_id = str(uuid.uuid1())
         if content_transfer_encoding == 'quoted-printable':
             content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')

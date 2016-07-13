@@ -16,7 +16,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 
 from aioimaplib import aioimaplib
@@ -419,3 +419,13 @@ class TestAioimaplib(AioWithImapServer):
                                                          flags='FOO BAR', date=datetime.now(tz=utc), )))
 
         self.assertEquals(('OK', ['1']), (yield from imap_client.examine('INBOX')))
+
+    @asyncio.coroutine
+    def test_rfc5032_within(self):
+        imap_receive(Mail.create(['user'], date=datetime.now(tz=utc) - timedelta(seconds=84600 * 3)))  # 1
+        imap_receive(Mail.create(['user'], date=datetime.now(tz=utc) - timedelta(seconds=84600)))  # 2
+        imap_receive(Mail.create(['user']))  # 3
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        self.assertEquals('1', (yield from imap_client.search('OLDER', '84700')).lines[0])
+        self.assertEquals('2 3', (yield from imap_client.search('YOUNGER', '84700')).lines[0])
