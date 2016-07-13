@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.8
+------
+- added a stop waiting server push function to interupt yield from queue.get
+
 V0.5.7
 ------
 - server send still here every IDLE_STILL_HERE_PERIOD_SECONDS to client when idle
