@@ -434,9 +434,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             pending_fetch.end_literal_data()
         return rest
 
+    def has_pending_idle_command(self):
+        return self.pending_sync_command is not None and self.pending_sync_command.name == 'IDLE'
+
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
-            if self.pending_sync_command.name == 'IDLE':
+            if self.has_pending_idle_command():
                 asyncio.async(self.idle_queue.put(line))
             else:
                 self.pending_sync_command.append_to_resp(line)
@@ -559,6 +562,11 @@ class IMAP4(object):
 
     def idle_done(self):
         self.protocol.idle_done()
+
+    @asyncio.coroutine
+    def stop_wait_server_push(self):
+        if self.protocol.has_pending_idle_command():
+            yield from self.protocol.idle_queue.put('stop_wait_server_push')
 
     @asyncio.coroutine
     def wait_server_push(self):

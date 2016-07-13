@@ -233,6 +233,27 @@ class TestAioimaplib(AioWithImapServer):
         self.assertEquals(('OK', ['IDLE terminated']), (yield from asyncio.wait_for(idle, 1)))
 
     @asyncio.coroutine
+    def test_idle_stop(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        idle = asyncio.async(imap_client.idle())
+        yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.IDLE), 1)
+        yield from imap_client.stop_wait_server_push()
+
+        self.assertEquals('stop_wait_server_push', (yield from imap_client.wait_server_push()))
+
+        imap_client.idle_done()
+        yield from asyncio.wait_for(idle, 1)
+
+    @asyncio.coroutine
+    def test_idle_stop_does_nothing_if_no_pending_idle(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        yield from imap_client.stop_wait_server_push()
+
+        with self.assertRaises(asyncio.TimeoutError):
+            yield from asyncio.wait_for(imap_client.wait_server_push(), 0.5)
+
+    @asyncio.coroutine
     def test_store_and_search_by_keyword(self):
         imap_receive(Mail.create(['user']))
         imap_receive(Mail.create(['user']))
