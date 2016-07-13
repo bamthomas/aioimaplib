@@ -221,12 +221,11 @@ class TestAioimaplib(AioWithImapServer):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         idle = asyncio.async(imap_client.idle())
-        yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.IDLE), 1)
+        self.assertEquals('idling', (yield from imap_client.wait_server_push()))
 
-        idle_push = asyncio.async(imap_client.wait_server_push())
         imap_receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
 
-        self.assertEquals('1 EXISTS', (yield from idle_push))
+        self.assertEquals('1 EXISTS', (yield from imap_client.wait_server_push()))
         self.assertEquals('1 RECENT', (yield from imap_client.wait_server_push()))
 
         imap_client.idle_done()
@@ -236,8 +235,8 @@ class TestAioimaplib(AioWithImapServer):
     def test_idle_stop(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         idle = asyncio.async(imap_client.idle())
-        yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.IDLE), 1)
-        yield from imap_client.stop_wait_server_push()
+        self.assertEquals('idling', (yield from imap_client.wait_server_push()))
+        self.assertTrue((yield from imap_client.stop_wait_server_push()))
 
         self.assertEquals('stop_wait_server_push', (yield from imap_client.wait_server_push()))
 
@@ -248,8 +247,7 @@ class TestAioimaplib(AioWithImapServer):
     def test_idle_stop_does_nothing_if_no_pending_idle(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        yield from imap_client.stop_wait_server_push()
-
+        self.assertFalse((yield from imap_client.stop_wait_server_push()))
         with self.assertRaises(asyncio.TimeoutError):
             yield from asyncio.wait_for(imap_client.wait_server_push(), 0.5)
 
