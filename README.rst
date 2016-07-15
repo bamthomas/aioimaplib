@@ -103,6 +103,34 @@ IMAP protocol allows to run some commands in parallel. Four rules are implemente
 3. async commands can be executed in parallel
 4. sync command must wait pending async commands to finish
 
+Logging
+-------
+.. _howto: https://docs.python.org/3.4/howto/logging.html#configuring-logging-for-a-library
+
+As said in the logging howto_ the logger is defined with ::
+
+    logger = logging.getLogger(__name__)
+
+
+Where name is 'aioimaplib.aioimaplib'. You can set the logger parameters, either by python API ::
+
+
+    aioimaplib_logger = logging.getLogger('aioimaplib.aioimaplib')
+    sh = logging.StreamHandler()
+    sh.setLevel(logging.DEBUG)
+    sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
+    aioimaplib_logger.addHandler(sh)
+
+Or with loading config file (for example with logging.config.dictConfig(yaml.load(file))) for example with this piece of yaml file::
+
+
+    loggers:
+    ...
+      aioimaplib.aioimaplib:
+        level: DEBUG
+        handlers: [syslog]
+        propagate: no
+    ...
 
 Tested with
 -----------

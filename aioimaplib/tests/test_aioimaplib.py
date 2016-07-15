@@ -15,6 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
+import logging
 import unittest
 from datetime import datetime, timedelta
 from functools import partial
@@ -26,6 +27,12 @@ from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
 from mock import Mock, call
 from pytz import utc
+
+aioimaplib.log.setLevel(logging.INFO)
+sh = logging.StreamHandler()
+sh.setLevel(logging.INFO)
+sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
+aioimaplib.log.addHandler(sh)
 
 
 class TestAioimaplibUtils(unittest.TestCase):
