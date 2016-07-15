@@ -2,6 +2,11 @@ Changes
 =======
 
 
+V0.5.11
+-------
+- remove hard coded logging config
+- doc : added logging settings
+
 V0.5.10
 -------
 - added rfc5032 'within' function to server and tests for aiolib (it is only YOUNGER/OLDER arguments)
