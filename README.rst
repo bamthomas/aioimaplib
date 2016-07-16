@@ -121,7 +121,7 @@ Where name is 'aioimaplib.aioimaplib'. You can set the logger parameters, either
     sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
     aioimaplib_logger.addHandler(sh)
 
-Or with loading config file (for example with logging.config.dictConfig(yaml.load(file))) for example with this piece of yaml file::
+Or with loading config file (for example with logging.config.dictConfig(yaml.load(file))) with this piece of yaml file::
 
 
     loggers:
