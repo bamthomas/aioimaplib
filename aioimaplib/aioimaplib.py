@@ -84,11 +84,11 @@ Response = namedtuple('Response', 'result lines')
 
 
 class Command(object):
-    def __init__(self, name, tag, *args, prefix='', untagged_resp=None, loop=asyncio.get_event_loop()):
+    def __init__(self, name, tag, *args, prefix='', untagged_resp_name=None, loop=asyncio.get_event_loop()):
         self.name = name
         self.args = args
         self.prefix = prefix
-        self.untagged_resp = name if untagged_resp is None else untagged_resp
+        self.untagged_resp_name = untagged_resp_name or name
         self.response = None
         self.event = asyncio.Event(loop=loop)
         self.tag = tag
@@ -243,9 +243,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 yield from self.wait_async_pending_commands()
             self.pending_sync_command = command
         else:
-            if self.pending_async_commands.get(command.untagged_resp) is not None:
-                yield from self.pending_async_commands[command.untagged_resp].wait()
-            self.pending_async_commands[command.untagged_resp] = command
+            if self.pending_async_commands.get(command.untagged_resp_name) is not None:
+                yield from self.pending_async_commands[command.untagged_resp_name].wait()
+            self.pending_async_commands[command.untagged_resp_name] = command
 
         self.send(str(command))
         yield from command.wait()
@@ -338,7 +338,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def store(self, *args, by_uid=False):
         return (yield from self.execute(
             Command('STORE', self.new_tag(), *args,
-                    prefix='UID ' if by_uid else '', untagged_resp='FETCH', loop=self.loop)))
+                    prefix='UID ' if by_uid else '', untagged_resp_name='FETCH', loop=self.loop)))
 
     @asyncio.coroutine
     def expunge(self):
@@ -464,7 +464,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             elif len(cmds) > 1:
                 raise Error('inconsistent state : two commands have the same tag (%s)' % cmds)
             command = cmds.pop()
-            self.pending_async_commands.pop(command.untagged_resp)
+            self.pending_async_commands.pop(command.untagged_resp_name)
 
         response_result, _, response_text = response.partition(' ')
         command.close(response_text, result=response_result)

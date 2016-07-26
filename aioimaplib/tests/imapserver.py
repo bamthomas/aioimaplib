@@ -527,7 +527,7 @@ class Mail(object):
         :type date: datetime
         :param in_reply_to:
         """
-        date = datetime.now(tz=utc) if date is None else date
+        date = date or datetime.now(tz=utc)
         message_id = str(uuid.uuid1())
         if content_transfer_encoding == 'quoted-printable':
             content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')
