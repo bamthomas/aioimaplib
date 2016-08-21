@@ -57,7 +57,7 @@ class TestAioimaplibUtils(unittest.TestCase):
                                              b'TAG OK FETCH completed.', self.line_handler, self.fetch_handler)
         self.fetch_handler.assert_called_once_with(b'* 1 FETCH (UID 1 RFC822 {26}\r\n'
                                                    b'...\r\n(mail content)\r\n...\r\n)', 27)
-        self.line_handler.assert_called_once_with('TAG OK FETCH completed.')
+        self.line_handler.assert_has_calls([call('TAG OK FETCH completed.')])
 
     def test_split_responses_with_two_messages_data(self):
         self.imap_protocol._handle_responses(b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
@@ -66,8 +66,8 @@ class TestAioimaplibUtils(unittest.TestCase):
                                              b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
                                              b'TAG OK FETCH completed.', self.line_handler, self.fetch_handler)
 
-        self.line_handler.assert_has_calls([call('* 1 FETCH (UID 10 FLAGS (FOO))'),
-                                            call('TAG OK FETCH completed.')])
+        self.line_handler.assert_has_calls([call(''), call('* 1 FETCH (UID 10 FLAGS (FOO))'),
+                                            call(''), call('TAG OK FETCH completed.')])
         self.fetch_handler.assert_has_calls([call(b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)', 9),
                                              call(b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)', 9)])
 

@@ -203,7 +203,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             end_message_index_with_parenthesis = int(msg_size) + 1
 
             fetch_handler(head + crlf + tail[0:end_message_index_with_parenthesis], end_message_index_with_parenthesis)
-            after_fetch = tail[end_message_index_with_parenthesis:].strip()
+            after_fetch = tail[end_message_index_with_parenthesis:]
             self._handle_responses(after_fetch, line_handler, fetch_handler)
         else:
             line, _, tail = data.partition(CRLF)
