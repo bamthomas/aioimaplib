@@ -386,6 +386,7 @@ class ImapProtocol(asyncio.Protocol):
         mailbox = self.server_state.get_mailbox_messages(self.user_login, mailbox_name)
         if mailbox is None:
             self.send_tagged_line(tag, 'NO STATUS completed.')
+            return
         status_response = 'STATUS %s (' % mailbox_name
         if 'MESSAGES' in data_items:
             status_response += 'MESSAGES %s' % len(mailbox)
