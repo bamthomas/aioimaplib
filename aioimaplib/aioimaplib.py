@@ -211,7 +211,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self._handle_responses(tail, line_handler, fetch_handler)
 
     def _handle_line(self, line):
-        if self.state == CONNECTED:
+        if not line:
+            return
+        elif self.state == CONNECTED:
             asyncio.async(self.welcome(line))
         elif line.startswith('*'):
             self._untagged_response(line.replace('* ', ''))
