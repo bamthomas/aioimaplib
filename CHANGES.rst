@@ -2,6 +2,13 @@ Changes
 =======
 
 
+V0.5.12
+-------
+- fix : issue #12 Not properly buffering newlines for incomplete lines
+- fix : imapserver with status of an inexistant mailbox
+- fix : remove offset problem with strip() modifying length of read data
+- fix : remove 'unknown data received' logs if line is empty
+
 V0.5.11
 -------
 - remove hard coded logging config
