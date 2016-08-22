@@ -173,6 +173,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.idle_queue = asyncio.Queue()
         self.imap_version = None
         self.literal_data = None
+        self.incomplete_line = b''
 
         self.tagnum = 0
         self.tagpre = int2ap(random.randint(4096, 65535))
@@ -183,15 +184,21 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def data_received(self, d):
         log.debug('Received : %s' % d)
-        if self._uncomplete_fetch_literal():
-            after_literal = self._append_fetch_data(d)
-            self._handle_responses(after_literal, self._handle_line, self._untagged_fetch_with_literal)
+        if self._incomplete_fetch_literal():
+            data = self._append_fetch_data(d)
         else:
-            self._handle_responses(d, self._handle_line, self._untagged_fetch_with_literal)
+            data = d
+        try:
+            self._handle_responses(data, self._handle_line, self._untagged_fetch_with_literal, self.incomplete_line)
+            self.incomplete_line = b''
+        except asyncio.IncompleteReadError as incomplete_error:
+            log.debug('Incomplete line, storing partial : %s' % incomplete_error.partial)
+            self.incomplete_line = incomplete_error.partial
 
-    def _handle_responses(self, data, line_handler, fetch_handler):
-        if not data:
+    def _handle_responses(self, d, line_handler, fetch_handler, incomplete_line=b''):
+        if not d:
             return
+        data = incomplete_line + d
         match_fetch_message = fetch_message_with_literal_data_re.match(data)
         if match_fetch_message:
             head, crlf, tail = data.partition(CRLF)
@@ -206,9 +213,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             after_fetch = tail[end_message_index_with_parenthesis:]
             self._handle_responses(after_fetch, line_handler, fetch_handler)
         else:
-            line, _, tail = data.partition(CRLF)
-            line_handler(line.decode())
-            self._handle_responses(tail, line_handler, fetch_handler)
+            line, separator, tail = data.partition(CRLF)
+            if not separator:
+                raise asyncio.IncompleteReadError(data, b'line should end with CRLF')
+            else:
+                line_handler(line.decode())
+                self._handle_responses(tail, line_handler, fetch_handler)
 
     def _handle_line(self, line):
         if not line:
@@ -420,7 +430,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             pending_fetch.append_to_resp(msg.rstrip(b')'))
 
-    def _uncomplete_fetch_literal(self):
+    def _incomplete_fetch_literal(self):
         return 'FETCH' in self.pending_async_commands and \
                self.pending_async_commands.get('FETCH').has_literal_data()
 

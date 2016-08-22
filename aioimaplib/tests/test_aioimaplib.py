@@ -54,7 +54,7 @@ class TestAioimaplibUtils(unittest.TestCase):
 
     def test_split_responses_with_message_data(self):
         self.imap_protocol._handle_responses(b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)\r\n'
-                                             b'TAG OK FETCH completed.', self.line_handler, self.fetch_handler)
+                                             b'TAG OK FETCH completed.\r\n', self.line_handler, self.fetch_handler)
         self.fetch_handler.assert_called_once_with(b'* 1 FETCH (UID 1 RFC822 {26}\r\n'
                                                    b'...\r\n(mail content)\r\n...\r\n)', 27)
         self.line_handler.assert_has_calls([call('TAG OK FETCH completed.')])
@@ -64,7 +64,7 @@ class TestAioimaplibUtils(unittest.TestCase):
                                              b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n'  # could be from a previous store
                                              # cmd cf https://tools.ietf.org/html/rfc3501#section-5.5
                                              b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
-                                             b'TAG OK FETCH completed.', self.line_handler, self.fetch_handler)
+                                             b'TAG OK FETCH completed.\r\n', self.line_handler, self.fetch_handler)
 
         self.line_handler.assert_has_calls([call(''), call('* 1 FETCH (UID 10 FLAGS (FOO))'),
                                             call(''), call('TAG OK FETCH completed.')])
@@ -74,7 +74,7 @@ class TestAioimaplibUtils(unittest.TestCase):
     def test_split_responses_with_flag_fetch_message_data(self):
         self.imap_protocol._handle_responses(b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n'
                                              b'* 1 FETCH (UID 15 FLAGS (BAR))\r\n'
-                                             b'TAG OK STORE completed.', self.line_handler, self.fetch_handler)
+                                             b'TAG OK STORE completed.\r\n', self.line_handler, self.fetch_handler)
         self.line_handler.assert_has_calls([call('* 1 FETCH (UID 10 FLAGS (FOO))'),
                                             call('* 1 FETCH (UID 15 FLAGS (BAR))'),
                                             call('TAG OK STORE completed.')])
@@ -84,6 +84,16 @@ class TestAioimaplibUtils(unittest.TestCase):
                                              self.line_handler, self.fetch_handler)
         self.line_handler.assert_has_calls([call('* 123 EXPUNGE'),
                                             call('TAG OK SELECT completed.')])
+
+    def test_unconplete_line_with_litteral_fetch(self):
+        with self.assertRaises(asyncio.IncompleteReadError) as expected:
+            self.imap_protocol._handle_responses(b'* 12 FETCH (BODY[HEADER] {4}\r\nyo\r\n)* 13 FETCH (BODY[', self.line_handler, self.fetch_handler)
+            self.fetch_handler.assert_has_calls([call(b'* 12 FETCH (BODY[HEADER] {4}\r\nyo\r\n)', 5)])
+            self.fetch_handler.reset_mock()
+
+        self.imap_protocol._handle_responses(b'HEADER] {5}\r\nyo2\r\n)', self.line_handler, self.fetch_handler,
+                                             incomplete_line=expected.exception.partial)
+        self.fetch_handler.assert_has_calls([call(b'* 13 FETCH (BODY[HEADER] {5}\r\nyo2\r\n)', 6)])
 
     def test_fetch_message_with_literal_data_re(self):
         self.assertIsNotNone(
