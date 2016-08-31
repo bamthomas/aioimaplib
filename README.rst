@@ -136,6 +136,7 @@ Tested with
 -----------
 
 - dovecot 2.2.13 on debian Jessie
+- gmail with imap and SSL
 
 Develop
 =======
