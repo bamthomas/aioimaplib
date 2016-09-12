@@ -96,7 +96,8 @@ class Command(object):
         self.expected_size = 0
 
     def __repr__(self):
-        return '%s %s%s %s' % (self.tag, self.prefix, self.name, ' '.join(self.args))
+        return '%s %s%s%s%s' % (self.tag, self.prefix, self.name,
+                                ' ' if self.args else '', ' '.join(self.args))
 
     def close(self, line, result):
         self.append_to_resp(line, result=result)
