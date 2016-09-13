@@ -87,7 +87,7 @@ class Command(object):
     def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=asyncio.get_event_loop()):
         self.name = name
         self.args = args
-        self.prefix = prefix
+        self.prefix = prefix + ' ' if prefix else None
         self.untagged_resp_name = untagged_resp_name or name
         self.response = None
         self.event = asyncio.Event(loop=loop)
@@ -337,7 +337,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def search(self, *criteria, charset='utf-8', by_uid=False):
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
-        prefix = 'UID ' if by_uid else ''
+        prefix = 'UID' if by_uid else ''
 
         return (yield from self.execute(
             Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop)))
@@ -346,13 +346,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def fetch(self, message_set, message_parts, by_uid=False):
         return (yield from self.execute(
             Command('FETCH', self.new_tag(), message_set, message_parts,
-                    prefix='UID ' if by_uid else '', loop=self.loop)))
+                    prefix='UID' if by_uid else '', loop=self.loop)))
 
     @asyncio.coroutine
     def store(self, *args, by_uid=False):
         return (yield from self.execute(
             Command('STORE', self.new_tag(), *args,
-                    prefix='UID ' if by_uid else '', untagged_resp_name='FETCH', loop=self.loop)))
+                    prefix='UID' if by_uid else '', untagged_resp_name='FETCH', loop=self.loop)))
 
     @asyncio.coroutine
     def expunge(self):
@@ -375,7 +375,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def copy(self, *args, by_uid=True):
         return (yield from self.execute(
-            Command('COPY', self.new_tag(), *args, prefix='UID ' if by_uid else '', loop=self.loop)))
+            Command('COPY', self.new_tag(), *args, prefix='UID' if by_uid else '', loop=self.loop)))
 
     @asyncio.coroutine
     def capability(self):

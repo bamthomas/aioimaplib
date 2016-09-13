@@ -104,8 +104,8 @@ class TestAioimaplibUtils(unittest.TestCase):
     def test_command_repr(self):
         self.assertEqual('tag NAME', str(Command('NAME', 'tag')))
         self.assertEqual('tag NAME arg1 arg2', str(Command('NAME', 'tag', 'arg1', 'arg2')))
-        self.assertEqual('tag UID NAME arg', str(Command('NAME', 'tag', 'arg', prefix='UID ')))
-        self.assertEqual('tag UID NAME', str(Command('NAME', 'tag', prefix='UID ')))
+        self.assertEqual('tag UID NAME arg', str(Command('NAME', 'tag', 'arg', prefix='UID')))
+        self.assertEqual('tag UID NAME', str(Command('NAME', 'tag', prefix='UID')))
 
 
 class AioWithImapServer(WithImapServer):
