@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from functools import partial
 
 from aioimaplib import aioimaplib
-from aioimaplib.aioimaplib import Commands, fetch_message_with_literal_data_re, IMAP4ClientProtocol
+from aioimaplib.aioimaplib import Commands, fetch_message_with_literal_data_re, IMAP4ClientProtocol, Command
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
@@ -100,6 +100,12 @@ class TestAioimaplibUtils(unittest.TestCase):
             fetch_message_with_literal_data_re.match(b'* 95 FETCH (FLAGS (\\Seen \\Recent) RFC822 {424635}\r\n...'))
         self.assertIsNotNone(
             fetch_message_with_literal_data_re.match(b'* 12 FETCH (BODY[HEADER] {342}\r\n...'))
+
+    def test_command_repr(self):
+        self.assertEqual('tag NAME', str(Command('NAME', 'tag')))
+        self.assertEqual('tag NAME arg1 arg2', str(Command('NAME', 'tag', 'arg1', 'arg2')))
+        self.assertEqual('tag UID NAME arg', str(Command('NAME', 'tag', 'arg', prefix='UID ')))
+        self.assertEqual('tag UID NAME', str(Command('NAME', 'tag', prefix='UID ')))
 
 
 class AioWithImapServer(WithImapServer):
