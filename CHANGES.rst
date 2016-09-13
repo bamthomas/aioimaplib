@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.13
+-------
+- fix : trailing whitespace bug causing "BAD Could not parse command" using gmail/IDLE
+- fix : stop adding a space for the prefix 'UID ' -> 'UID'
 
 V0.5.12
 -------
