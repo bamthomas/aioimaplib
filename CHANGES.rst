@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.14
+-------
+- tests : extract Mail.create_binary for convenience
+
 V0.5.13
 -------
 - fix : trailing whitespace bug causing "BAD Could not parse command" using gmail/IDLE
