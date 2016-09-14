@@ -495,9 +495,8 @@ def reset():
 
 
 class Mail(object):
-    def __init__(self, email, encoding='utf-8', date=datetime.now()):
+    def __init__(self, email, date=datetime.now()):
         self.date = date
-        self.encoding = encoding
         self.email = email
         self.uid = 0
         self.id = 0
@@ -514,10 +513,31 @@ class Mail(object):
         return self.email.get('To').split(', ')
 
     @staticmethod
-    def create(to, mail_from='', subject='', content='', encoding='utf-8',
-               content_transfer_encoding='7bit',
+    def create(to, mail_from='', subject='', content='',
+               encoding='utf-8',
+               content_transfer_encoding='8bit',
                date=None,
                in_reply_to=None):
+        """
+        :type to: list
+        :type mail_from: str
+        :type subject: unicode
+        :type content: unicode
+        :type encoding: str
+        :type content_transfer_encoding: str
+        :type date: datetime
+        :param in_reply_to:
+        """
+        date = date or datetime.now(tz=utc)
+        return Mail(email.message_from_bytes(
+            Mail.create_binary(to, mail_from, subject, content, encoding, content_transfer_encoding, date, in_reply_to)), date=date)
+
+    @staticmethod
+    def create_binary(to, mail_from='', subject='', content='',
+                      encoding='utf-8',
+                      content_transfer_encoding='8bit',
+                      date=None,
+                      in_reply_to=None):
         """
         :type to: list
         :type mail_from: str
@@ -533,28 +553,31 @@ class Mail(object):
         if content_transfer_encoding == 'quoted-printable':
             content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')
 
-        return Mail(email.message_from_bytes(
-            'Return-Path: <{mail_from}>\r\n'
-            'Delivered-To: <{to}>\r\n'
-            'Received: from Mock IMAP Server\r\n'
-            'Message-ID: <{message_id}@mockimap>\r\n'
-            'Date: {date}\r\n'
-            'From: {mail_from}\r\n'
-            'User-Agent: python3\r\n'
-            'MIME-Version: 1.0\r\n'
-            'To: {to}\r\n'
-            'Subject: {subject}\r\n'
-            '{reply_to_header}'
-            'Content-Type: text/plain; charset={charset}\r\n'
-            'Content-Transfer-Encoding: {content_transfer_encoding}\r\n'
-            '\r\n'
-            '{content}\r\n'.format(mail_from=mail_from, to=', '.join(to), message_id=message_id,
-                                   date=date.strftime('%a, %d %b %Y %H:%M:%S %z'),
-                                   subject=Mail.get_encoded_subject(subject),
-                                   content=content, charset=encoding,
-                                   content_transfer_encoding=content_transfer_encoding,
-                                   reply_to_header='' if in_reply_to is None
-                                   else 'In-Reply-To: <%s>\r\n' % in_reply_to).encode(encoding=encoding)), date=date)
+        reply_to_header = '' if in_reply_to is None else 'In-Reply-To: <%s>\r\n' % in_reply_to
+
+        return 'Return-Path: <{mail_from}>\r\n' \
+               'Delivered-To: <{to}>\r\n' \
+               'Received: from Mock IMAP Server\r\n' \
+               'Message-ID: <{message_id}@mockimap>\r\n' \
+               'Date: {date}\r\nFrom: {mail_from}\r\n' \
+               'User-Agent: python3\r\n' \
+               'MIME-Version: 1.0\r\n' \
+               'To: {to}\r\n' \
+               'Subject: {subject}\r\n' \
+               '{reply_to_header}' \
+               'Content-Type: text/plain; charset={charset}\r\n' \
+               'Content-Transfer-Encoding: {content_transfer_encoding}\r\n' \
+               '\r\n' \
+               '{content}\r\n'.format(
+                    mail_from=mail_from,
+                    to=', '.join(to),
+                    message_id=message_id,
+                    date=date.strftime('%a, %d %b %Y %H:%M:%S %z'),
+                    subject=Mail.get_encoded_subject(subject),
+                    content=content,
+                    charset=encoding,
+                    content_transfer_encoding=content_transfer_encoding,
+                    reply_to_header=reply_to_header).encode(encoding=encoding)
 
     @staticmethod
     def get_encoded_subject(subject):
