@@ -553,7 +553,7 @@ class Mail(object):
         :param message_id: str
         """
         date = date or datetime.now(tz=utc)
-        message_id = message_id or str(uuid.uuid1())
+        message_id = message_id or '%s@mockimap' % str(uuid.uuid1())
         if content_transfer_encoding == 'quoted-printable':
             content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')
 
@@ -562,7 +562,7 @@ class Mail(object):
         return 'Return-Path: <{mail_from}>\r\n' \
                'Delivered-To: <{to}>\r\n' \
                'Received: from Mock IMAP Server\r\n' \
-               'Message-ID: <{message_id}@mockimap>\r\n' \
+               'Message-ID: <{message_id}>\r\n' \
                'Date: {date}\r\nFrom: {mail_from}\r\n' \
                'User-Agent: python3\r\n' \
                'MIME-Version: 1.0\r\n' \
