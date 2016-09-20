@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.15
+-------
+- tests : added message_id as Mail.create parameter for testing 
+
 V0.5.14
 -------
 - tests : extract Mail.create_binary for convenience
