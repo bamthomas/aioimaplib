@@ -517,7 +517,8 @@ class Mail(object):
                encoding='utf-8',
                content_transfer_encoding='8bit',
                date=None,
-               in_reply_to=None):
+               in_reply_to=None,
+               message_id=None):
         """
         :type to: list
         :type mail_from: str
@@ -526,18 +527,20 @@ class Mail(object):
         :type encoding: str
         :type content_transfer_encoding: str
         :type date: datetime
-        :param in_reply_to:
+        :param in_reply_to: str
+        :param message_id: str
         """
         date = date or datetime.now(tz=utc)
         return Mail(email.message_from_bytes(
-            Mail.create_binary(to, mail_from, subject, content, encoding, content_transfer_encoding, date, in_reply_to)), date=date)
+            Mail.create_binary(to, mail_from, subject, content, encoding, content_transfer_encoding, date, in_reply_to, message_id)), date=date)
 
     @staticmethod
     def create_binary(to, mail_from='', subject='', content='',
                       encoding='utf-8',
                       content_transfer_encoding='8bit',
                       date=None,
-                      in_reply_to=None):
+                      in_reply_to=None,
+                      message_id=None):
         """
         :type to: list
         :type mail_from: str
@@ -546,10 +549,11 @@ class Mail(object):
         :type encoding: str
         :type content_transfer_encoding: str
         :type date: datetime
-        :param in_reply_to:
+        :param in_reply_to: str
+        :param message_id: str
         """
         date = date or datetime.now(tz=utc)
-        message_id = str(uuid.uuid1())
+        message_id = message_id or str(uuid.uuid1())
         if content_transfer_encoding == 'quoted-printable':
             content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')
 
