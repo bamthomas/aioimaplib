@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.17
+-------
+- tests : mail_from parameter from Mail.create should handle mail@host, <mail@host>, Name <mail@host>
+
 V0.5.16
 -------
 - tests : added better encoding handling and message building in Mail.create 
