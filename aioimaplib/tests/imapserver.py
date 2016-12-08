@@ -20,6 +20,9 @@ import quopri
 import uuid
 from datetime import datetime, timedelta
 from email._encoded_words import encode
+from email.header import Header
+from email.message import Message
+from email.mime.text import MIMEText
 from math import ceil
 
 import re
@@ -515,83 +518,46 @@ class Mail(object):
     @staticmethod
     def create(to, mail_from='', subject='', content='',
                encoding='utf-8',
-               content_transfer_encoding='8bit',
                date=None,
                in_reply_to=None,
-               message_id=None):
+               message_id=None,
+               quoted_printable=False,
+               cc=None
+               ):
         """
+        :param quoted_printable: boolean
         :type to: list
+        :type cc: list
         :type mail_from: str
         :type subject: unicode
         :type content: unicode
         :type encoding: str
-        :type content_transfer_encoding: str
         :type date: datetime
         :param in_reply_to: str
         :param message_id: str
         """
-        date = date or datetime.now(tz=utc)
-        return Mail(email.message_from_bytes(
-            Mail.create_binary(to, mail_from, subject, content, encoding, content_transfer_encoding, date, in_reply_to, message_id)), date=date)
-
-    @staticmethod
-    def create_binary(to, mail_from='', subject='', content='',
-                      encoding='utf-8',
-                      content_transfer_encoding='8bit',
-                      date=None,
-                      in_reply_to=None,
-                      message_id=None):
-        """
-        :type to: list
-        :type mail_from: str
-        :type subject: unicode
-        :type content: unicode
-        :type encoding: str
-        :type content_transfer_encoding: str
-        :type date: datetime
-        :param in_reply_to: str
-        :param message_id: str
-        """
-        date = date or datetime.now(tz=utc)
-        message_id = message_id or '%s@mockimap' % str(uuid.uuid1())
-        if content_transfer_encoding == 'quoted-printable':
-            content = quopri.encodestring(content.encode(encoding=encoding)).decode('ascii')
-
-        reply_to_header = '' if in_reply_to is None else 'In-Reply-To: <%s>\r\n' % in_reply_to
-
-        return 'Return-Path: <{mail_from}>\r\n' \
-               'Delivered-To: <{to}>\r\n' \
-               'Received: from Mock IMAP Server\r\n' \
-               'Message-ID: <{message_id}>\r\n' \
-               'Date: {date}\r\nFrom: {mail_from}\r\n' \
-               'User-Agent: python3\r\n' \
-               'MIME-Version: 1.0\r\n' \
-               'To: {to}\r\n' \
-               'Subject: {subject}\r\n' \
-               '{reply_to_header}' \
-               'Content-Type: text/plain; charset={charset}\r\n' \
-               'Content-Transfer-Encoding: {content_transfer_encoding}\r\n' \
-               '\r\n' \
-               '{content}\r\n'.format(
-                    mail_from=mail_from,
-                    to=', '.join(to),
-                    message_id=message_id,
-                    date=date.strftime('%a, %d %b %Y %H:%M:%S %z'),
-                    subject=Mail.get_encoded_subject(subject),
-                    content=content,
-                    charset=encoding,
-                    content_transfer_encoding=content_transfer_encoding,
-                    reply_to_header=reply_to_header).encode(encoding=encoding)
-
-    @staticmethod
-    def get_encoded_subject(subject):
-        try:
-            subject.encode('ascii')
-        except UnicodeEncodeError:
-            return encode(subject, encoding='b')
+        charset = email.charset.Charset(encoding)
+        if quoted_printable:
+            msg = email.mime.nonmultipart.MIMENonMultipart('text', 'plain', charset='utf-8')
+            charset.body_encoding=email.charset.QP
         else:
-            return subject
-
+            msg = MIMEText(None, _charset=encoding)
+        msg.set_payload(content, charset=charset)
+        date = date or datetime.now(tz=utc)
+        msg['Return-Path'] = '<%s>' % mail_from
+        msg['Delivered-To'] = '<%s>' % ', '.join(to)
+        msg['Message-ID'] = '<%s>' % (message_id or '%s@mockimap' % str(uuid.uuid1()))
+        msg['Date'] = date.strftime('%a, %d %b %Y %H:%M:%S %z')
+        msg['From'] = '<%s>' % mail_from
+        msg['User-Agent'] = 'python3'
+        msg['MIME-Version'] = '1.0'
+        msg['To'] = ', '.join(to)
+        msg['Subject'] = Header(subject, encoding)
+        if in_reply_to is not None:
+            msg['In-Reply-To'] = '<%s>' % in_reply_to
+        if cc is not None:
+            msg['Cc'] = ', '.join(cc)
+        return Mail(msg, date=date)
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()

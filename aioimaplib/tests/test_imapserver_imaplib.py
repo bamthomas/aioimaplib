@@ -131,7 +131,7 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(RFC822)')), 1)
 
         self.assertEqual('OK', result)
-        self.assertEqual([(b'1 (UID 1 RFC822 {359}', mail.as_bytes()), b')'], data)
+        self.assertEqual([(b'1 (UID 1 RFC822 {362}', mail.as_bytes()), b')'], data)
 
     @asyncio.coroutine
     def test_fetch_one_messages_by_uid_encoding_cp1252(self):
@@ -142,7 +142,7 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(RFC822)')), 1)
 
         mail_content = data[0][1]
-        self.assertTrue(b'charset=cp1252' in mail_content)
+        self.assertTrue(b'charset="cp1252"' in mail_content)
         self.assertTrue(b'ma\xeetre' in mail_content)
         self.assertEqual('maître', email.message_from_bytes(mail_content).get_payload().strip())
 

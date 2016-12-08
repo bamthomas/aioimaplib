@@ -52,12 +52,17 @@ class TestMailToString(unittest.TestCase):
     def test_message_title_string_with_accents_is_base64encoded(self):
         mail = imapserver.Mail.create(['user'], subject='Classé ?')
 
-        self.assertEqual(mail.email.get('Subject'), '=?utf-8?b?Q2xhc3PDqSA/?=')
+        self.assertTrue('=?utf-8?b?Q2xhc3PDqSA/?=' in mail.as_string())
 
     def test_message_quoted_printable(self):
-        mail = imapserver.Mail.create(['user'], content='Bonjour à vous', content_transfer_encoding='quoted-printable')
+        mail = imapserver.Mail.create(['user'], content='Bonjour à vous', quoted_printable=True)
 
         self.assertTrue('Bonjour =C3=A0 vous' in mail.as_string(), msg='"=C3=A0" not found in %s' % mail.as_string())
+
+    def test_header_encode_to(self):
+        mail = imapserver.Mail.create(['Zébulon Durand <zeb@zebulon.io>'], mail_from='from@mail.fr', subject='subject')
+
+        self.assertTrue('=?utf-8?q?Z=C3=A9bulon_Durand_=3Czeb=40zebulon=2Eio=3E?=' in mail.as_string(), msg='expected string not found in :%s\n' % mail.as_string())
 
 
 class TestServerState(unittest.TestCase):
