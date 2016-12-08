@@ -548,7 +548,10 @@ class Mail(object):
         msg['Delivered-To'] = '<%s>' % ', '.join(to)
         msg['Message-ID'] = '<%s>' % (message_id or '%s@mockimap' % str(uuid.uuid1()))
         msg['Date'] = date.strftime('%a, %d %b %Y %H:%M:%S %z')
-        msg['From'] = '<%s>' % mail_from
+        if '<' in mail_from  and '>' in mail_from or mail_from == '':
+            msg['From'] = mail_from
+        else:
+            msg['From'] = '<%s>' % mail_from
         msg['User-Agent'] = 'python3'
         msg['MIME-Version'] = '1.0'
         msg['To'] = ', '.join(to)

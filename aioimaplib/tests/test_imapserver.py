@@ -64,6 +64,19 @@ class TestMailToString(unittest.TestCase):
 
         self.assertTrue('=?utf-8?q?Z=C3=A9bulon_Durand_=3Czeb=40zebulon=2Eio=3E?=' in mail.as_string(), msg='expected string not found in :%s\n' % mail.as_string())
 
+    def test_mail_from(self):
+        mail = imapserver.Mail.create(['user'], subject='subject')
+        self.assertEquals(mail.email.get('From'), '')
+
+        mail = imapserver.Mail.create(['user'], mail_from='<test@test>', subject='subject')
+        self.assertEquals(mail.email.get('From'), '<test@test>')
+
+        mail = imapserver.Mail.create(['user'], mail_from='test@test', subject='subject')
+        self.assertEquals(mail.email.get('From'), '<test@test>')
+
+        mail = imapserver.Mail.create(['user'], mail_from='Test <test@test>', subject='subject')
+        self.assertEquals(mail.email.get('From'), 'Test <test@test>')
+
 
 class TestServerState(unittest.TestCase):
     def test_max_ids_with_no_user(self):
