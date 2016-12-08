@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.16
+-------
+- tests : added better encoding handling and message building in Mail.create 
+
 V0.5.15
 -------
 - tests : added message_id as Mail.create parameter for testing 
