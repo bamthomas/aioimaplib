@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.19
+-------
+- tests : [revert] add_charset to much intrusive when running a test suite 
+
 V0.5.18
 -------
 - tests : body text was not base64 encoded even if the header said so
