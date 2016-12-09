@@ -20,6 +20,8 @@ import imaplib
 from datetime import datetime, timedelta
 
 import functools
+from email.charset import add_charset, SHORTEST
+
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail, imap_receive, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
@@ -27,6 +29,12 @@ from pytz import utc
 
 
 class TestImapServerWithImaplib(WithImapServer):
+
+    def __init__(self, methodName='runTest'):
+        super().__init__(methodName)
+        add_charset('utf-8', SHORTEST, None, 'utf-8')
+        add_charset('cp1252', SHORTEST, None, 'cp1252')
+
     @asyncio.coroutine
     def test_server_greetings_and_capabilities(self):
         pending_imap = self.loop.run_in_executor(None, functools.partial(imaplib.IMAP4, host='localhost', port=12345))

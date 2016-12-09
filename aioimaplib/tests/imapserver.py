@@ -18,7 +18,6 @@ import email
 import logging
 import uuid
 from datetime import datetime, timedelta
-from email.charset import add_charset, SHORTEST
 from email.header import Header
 import email.mime.nonmultipart
 from math import ceil
@@ -36,8 +35,6 @@ sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s " +
                                   "[%(module)s:%(lineno)d] %(message)s"))
 log.addHandler(sh)
 
-add_charset('utf-8', SHORTEST, None, 'utf-8')
-add_charset('cp1252', SHORTEST, None, 'cp1252')
 NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
 
 
