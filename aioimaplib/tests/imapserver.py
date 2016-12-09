@@ -16,13 +16,11 @@
 import asyncio
 import email
 import logging
-import quopri
 import uuid
 from datetime import datetime, timedelta
-from email._encoded_words import encode
+from email.charset import add_charset, SHORTEST
 from email.header import Header
-from email.message import Message
-from email.mime.text import MIMEText
+import email.mime.nonmultipart
 from math import ceil
 
 import re
@@ -38,6 +36,8 @@ sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s " +
                                   "[%(module)s:%(lineno)d] %(message)s"))
 log.addHandler(sh)
 
+add_charset('utf-8', SHORTEST, None, 'utf-8')
+add_charset('cp1252', SHORTEST, None, 'cp1252')
 NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
 
 
@@ -537,11 +537,9 @@ class Mail(object):
         :param message_id: str
         """
         charset = email.charset.Charset(encoding)
+        msg = email.mime.nonmultipart.MIMENonMultipart('text', 'plain', charset=encoding)
         if quoted_printable:
-            msg = email.mime.nonmultipart.MIMENonMultipart('text', 'plain', charset='utf-8')
-            charset.body_encoding=email.charset.QP
-        else:
-            msg = MIMEText(None, _charset=encoding)
+            charset.body_encoding = email.charset.QP
         msg.set_payload(content, charset=charset)
         date = date or datetime.now(tz=utc)
         msg['Return-Path'] = '<%s>' % mail_from

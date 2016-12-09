@@ -59,6 +59,12 @@ class TestMailToString(unittest.TestCase):
 
         self.assertTrue('Bonjour =C3=A0 vous' in mail.as_string(), msg='"=C3=A0" not found in %s' % mail.as_string())
 
+    def test_message_not_quoted_printable(self):
+        mail = imapserver.Mail.create(['user'], subject='élo ?', content='Bonjour à vous').as_bytes()
+
+        m = email.message_from_bytes(mail)
+        self.assertEquals('Bonjour à vous', m.get_payload(decode=True).decode())
+
     def test_header_encode_to(self):
         mail = imapserver.Mail.create(['Zébulon Durand <zeb@zebulon.io>'], mail_from='from@mail.fr', subject='subject')
 
