@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.18
+-------
+- tests : body text was not base64 encoded even if the header said so
+
 V0.5.17
 -------
 - tests : mail_from parameter from Mail.create should handle mail@host, <mail@host>, Name <mail@host>
