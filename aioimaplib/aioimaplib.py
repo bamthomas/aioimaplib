@@ -453,8 +453,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             else:
                 self.pending_sync_command.append_to_resp(line)
         else:
-            if message_data_without_literal_re.match(line):
-                text, command = line.split()[0:2]
+            match = message_data_without_literal_re.match(line)
+            if match:
+                command, text = match.group(1), match.string
             else:
                 command, _, text = line.partition(' ')
             pending_async_command = self.pending_async_commands.get(command.upper())

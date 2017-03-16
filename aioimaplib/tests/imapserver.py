@@ -329,13 +329,18 @@ class ImapProtocol(asyncio.Protocol):
 
     def fetch(self, tag, *args):
         uid = int(args[0])
+        parts = args[1:]
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
             if message.uid == uid:
                 message_body = message.as_bytes()
                 uid_bytes = ('%d' % message.uid).encode()
-                self.send_raw_untagged_line(uid_bytes + b' FETCH (UID ' + uid_bytes + b' RFC822 {' +
+                if 'RFC822' in ' '.join(parts):
+                    self.send_raw_untagged_line(uid_bytes + b' FETCH (UID ' + uid_bytes + b' RFC822 {' +
                                             ('%d' % len(message_body)).encode() + b'}\r\n' + message_body + b')',
                                             max_chunk_size=self.fetch_chunk_size)
+                else:
+                    self.send_untagged_line('{uid} FETCH (UID {uid} FLAGS ({flags}))'.format(
+                        uid=uid, flags=' '.join(message.flags)))
         self.send_tagged_line(tag, 'OK FETCH completed.')
 
     def append(self, tag, *args):

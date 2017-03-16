@@ -228,6 +228,18 @@ class TestAioimaplib(AioWithImapServer):
         self.assertEqual([mail.as_bytes(), 'FETCH completed.'], data)
 
     @asyncio.coroutine
+    def test_fetch_by_uid_without_body(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        mail = Mail.create(['user'], mail_from='me', subject='hello',
+                           content='pleased to meet you, wont you guess my name ?')
+        imap_receive(mail)
+
+        response = (yield from imap_client.uid('fetch', '1', '(UID FLAGS)'))
+
+        self.assertEqual('OK', response.result)
+        self.assertEquals('1 FETCH (UID 1 FLAGS ())', response.lines[0])
+
+    @asyncio.coroutine
     def test_fetch_by_uid(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         mail = Mail.create(['user'], mail_from='me', subject='hello',
@@ -292,7 +304,7 @@ class TestAioimaplib(AioWithImapServer):
         imap_receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        self.assertEquals(('OK', ['1', '2', 'EXPUNGE completed.']), (yield from imap_client.expunge()))
+        self.assertEquals(('OK', ['1 EXPUNGE', '2 EXPUNGE', 'EXPUNGE completed.']), (yield from imap_client.expunge()))
 
         self.assertEquals(('OK', ['0']), (yield from imap_client.select()))
 
