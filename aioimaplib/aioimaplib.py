@@ -426,6 +426,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if pending_fetch is None:
             raise Abort('unexpected fetch message (%r) response:' % raw_line)
         msg_header, _, msg = raw_line.partition(CRLF)
+        pending_fetch.append_to_resp(msg_header)
         if len(msg) < msg_size:
             # email message is not complete we should wait the future chunks
             pending_fetch.begin_literal_data(msg, msg_size)
