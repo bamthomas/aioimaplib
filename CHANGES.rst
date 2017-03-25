@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.5.20
+-------
+- fix : issue #15 https://github.com/bamthomas/aioimaplib/issues/15 This will break the API for FETCH with emails BODY : now the first line is the server FETCH server response line. The messages are between 1 and end of Response.lines list.
+
 V0.5.19
 -------
 - tests : [revert] add_charset to much intrusive when running a test suite 
