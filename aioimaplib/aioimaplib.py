@@ -31,7 +31,7 @@ from concurrent import futures
 
 
 log = logging.getLogger(__name__)
-
+TIMEOUT_SECONDS = 10
 IMAP4_PORT = 143
 IMAP4_SSL_PORT = 993
 STARTED, CONNECTED, NONAUTH, AUTH, SELECTED, LOGOUT = 'STARTED', 'CONNECTED', 'NONAUTH', 'AUTH', 'SELECTED', 'LOGOUT'
@@ -85,11 +85,9 @@ Response = namedtuple('Response', 'result lines')
 
 
 class UpdatableTimeout:
-    def __init__(self, timeout, loop=None):
-        if loop is None:
-            self.loop = asyncio.events.get_event_loop()
-        else:
-            self.loop = loop
+
+    def __init__(self, timeout, loop=asyncio.get_event_loop()):
+        self.loop = loop
         self.timeout = timeout
         self.timeout_handle = None
         self.waiter = self.loop.create_future()
@@ -108,6 +106,11 @@ class UpdatableTimeout:
         if not self.waiter.done():
             self.timeout_handle.cancel()
             self.waiter.set_result(None)
+    
+    def exception(self):
+        if not self.waiter.done():
+            return None
+        return self.waiter.exception()
 
     @asyncio.coroutine
     def wait(self):
@@ -127,7 +130,6 @@ class UpdatableTimeout:
 
 
 class Command(object):
-    TIMEOUT_SECONDS = 10
 
     def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None,
                  loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS):
@@ -137,7 +139,7 @@ class Command(object):
         self.untagged_resp_name = untagged_resp_name or name
         self.response = None
         self.event = asyncio.Event(loop=loop)
-        self.ut = UpdatableTimeout(timeout, loop=loop)
+        self.new_data_timeout = UpdatableTimeout(timeout, loop=loop)
         self.tag = tag
         self.literal_data = None
         self.expected_size = 0
@@ -149,19 +151,19 @@ class Command(object):
 
     def close(self, line, result):
         self.append_to_resp(line, result=result)
-        self.ut.done()
+        self.new_data_timeout.done()
         self.event.set()
 
     def begin_literal_data(self, data, expected_size):
         self.literal_data = data
         self.expected_size = expected_size
-        self.ut.update()
+        self.new_data_timeout.update()
 
     def end_literal_data(self):
         self.append_to_resp(self.literal_data.rstrip(b')'))
         self.expected_size = 0
         self.literal_data = None
-        self.ut.update()
+        self.new_data_timeout.update()
 
     def has_literal_data(self):
         return self.expected_size != 0 and len(self.literal_data) != self.expected_size
@@ -169,7 +171,7 @@ class Command(object):
     def append_literal_data(self, data):
         nb_bytes_to_add = self.expected_size - len(self.literal_data)
         self.literal_data += data[0:nb_bytes_to_add]
-        self.ut.update()
+        self.new_data_timeout.update()
         return data[nb_bytes_to_add:]
 
     def append_to_resp(self, line, result='Pending'):
@@ -178,11 +180,15 @@ class Command(object):
         else:
             old = self.response
             self.response = Response(result, old.lines + [line])
-        self.ut.update()
+        self.new_data_timeout.update()
 
     @asyncio.coroutine
     def wait(self):
-        yield from asyncio.wait([self.event.wait(), self.ut.wait()], return_when=futures.FIRST_EXCEPTION)
+        yield from asyncio.wait(
+            [self.event.wait(), self.new_data_timeout.wait()],
+            return_when=futures.FIRST_EXCEPTION)
+        if self.new_data_timeout.exception() is not None:
+            raise asyncio.futures.TimeoutError()
 
 
 class Error(Exception):
@@ -216,7 +222,6 @@ tagged_status_response_re = re.compile(r'[A-Z0-9]+ ((OK)|(NO)|(BAD))')
 
 
 class IMAP4ClientProtocol(asyncio.Protocol):
-    TIMEOUT_SECONDS = 10
 
     def __init__(self, loop, timeout=TIMEOUT_SECONDS):
         self.loop = loop
@@ -565,7 +570,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
 
 class IMAP4(object):
-    TIMEOUT_SECONDS = 10
 
     def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS):
         self.timeout = timeout
@@ -694,7 +698,7 @@ class IMAP4(object):
 
 class IMAP4_SSL(IMAP4):
     def __init__(self, host='localhost', port=IMAP4_SSL_PORT, loop=asyncio.get_event_loop(),
-                 timeout=IMAP4.TIMEOUT_SECONDS):
+                 timeout=TIMEOUT_SECONDS):
         super().__init__(host, port, loop, timeout)
 
     def create_client(self, host, port, loop):
