@@ -90,7 +90,7 @@ class UpdatableTimeout:
         self.loop = loop
         self.timeout = timeout
         self.timeout_handle = None
-        self.waiter = self.loop.create_future()
+        self.waiter = asyncio.Future(loop=loop)
 
     def _raise_timeout(self):
         if not self.waiter.done():
