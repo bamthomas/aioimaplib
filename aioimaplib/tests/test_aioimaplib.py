@@ -299,9 +299,9 @@ class TestAioimaplib(AioWithImapServer):
     @asyncio.coroutine
     def test_search_three_messages_by_uid(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        print(imap_receive(Mail.create(['user'])))  # id=1 uid=1
-        print(imap_receive(Mail.create(['user']), mailbox='OTHER_MAILBOX'))  # id=1 uid=2
-        print(imap_receive(Mail.create(['user'])))  # id=2 uid=3
+        imap_receive(Mail.create(['user']))  # id=1 uid=1
+        imap_receive(Mail.create(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=2
+        imap_receive(Mail.create(['user']))  # id=2 uid=3
 
         self.assertEqual('1 2', (yield from imap_client.search('ALL')).lines[0])
         self.assertEqual('1 3', (yield from imap_client.uid_search('ALL')).lines[0])

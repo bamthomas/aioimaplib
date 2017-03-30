@@ -163,7 +163,6 @@ class ImapProtocol(asyncio.Protocol):
         self.server_state = server_state
         self.user_login = None
         self.user_mailbox = None
-        self.by_uid = False
         self.idle_tag = None
         self.idle_task = None
         self.state = NONAUTH
@@ -199,9 +198,13 @@ class ImapProtocol(asyncio.Protocol):
 
     def exec_command(self, tag, command_array):
         command = command_array[0].lower()
+        parameters = command_array[1:]
+        if command == 'uid':
+            command = command_array[1].lower()
+            parameters = ['uid'] + command_array[2:]
         if not hasattr(self, command):
             return self.error(tag, 'Command "%s" not implemented' % command)
-        getattr(self, command)(tag, *command_array[1:])
+        self.loop.call_later(self.delay_seconds, lambda: getattr(self, command)(tag, *parameters))
 
     def send_untagged_line(self, response, encoding='utf-8', continuation=False, max_chunk_size=0):
         self.send_raw_untagged_line(response.encode(encoding=encoding), continuation, max_chunk_size)
@@ -285,7 +288,13 @@ class ImapProtocol(asyncio.Protocol):
 
     def search(self, tag, *args_param):
         args = list(args_param)
+        by_uid = False
         args.reverse()
+
+        if args[-1] == 'uid':
+            args.pop()
+            by_uid = True
+
         charset, keyword, unkeyword, older, younger = None, None, None, None, None
         if args and 'CHARSET' == args[-1].upper():
             args.pop()
@@ -305,10 +314,11 @@ class ImapProtocol(asyncio.Protocol):
         all = 'ALL' in args
 
         self.send_untagged_line(
-            'SEARCH {msg_uids}'.format(msg_uids=' '.join(self.memory_search(all, keyword, unkeyword, older, younger))))
-        self.send_tagged_line(tag, 'OK %sSEARCH completed' % ('UID ' if self.by_uid else ''))
+            'SEARCH {msg_uids}'.format(msg_uids=' '.join(
+                self.memory_search(all, keyword, unkeyword, older, younger, by_uid=by_uid))))
+        self.send_tagged_line(tag, 'OK %sSEARCH completed' % ('UID ' if by_uid else ''))
 
-    def memory_search(self, all, keyword, unkeyword, older, younger):
+    def memory_search(self, all, keyword, unkeyword, older, younger, by_uid=False):
         def item_match(msg):
             return all or \
                    (keyword is not None and keyword in msg.flags) or \
@@ -316,13 +326,16 @@ class ImapProtocol(asyncio.Protocol):
                    (older is not None and datetime.now(tz=utc) - timedelta(seconds=older) > msg.date) or \
                    (younger is not None and datetime.now(tz=utc) - timedelta(seconds=younger) < msg.date)
 
-        return [str(msg.uid if self.by_uid else msg.id)
+        return [str(msg.uid if by_uid else msg.id)
                 for msg in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox)
                 if item_match(msg)]
 
     def store(self, tag, *args):
-        uid = int(args[0])  # args = ['12', '+FLAGS', 'FOO']
-        flag = args[2]  # only support one flag and do not handle replacement (without + sign)
+        arg_list = list(args)
+        if arg_list[0] == 'uid':
+            arg_list = list(args[1:])
+        uid = int(arg_list[0])  # args = ['12', '+FLAGS', 'FOO']
+        flag = arg_list[2]  # only support one flag and do not handle replacement (without + sign)
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
             if message.uid == uid:
                 message.flags.append(flag)
@@ -331,8 +344,11 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK Store completed.')
 
     def fetch(self, tag, *args):
-        uid = int(args[0])
-        parts = args[1:]
+        arg_list = list(args)
+        if arg_list[0] == 'uid':
+            arg_list = list(args[1:])
+        uid = int(arg_list[0])
+        parts = arg_list[1:]
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
             if message.uid == uid:
                 message_body = message.as_bytes()
@@ -453,13 +469,6 @@ class ImapProtocol(asyncio.Protocol):
         for mb in self.server_state.list(self.user_login, mailbox_pattern):
             self.send_untagged_line('LIST () "/" %s' % mb)
         self.send_tagged_line(tag, 'OK LIST completed.')
-
-    def uid(self, tag, *args):
-        self.by_uid = True
-        try:
-            self.exec_command(tag, args)
-        finally:
-            self.by_uid = False
 
     def error(self, tag, msg):
         self.send_tagged_line(tag, 'BAD %s' % msg)
