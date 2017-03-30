@@ -22,6 +22,7 @@ from datetime import datetime
 import asyncio
 
 import functools
+from functools import partial
 
 import asynctest
 import pytz
@@ -107,9 +108,10 @@ class TestServerState(unittest.TestCase):
         self.assertEquals(2, server_state.max_uid('user'))
 
 
-class WithImapServer(asynctest.TestCase):
+class WithImapServer(asynctest.ClockedTestCase):
     def setUp(self):
-        factory = self.loop.create_server(imapserver.create_imap_protocol, 'localhost', 12345)
+        factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64, loop=self.loop),
+                                          'localhost', 12345)
         self.server = self.loop.run_until_complete(factory)
 
     @asyncio.coroutine

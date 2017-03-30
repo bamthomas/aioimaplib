@@ -84,16 +84,22 @@ Response = namedtuple('Response', 'result lines')
 
 
 class Command(object):
-    def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=asyncio.get_event_loop()):
+    def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=asyncio.get_event_loop(), timeout=None):
         self.name = name
+        self.tag = tag
         self.args = args
         self.prefix = prefix + ' ' if prefix else None
         self.untagged_resp_name = untagged_resp_name or name
+
         self.response = None
-        self.event = asyncio.Event(loop=loop)
-        self.tag = tag
-        self.literal_data = None
-        self.expected_size = 0
+        self._exception = None
+        self._event = asyncio.Event(loop=loop)
+        self._loop = loop
+        self._timeout = timeout
+        self._timer = asyncio.Handle(lambda: None, None, loop)  # fake timer
+        self._set_timer()
+        self._literal_data = None
+        self._expected_size = 0
 
     def __repr__(self):
         return '{tag} {prefix}{name}{space}{args}'.format(
@@ -102,23 +108,27 @@ class Command(object):
 
     def close(self, line, result):
         self.append_to_resp(line, result=result)
-        self.event.set()
+        self._timer.cancel()
+        self._event.set()
 
     def begin_literal_data(self, data, expected_size):
-        self.literal_data = data
-        self.expected_size = expected_size
+        self._literal_data = data
+        self._expected_size = expected_size
+        self._reset_timer()
 
     def end_literal_data(self):
-        self.append_to_resp(self.literal_data.rstrip(b')'))
-        self.expected_size = 0
-        self.literal_data = None
+        self.append_to_resp(self._literal_data.rstrip(b')'))
+        self._expected_size = 0
+        self._literal_data = None
+        self._reset_timer()
 
     def has_literal_data(self):
-        return self.expected_size != 0 and len(self.literal_data) != self.expected_size
+        return self._expected_size != 0 and len(self._literal_data) != self._expected_size
 
     def append_literal_data(self, data):
-        nb_bytes_to_add = self.expected_size - len(self.literal_data)
-        self.literal_data += data[0:nb_bytes_to_add]
+        nb_bytes_to_add = self._expected_size - len(self._literal_data)
+        self._literal_data += data[0:nb_bytes_to_add]
+        self._reset_timer()
         return data[nb_bytes_to_add:]
 
     def append_to_resp(self, line, result='Pending'):
@@ -127,10 +137,25 @@ class Command(object):
         else:
             old = self.response
             self.response = Response(result, old.lines + [line])
+        self._reset_timer()
 
     @asyncio.coroutine
     def wait(self):
-        yield from self.event.wait()
+        yield from self._event.wait()
+        if self._exception is not None:
+            raise self._exception
+
+    def _set_timer(self):
+        if self._timeout is not None:
+            self._timer = self._loop.call_later(self._timeout, self._timeout_callback)
+
+    def _timeout_callback(self):
+        self._exception = asyncio.TimeoutError()
+        self._event.set()
+
+    def _reset_timer(self):
+        self._timer.cancel()
+        self._set_timer()
 
 
 class Error(Exception):

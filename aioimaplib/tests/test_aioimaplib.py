@@ -20,8 +20,10 @@ import unittest
 from datetime import datetime, timedelta
 from functools import partial
 
+import asynctest
+
 from aioimaplib import aioimaplib
-from aioimaplib.aioimaplib import Commands, fetch_message_with_literal_data_re, IMAP4ClientProtocol, Command
+from aioimaplib.aioimaplib import Commands, fetch_message_with_literal_data_re, IMAP4ClientProtocol, Command, Response
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
@@ -112,6 +114,91 @@ class TestAioimaplibUtils(unittest.TestCase):
         self.assertEqual('tag UID NAME', str(Command('NAME', 'tag', prefix='UID')))
 
 
+class TestAioimaplibCommand(asynctest.ClockedTestCase):
+    @asyncio.coroutine
+    def test_command_timeout(self):
+        cmd = Command('CMD', 'tag', loop=self.loop, timeout=1)
+        yield from self.advance(2)
+        with self.assertRaises(asyncio.TimeoutError):
+            yield from cmd.wait()
+
+    @asyncio.coroutine
+    def test_command_close_cancels_timer(self):
+        cmd = Command('CMD', 'tag', loop=self.loop, timeout=1)
+        cmd.close('line', 'OK')
+        yield from self.advance(3)
+
+        yield from cmd.wait()
+        self.assertEqual(Response('OK', ['line']), cmd.response)
+
+    @asyncio.coroutine
+    def test_command_begin_literal_data_resets_timer(self):
+        cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
+
+        yield from self.advance(1)
+        cmd.begin_literal_data(b'literal', 12)
+
+        yield from self.advance(1.9)
+        cmd.close('line', 'OK')
+
+        yield from cmd.wait()
+        self.assertEqual(Response('OK', ['line']), cmd.response)
+
+    @asyncio.coroutine
+    def test_command_end_literal_data_resets_timer(self):
+        cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
+        cmd.begin_literal_data(b'data', 4)
+
+        yield from self.advance(1.9)
+        cmd.end_literal_data()
+
+        yield from self.advance(1.9)
+        cmd.close('line', 'OK')
+
+        yield from cmd.wait()
+        self.assertEqual(Response('OK', [b'data', 'line']), cmd.response)
+
+    @asyncio.coroutine
+    def test_command_append_literal_data_resets_timer(self):
+        cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
+        cmd.begin_literal_data(b'literal', 12)
+
+        yield from self.advance(1.9)
+        cmd.append_literal_data(b' data')
+        yield from self.advance(1.9)
+        cmd.end_literal_data()
+
+        yield from self.advance(1.9)
+        cmd.close('line', 'OK')
+
+        yield from cmd.wait()
+        self.assertEqual(Response('OK', [b'literal data', 'line']), cmd.response)
+
+    @asyncio.coroutine
+    def test_command_append_to_resp_resets_timer(self):
+        cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
+
+        yield from self.advance(1.9)
+        cmd.append_to_resp('line 1')
+
+        yield from self.advance(1.9)
+        cmd.close('line 2', 'OK')
+
+        yield from cmd.wait()
+        self.assertEqual(Response('OK', ['line 1', 'line 2']), cmd.response)
+
+    @asyncio.coroutine
+    def test_command_timeout_while_receiving_data(self):
+        cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
+
+        yield from self.advance(1)
+        cmd.begin_literal_data('literal', 12)
+
+        yield from self.advance(3)
+        with self.assertRaises(asyncio.TimeoutError):
+            yield from cmd.wait()
+
+
 class AioWithImapServer(WithImapServer):
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
@@ -127,8 +214,8 @@ class AioWithImapServer(WithImapServer):
 
 class TestAioimaplib(AioWithImapServer):
     def setUp(self):
-        factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64), 'localhost',
-                                          12345)
+        factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64, loop=self.loop),
+                                          'localhost', 12345)
         self.server = self.loop.run_until_complete(factory)
 
     @asyncio.coroutine
@@ -212,15 +299,16 @@ class TestAioimaplib(AioWithImapServer):
     @asyncio.coroutine
     def test_search_three_messages_by_uid(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        imap_receive(Mail.create(['user']))  # id=1 uid=1
-        imap_receive(Mail.create(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=2
-        imap_receive(Mail.create(['user']))  # id=2 uid=3
+        print(imap_receive(Mail.create(['user'])))  # id=1 uid=1
+        print(imap_receive(Mail.create(['user']), mailbox='OTHER_MAILBOX'))  # id=1 uid=2
+        print(imap_receive(Mail.create(['user'])))  # id=2 uid=3
 
-        self.assertEqual('1 3', (yield from imap_client.uid_search('ALL')).lines[0])
         self.assertEqual('1 2', (yield from imap_client.search('ALL')).lines[0])
+        self.assertEqual('1 3', (yield from imap_client.uid_search('ALL')).lines[0])
 
     @asyncio.coroutine
     def test_fetch(self):
+        print('test loop %r' % self.loop)
         imap_client = yield from self.login_user('user', 'pass', select=True)
         mail = Mail.create(['user'], mail_from='me', subject='hello',
                            content='pleased to meet you, wont you guess my name ?')
@@ -287,8 +375,6 @@ class TestAioimaplib(AioWithImapServer):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         self.assertFalse((yield from imap_client.stop_wait_server_push()))
-        with self.assertRaises(asyncio.TimeoutError):
-            yield from asyncio.wait_for(imap_client.wait_server_push(), 0.5)
 
     @asyncio.coroutine
     def test_store_and_search_by_keyword(self):
@@ -381,6 +467,13 @@ class TestAioimaplib(AioWithImapServer):
         examine = asyncio.async(imap_client.examine('MBOX'))
 
         self.assertEquals(('OK', ['1']), (yield from asyncio.wait_for(examine, 1)))
+
+    # @asyncio.coroutine
+    # def test_commands_timeout(self):
+    #     imap_client = yield from self.login_user('user', 'pass', select=True)
+    #
+    #     self.server.set_delay(3)
+    #
 
     @asyncio.coroutine
     def test_noop(self):

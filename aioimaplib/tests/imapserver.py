@@ -93,6 +93,7 @@ class ServerState(object):
         uid = self.add_mail(user, mail, mailbox)
         if user in self.connections:
             self.connections[user].notify_new_mail(uid)
+        return uid
 
     def get_connection(self, user):
         return self.connections.get(user)
@@ -155,6 +156,7 @@ class ImapProtocol(asyncio.Protocol):
     IDLE_STILL_HERE_PERIOD_SECONDS = 10
 
     def __init__(self, server_state, fetch_chunk_size=0, loop=asyncio.get_event_loop()):
+        self.delay_seconds = 0
         self.loop = loop
         self.fetch_chunk_size = fetch_chunk_size
         self.transport = None
@@ -183,7 +185,6 @@ class ImapProtocol(asyncio.Protocol):
                 command_array = cmd_line.decode().rstrip().split()
                 if self.state is not IDLE:
                     tag = command_array[0]
-                    self.by_uid = False
                     self.exec_command(tag, command_array[1:])
                 else:
                     self.exec_command(None, command_array)
@@ -206,19 +207,21 @@ class ImapProtocol(asyncio.Protocol):
         self.send_raw_untagged_line(response.encode(encoding=encoding), continuation, max_chunk_size)
 
     def send_raw_untagged_line(self, raw_response, continuation=False, max_chunk_size=0):
-        log.debug("Sending %r", raw_response)
         prefix = b'+ ' if continuation else b'* '
         raw_line = prefix + raw_response + b'\r\n'
         if max_chunk_size:
             for nb_chunk in range(ceil(len(raw_line) / max_chunk_size)):
                 chunk_start_index = nb_chunk * max_chunk_size
-                self.transport.write(raw_line[chunk_start_index:chunk_start_index + max_chunk_size])
+                self.send(raw_line[chunk_start_index:chunk_start_index + max_chunk_size])
         else:
-            self.transport.write(raw_line)
+            self.send(raw_line)
 
     def send_tagged_line(self, tag, response):
-        log.debug("Sending %s", response)
-        self.transport.write('{tag} {response}\r\n'.format(tag=tag, response=response).encode())
+        self.send('{tag} {response}\r\n'.format(tag=tag, response=response).encode())
+
+    def send(self, _bytes):
+        log.debug("Sending %r", _bytes)
+        self.transport.write(_bytes)
 
     @critical_section(next_state=AUTH)
     def login(self, tag, *args):
@@ -466,6 +469,9 @@ class ImapProtocol(asyncio.Protocol):
             self.send_untagged_line('{uid} EXISTS'.format(uid=uid))
             self.send_untagged_line('{uid} RECENT'.format(uid=uid))
 
+    def set_delay(self, seconds):
+        self.delay_seconds = seconds
+
 
 _SERVER_STATE = ServerState()
 
@@ -479,10 +485,12 @@ def imap_receive(mail, imap_user=None, mailbox='INBOX'):
     """
     global _SERVER_STATE
     if imap_user is not None:
-        _SERVER_STATE.imap_receive(imap_user, mail, mailbox)
+        return [_SERVER_STATE.imap_receive(imap_user, mail, mailbox)]
     else:
+        uids = list()
         for to in mail.to:
-            _SERVER_STATE.imap_receive(to, mail, mailbox)
+            uids.append(_SERVER_STATE.imap_receive(to, mail, mailbox))
+        return uids
 
 
 def get_imapconnection(user):

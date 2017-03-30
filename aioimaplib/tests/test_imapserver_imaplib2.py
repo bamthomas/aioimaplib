@@ -16,6 +16,8 @@
 import asyncio
 
 import functools
+
+import time
 from imaplib2 import imaplib2
 from mock import Mock
 from aioimaplib.tests import imapserver
@@ -34,7 +36,7 @@ class TestImapServerIdle(WithImapServer):
         self.loop.run_in_executor(None, functools.partial(imap_receive, Mail.create(to=['user'], mail_from='me', subject='hello')))
 
         yield from asyncio.wait_for(get_imapconnection('user').wait(imapserver.SELECTED), 1)
-        yield from asyncio.sleep(0.1) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
+        time.sleep(0.1) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
         idle_callback.assert_called_once()
 
     @asyncio.coroutine
