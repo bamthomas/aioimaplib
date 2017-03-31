@@ -478,8 +478,9 @@ class ImapProtocol(asyncio.Protocol):
             self.send_untagged_line('{uid} EXISTS'.format(uid=uid))
             self.send_untagged_line('{uid} RECENT'.format(uid=uid))
 
-    def set_delay(self, seconds):
-        self.delay_seconds = seconds
+    def delay(self, tag, *args):
+        self.delay_seconds = int(args[0])
+        self.send_tagged_line(tag, 'OK DELAY completed.')
 
 
 _SERVER_STATE = ServerState()

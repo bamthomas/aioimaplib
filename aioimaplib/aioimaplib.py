@@ -78,6 +78,8 @@ Commands = {
     'THREAD':       Cmd('THREAD',       (SELECTED,),                Exec.async),
     'UID':          Cmd('UID',          (SELECTED,),                Exec.async),
     'UNSUBSCRIBE':  Cmd('UNSUBSCRIBE',  (AUTH, SELECTED),           Exec.sync),
+    # for testing
+    'DELAY':        Cmd('DELAY',        (AUTH, SELECTED),           Exec.sync),
 }
 
 Response = namedtuple('Response', 'result lines')
@@ -150,8 +152,8 @@ class Command(object):
             self._timer = self._loop.call_later(self._timeout, self._timeout_callback)
 
     def _timeout_callback(self):
-        self._exception = asyncio.TimeoutError()
-        self._event.set()
+        self._exception = CommandTimeout(self)
+        self.close(str(self._exception), 'KO')
 
     def _reset_timer(self):
         self._timer.cancel()
@@ -166,6 +168,11 @@ class Error(Exception):
 class Abort(Error):
     def __init__(self, reason):
         super().__init__(reason)
+
+
+class CommandTimeout(asyncio.TimeoutError):
+    def __init__(self, command):
+        self.command = command
 
 
 def change_state(coro):
@@ -287,7 +294,15 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.pending_async_commands[command.untagged_resp_name] = command
 
         self.send(str(command))
-        yield from command.wait()
+        try:
+            yield from command.wait()
+        except CommandTimeout:
+            if Commands.get(command.name).exec == Exec.sync:
+                self.pending_sync_command = None
+            else:
+                self.pending_async_commands.pop(command.untagged_resp_name, None)
+            raise
+
         return command.response
 
     @change_state
@@ -368,10 +383,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop)))
 
     @asyncio.coroutine
-    def fetch(self, message_set, message_parts, by_uid=False):
+    def fetch(self, message_set, message_parts, by_uid=False, timeout=None):
         return (yield from self.execute(
             Command('FETCH', self.new_tag(), message_set, message_parts,
-                    prefix='UID' if by_uid else '', loop=self.loop)))
+                    prefix='UID' if by_uid else '', loop=self.loop, timeout=timeout)))
 
     @asyncio.coroutine
     def store(self, *args, by_uid=False):
@@ -593,7 +608,7 @@ class IMAP4(object):
 
     @asyncio.coroutine
     def fetch(self, message_set, message_parts):
-        return (yield from asyncio.wait_for(self.protocol.fetch(message_set, message_parts), self.timeout))
+        return (yield from self.protocol.fetch(message_set, message_parts, self.timeout))
 
     @asyncio.coroutine
     def idle(self):
