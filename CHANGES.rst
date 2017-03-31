@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.6.1
+------
+- [fix] issue #17 "Error fetch uid param"
+
 V0.6.0
 ------
 - moved timeout handling at the Command level and not IMAP4 client for fetch as proposed by @cyberlis in https://github.com/bamthomas/aioimaplib/pull/16
