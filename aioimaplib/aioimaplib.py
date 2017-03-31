@@ -608,7 +608,7 @@ class IMAP4(object):
 
     @asyncio.coroutine
     def fetch(self, message_set, message_parts):
-        return (yield from self.protocol.fetch(message_set, message_parts, self.timeout))
+        return (yield from self.protocol.fetch(message_set, message_parts, timeout=self.timeout))
 
     @asyncio.coroutine
     def idle(self):
