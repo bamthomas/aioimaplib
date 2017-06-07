@@ -1,6 +1,11 @@
 Changes
 =======
 
+
+V0.6.2
+------
+- [fix] added '$' and ';' for fetch message with litteral regexp 
+
 V0.6.1
 ------
 - [fix] issue #17 "Error fetch uid param"

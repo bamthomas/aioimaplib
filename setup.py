@@ -20,7 +20,7 @@ requires = [
 
 setup(
     name=NAME,
-    version='0.6.1',
+    version='0.6.2',
     description='Python asyncio IMAP4rev1 client library',
     long_description=README + '\n\n' + CHANGES,
     classifiers=[
