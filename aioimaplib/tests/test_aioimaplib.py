@@ -103,9 +103,9 @@ class TestAioimaplibUtils(unittest.TestCase):
         self.assertIsNotNone(
             fetch_message_with_literal_data_re.match(b'* 12 FETCH (BODY[HEADER] {342}\r\n...'))
         self.assertIsNotNone(
-            fetch_message_with_literal_data_re.match(b'* 1 FETCH (UID 211 INTERNALDATE "21-Jul-2012 20:31:55 +0000" '
-                                                     b'FLAGS (\\Seen) BODY[HEADER.FIELDS (FROM TO CC BCC REPLY-TO '
-                                                     b'DATE SUBJECT MESSAGE-ID IN-REPLY-TO REFERENCES)] {224}\r\n...'))
+            fetch_message_with_literal_data_re.match(b'* 4 FETCH (FLAGS ($NotJunk) UID 160018 INTERNALDATE "07-Jun-2017'
+                                                     b' 13:07:15 +0000" BODY[HEADER.FIELDS (FROM TO CC BCC REPLY-TO '
+                                                     b'DATE SUBJECT MESSAGE-ID; IN-REPLY-TO REFERENCES)] {216}\r\n...'))
 
     def test_command_repr(self):
         self.assertEqual('tag NAME', str(Command('NAME', 'tag')))
