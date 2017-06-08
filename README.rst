@@ -137,6 +137,11 @@ Tested with
 
 - dovecot 2.2.13 on debian Jessie
 - gmail with imap and SSL
+- outlook with SSL
+- yahoo with SSL
+- free.fr with SSL
+- orange.fr with SSL
+- mailden.net with SSL
 
 Develop
 =======
