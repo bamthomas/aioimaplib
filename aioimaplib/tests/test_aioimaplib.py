@@ -22,7 +22,7 @@ from functools import partial
 
 import asynctest
 
-from aioimaplib import aioimaplib, CommandTimeout
+from aioimaplib import aioimaplib, CommandTimeout, extract_exists
 from aioimaplib.aioimaplib import Commands, fetch_message_with_literal_data_re, IMAP4ClientProtocol, Command, Response
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
@@ -96,6 +96,20 @@ class TestAioimaplibUtils(unittest.TestCase):
         self.imap_protocol._handle_responses(b'HEADER] {5}\r\nyo2\r\n)', self.line_handler, self.fetch_handler,
                                              incomplete_line=expected.exception.partial)
         self.fetch_handler.assert_has_calls([call(b'* 13 FETCH (BODY[HEADER] {5}\r\nyo2\r\n)', 6)])
+
+    # def test_line_with_attachment_litterals(self):
+    #     self.imap_protocol._handle_responses(b'* 46 FETCH (UID 46 FLAGS () BODYSTRUCTURE ('
+    #                                          b'("text" "calendar" ("charset" "UTF-8" "name" {16}\r\nG\xe9n\xe9ration 3.ics) '
+    #                                          b'"<mqwssinzuqvhkzlnhlcq>" NIL "quoted-printable" 365 14 NIL '
+    #                                          b'("attachment" ("filename" {16}\r\nG\xe9n\xe9ration 3.ics)))',
+    #                                          self.line_handler, self.fetch_handler)
+    #     self.fetch_handler.assert_has_calls([call(b'* 46 FETCH (UID 46 FLAGS () BODYSTRUCTURE '
+    #                                               b'("text" "calendar" ("charset" "UTF-8" "name" {16}\r\n'),
+    #                                          call(b'G\xe9n\xe9ration 3.ics'),
+    #                                          call(b') "<mqwssinzuqvhkzlnhlcq>" NIL "quoted-printable" 365 14 NIL '
+    #                                               b'("attachment" ("filename" {16}\r\n'),
+    #                                          call(b'G\xe9n\xe9ration 3.ics'),
+    #                                          call(b')))')])
 
     def test_fetch_message_with_literal_data_re(self):
         self.assertIsNotNone(
@@ -260,10 +274,10 @@ class TestAioimaplib(AioWithImapServer):
     def test_select_no_messages(self):
         imap_client = yield from self.login_user('user', 'pass')
 
-        result, data = yield from imap_client.select()
+        resp = yield from imap_client.select()
 
-        self.assertEqual('OK', result)
-        self.assertEqual(['0'], data)
+        self.assertEqual('OK', resp[0])
+        self.assertEqual(0, extract_exists(resp))
         self.assertEquals(aioimaplib.SELECTED, imap_client.protocol.state)
 
     @asyncio.coroutine
@@ -396,7 +410,7 @@ class TestAioimaplib(AioWithImapServer):
 
         self.assertEquals(('OK', ['1 EXPUNGE', '2 EXPUNGE', 'EXPUNGE completed.']), (yield from imap_client.expunge()))
 
-        self.assertEquals(('OK', ['0']), (yield from imap_client.select()))
+        self.assertEquals(0, extract_exists((yield from imap_client.select())))
 
     @asyncio.coroutine
     def test_copy_messages(self):
@@ -407,7 +421,7 @@ class TestAioimaplib(AioWithImapServer):
         result, _ = yield from imap_client.copy('1', '2', 'MAILBOX')
         self.assertEqual('OK', result)
 
-        self.assertEquals(('OK', ['2']), (yield from imap_client.select('MAILBOX')))
+        self.assertEquals(2, extract_exists((yield from imap_client.select('MAILBOX'))))
 
     @asyncio.coroutine
     def test_copy_messages_by_uid(self):
@@ -417,7 +431,7 @@ class TestAioimaplib(AioWithImapServer):
         result, _ = yield from imap_client.uid('copy', '1', 'MAILBOX')
         self.assertEqual('OK', result)
 
-        self.assertEquals(('OK', ['1']), (yield from imap_client.select('MAILBOX')))
+        self.assertEquals(1, extract_exists((yield from imap_client.select('MAILBOX'))))
 
     @asyncio.coroutine
     def test_concurrency_1_executing_sync_commands_sequentially(self):
@@ -453,8 +467,8 @@ class TestAioimaplib(AioWithImapServer):
         expunge = asyncio.async(imap_client.expunge())
 
         yield from asyncio.wait([store, copy, expunge])
-        self.assertEquals(('OK', ['0']), (yield from imap_client.select()))
-        self.assertEquals(('OK', ['1']), (yield from imap_client.select('MBOX')))
+        self.assertEquals(0, extract_exists((yield from imap_client.select())))
+        self.assertEquals(1, extract_exists((yield from imap_client.select('MBOX'))))
         self.assertEqual('1', (yield from imap_client.search('KEYWORD FOO', charset=None)).lines[0])
 
     @asyncio.coroutine

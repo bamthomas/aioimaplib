@@ -342,9 +342,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         if 'OK' == response.result:
             self.state = SELECTED
-        for line in response.lines:
-            if 'EXISTS' in line:
-                return Response(response.result, [line.replace(' EXISTS', '')])
         return response
 
     @change_state
@@ -675,6 +672,12 @@ class IMAP4(object):
     @asyncio.coroutine
     def close(self):
         return (yield from asyncio.wait_for(self.protocol.close(), self.timeout))
+
+
+def extract_exists(response):
+    for line in response.lines:
+        if 'EXISTS' in line:
+            return int(line.replace(' EXISTS', ''))
 
 
 class IMAP4_SSL(IMAP4):
