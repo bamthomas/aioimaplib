@@ -1,6 +1,11 @@
 Changes
 =======
 
+V0.7.0
+------
+- [fix] generalization of literal treatment
+- do not filter exists line for 'select' command (breaks the API). To retrieve unread mails with select, use
+   aioimaplib.extract_exists((yield from imap_client.select()) instead of 'yield from imap_client.select()[0]'
 
 V0.6.2
 ------
