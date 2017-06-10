@@ -22,8 +22,8 @@ from functools import partial
 
 import asynctest
 
-from aioimaplib import aioimaplib, CommandTimeout, extract_exists
-from aioimaplib.aioimaplib import Commands, fetch_message_with_literal_data_re, IMAP4ClientProtocol, Command, Response
+from aioimaplib import aioimaplib, CommandTimeout, extract_exists, IncompleteLiteral
+from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import imap_receive, Mail, get_imapconnection
 from aioimaplib.tests.test_imapserver import WithImapServer
@@ -41,85 +41,118 @@ class TestAioimaplibUtils(unittest.TestCase):
     def setUp(self):
         self.imap_protocol = IMAP4ClientProtocol(None)
         self.line_handler = Mock()
-        self.fetch_handler = Mock()
 
     def test_split_responses_no_data(self):
-        self.imap_protocol._handle_responses(b'', self.line_handler, self.fetch_handler)
+        self.imap_protocol._handle_responses(b'', self.line_handler)
         self.line_handler.assert_not_called()
-        self.fetch_handler.assert_not_called()
 
     def test_split_responses_regular_lines(self):
-        self.imap_protocol._handle_responses(b'* BYE Logging out\r\nCAPB2 OK LOGOUT completed\r\n', self.line_handler,
-                                             self.fetch_handler)
-        self.line_handler.assert_has_calls([call('* BYE Logging out'), call('CAPB2 OK LOGOUT completed')])
-        self.fetch_handler.assert_not_called()
+        self.imap_protocol._handle_responses(b'* BYE Logging out\r\nCAPB2 OK LOGOUT completed\r\n', self.line_handler)
+        self.line_handler.assert_has_calls([call('* BYE Logging out', None), call('CAPB2 OK LOGOUT completed', None)])
 
     def test_split_responses_with_message_data(self):
+        cmd = Command('FETCH', 'TAG')
+        self.line_handler.side_effect = [cmd, cmd, cmd]
         self.imap_protocol._handle_responses(b'* 1 FETCH (UID 1 RFC822 {26}\r\n...\r\n(mail content)\r\n...\r\n)\r\n'
-                                             b'TAG OK FETCH completed.\r\n', self.line_handler, self.fetch_handler)
-        self.fetch_handler.assert_called_once_with(b'* 1 FETCH (UID 1 RFC822 {26}\r\n'
-                                                   b'...\r\n(mail content)\r\n...\r\n)', 27)
-        self.line_handler.assert_has_calls([call('TAG OK FETCH completed.')])
+                                             b'TAG OK FETCH completed.\r\n', self.line_handler)
+
+        self.line_handler.assert_has_calls([call('* 1 FETCH (UID 1 RFC822 {26}', None)])
+        self.line_handler.assert_has_calls([call(')', cmd)])
+        self.line_handler.assert_has_calls([call('TAG OK FETCH completed.', None)])
+        self.assertEqual([b'...\r\n(mail content)\r\n...\r\n'], cmd.response.lines)
 
     def test_split_responses_with_two_messages_data(self):
-        self.imap_protocol._handle_responses(b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)\r\n'
-                                             b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n'  # could be from a previous store
-                                             # cmd cf https://tools.ietf.org/html/rfc3501#section-5.5
-                                             b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)\r\n'
-                                             b'TAG OK FETCH completed.\r\n', self.line_handler, self.fetch_handler)
+        cmd = Command('FETCH', 'TAG')
+        self.line_handler.side_effect = [cmd, cmd, cmd, cmd, cmd]
+        self.imap_protocol._handle_responses(b'* 3 FETCH (UID 3 RFC822 {6}\r\nmail 1)\r\n'
+                                             b'* 4 FETCH (UID 4 RFC822 {6}\r\nmail 2)\r\n'
+                                             b'TAG OK FETCH completed.\r\n', self.line_handler)
 
-        self.line_handler.assert_has_calls([call(''), call('* 1 FETCH (UID 10 FLAGS (FOO))'),
-                                            call(''), call('TAG OK FETCH completed.')])
-        self.fetch_handler.assert_has_calls([call(b'* 3 FETCH (UID 3 RFC822 {8}\r\nmail 1\r\n)', 9),
-                                             call(b'* 4 FETCH (UID 4 RFC822 {8}\r\nmail 2\r\n)', 9)])
+        self.line_handler.assert_has_calls([call('* 3 FETCH (UID 3 RFC822 {6}', None),
+                                            call(')', cmd),
+                                            call('* 4 FETCH (UID 4 RFC822 {6}', None),
+                                            call(')', cmd),
+                                            call('TAG OK FETCH completed.', None)])
+        self.assertEqual([b'mail 1', b'mail 2'], cmd.response.lines)
 
     def test_split_responses_with_flag_fetch_message_data(self):
         self.imap_protocol._handle_responses(b'* 1 FETCH (UID 10 FLAGS (FOO))\r\n'
                                              b'* 1 FETCH (UID 15 FLAGS (BAR))\r\n'
-                                             b'TAG OK STORE completed.\r\n', self.line_handler, self.fetch_handler)
-        self.line_handler.assert_has_calls([call('* 1 FETCH (UID 10 FLAGS (FOO))'),
-                                            call('* 1 FETCH (UID 15 FLAGS (BAR))'),
-                                            call('TAG OK STORE completed.')])
+                                             b'TAG OK STORE completed.\r\n', self.line_handler)
+        self.line_handler.assert_has_calls([call('* 1 FETCH (UID 10 FLAGS (FOO))', None),
+                                            call('* 1 FETCH (UID 15 FLAGS (BAR))', None),
+                                            call('TAG OK STORE completed.', None)])
 
     def test_split_responses_with_message_data_expunge(self):
-        self.imap_protocol._handle_responses(b'* 123 EXPUNGE\r\nTAG OK SELECT completed.\r\n',
-                                             self.line_handler, self.fetch_handler)
-        self.line_handler.assert_has_calls([call('* 123 EXPUNGE'),
-                                            call('TAG OK SELECT completed.')])
+        self.imap_protocol._handle_responses(b'* 123 EXPUNGE\r\nTAG OK SELECT completed.\r\n', self.line_handler)
+        self.line_handler.assert_has_calls([call('* 123 EXPUNGE', None),
+                                            call('TAG OK SELECT completed.', None)])
 
     def test_unconplete_line_with_litteral_fetch(self):
+        cmd = Command('FETCH', 'TAG')
+        self.line_handler.side_effect = [cmd, cmd, cmd, cmd, cmd]
         with self.assertRaises(asyncio.IncompleteReadError) as expected:
-            self.imap_protocol._handle_responses(b'* 12 FETCH (BODY[HEADER] {4}\r\nyo\r\n)* 13 FETCH (BODY[', self.line_handler, self.fetch_handler)
-            self.fetch_handler.assert_has_calls([call(b'* 12 FETCH (BODY[HEADER] {4}\r\nyo\r\n)', 5)])
-            self.fetch_handler.reset_mock()
+            self.imap_protocol._handle_responses(b'* 12 FETCH (BODY[HEADER] {4}\r\nyo\r\n)\r\n* 13 FETCH (BODY[', self.line_handler)
+            self.line_handler.assert_has_calls([call('* 12 FETCH (BODY[HEADER] {4}', None), call(')', cmd)])
+            self.line_handler.reset_mock()
 
-        self.imap_protocol._handle_responses(b'HEADER] {5}\r\nyo2\r\n)', self.line_handler, self.fetch_handler,
-                                             incomplete_line=expected.exception.partial)
-        self.fetch_handler.assert_has_calls([call(b'* 13 FETCH (BODY[HEADER] {5}\r\nyo2\r\n)', 6)])
+        self.imap_protocol._handle_responses(b'HEADER] {5}\r\nyo2\r\n)\r\nTAG OK STORE completed.\r\n',
+                                             self.line_handler, expected.exception.partial)
+        self.line_handler.assert_has_calls([call('* 13 FETCH (BODY[HEADER] {5}', None),
+                                            call(')', cmd),
+                                           call('TAG OK STORE completed.', None)])
+        self.assertEqual([b'yo\r\n', b'yo2\r\n'], cmd.response.lines)
 
-    # def test_line_with_attachment_litterals(self):
-    #     self.imap_protocol._handle_responses(b'* 46 FETCH (UID 46 FLAGS () BODYSTRUCTURE ('
-    #                                          b'("text" "calendar" ("charset" "UTF-8" "name" {16}\r\nG\xe9n\xe9ration 3.ics) '
-    #                                          b'"<mqwssinzuqvhkzlnhlcq>" NIL "quoted-printable" 365 14 NIL '
-    #                                          b'("attachment" ("filename" {16}\r\nG\xe9n\xe9ration 3.ics)))',
-    #                                          self.line_handler, self.fetch_handler)
-    #     self.fetch_handler.assert_has_calls([call(b'* 46 FETCH (UID 46 FLAGS () BODYSTRUCTURE '
-    #                                               b'("text" "calendar" ("charset" "UTF-8" "name" {16}\r\n'),
-    #                                          call(b'G\xe9n\xe9ration 3.ics'),
-    #                                          call(b') "<mqwssinzuqvhkzlnhlcq>" NIL "quoted-printable" 365 14 NIL '
-    #                                               b'("attachment" ("filename" {16}\r\n'),
-    #                                          call(b'G\xe9n\xe9ration 3.ics'),
-    #                                          call(b')))')])
+    def test_unconplete_line_during_litteral(self):
+        cmd = Command('LIST', 'TAG')
+        self.line_handler.side_effect = [cmd, cmd, cmd, cmd]
 
-    def test_fetch_message_with_literal_data_re(self):
-        self.assertIsNotNone(
-            fetch_message_with_literal_data_re.match(b'* 95 FETCH (FLAGS (\\Seen \\Recent) RFC822 {424635}\r\n...'))
-        self.assertIsNotNone(
-            fetch_message_with_literal_data_re.match(b'* 12 FETCH (BODY[HEADER] {342}\r\n...'))
-        self.assertIsNotNone(
-            fetch_message_with_literal_data_re.match(b'* 4 FETCH (FLAGS ($NotJunk) UID 160018 INTERNALDATE "07-Jun-2017'
-                                                     b' 13:07:15 +0000" BODY[HEADER.FIELDS (FROM TO CC BCC REPLY-TO '
-                                                     b'DATE SUBJECT MESSAGE-ID; IN-REPLY-TO REFERENCES)] {216}\r\n...'))
+        with self.assertRaises(IncompleteLiteral) as expected:
+            self.imap_protocol._handle_responses(b'* LIST () "/" {7}\r\nfoo/', self.line_handler)
+            self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None)])
+
+        self.imap_protocol._handle_responses(b'bar\r\n* LIST () "/" baz\r\nTAG OK LIST completed\r\n', self.line_handler,
+                                             expected.exception.partial, expected.exception.cmd)
+        self.line_handler.assert_has_calls([call('* LIST () "/" baz', None),
+                                            call('TAG OK LIST completed', None)])
+        self.assertEqual([b'foo/bar'], cmd.response.lines)
+
+    def test_unconplete_line_during_litteral_no_cmd_found(self):
+        self.line_handler.side_effect = [None, None, None, None]
+
+        with self.assertRaises(IncompleteLiteral) as expected:
+            self.imap_protocol._handle_responses(b'* LIST () "/" {7}\r\nfoo/', self.line_handler)
+            self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None)])
+
+        self.imap_protocol._handle_responses(b'bar\r\nTAG OK LIST completed\r\n', self.line_handler,
+                                             expected.exception.partial, expected.exception.cmd)
+        self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None),
+                                            call('', Command('NIL', 'unused')),
+                                            call('TAG OK LIST completed', None)])
+
+    def test_line_with_litteral_no_cmd_found_no_AttributeError_thrown(self):
+        self.line_handler.side_effect = [None, None, None]
+        self.imap_protocol._handle_responses(b'* 3 FETCH (UID 12 RFC822 {4}\r\nmail)\r\n'
+                                             b'TAG OK FETCH completed.\r\n', self.line_handler)
+        self.line_handler.assert_has_calls([call('* 3 FETCH (UID 12 RFC822 {4}', None),
+                                            call(')', Command('NIL', 'unused')),
+                                            call('TAG OK FETCH completed.', None)])
+
+    def test_line_with_attachment_litterals(self):
+        cmd = Command('FETCH', 'TAG')
+        self.line_handler.side_effect = [cmd, cmd, cmd, cmd, cmd]
+        self.imap_protocol._handle_responses(b'* 46 FETCH (UID 46 FLAGS () BODYSTRUCTURE ('
+                                             b'("text" "calendar" ("charset" "UTF-8" "name" {16}\r\nG\xe9n\xe9ration 3.ics) '
+                                             b'"<mqwssinzuqvhkzlnhlcq>" NIL "quoted-printable" 365 14 NIL '
+                                             b'("attachment" ("filename" {16}\r\nG\xe9n\xe9ration 3.ics)))\r\n',
+                                             self.line_handler)
+        self.line_handler.assert_has_calls([call('* 46 FETCH (UID 46 FLAGS () BODYSTRUCTURE ('
+                                                  '("text" "calendar" ("charset" "UTF-8" "name" {16}', None),
+                                             call(') "<mqwssinzuqvhkzlnhlcq>" NIL "quoted-printable" 365 14 NIL '
+                                                  '("attachment" ("filename" {16}', cmd),
+                                             call(')))', cmd)])
+
+        self.assertEqual([b'G\xe9n\xe9ration 3.ics', b'G\xe9n\xe9ration 3.ics'], cmd.response.lines)
 
     def test_command_repr(self):
         self.assertEqual('tag NAME', str(Command('NAME', 'tag')))
@@ -150,21 +183,21 @@ class TestAioimaplibCommand(asynctest.ClockedTestCase):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
 
         yield from self.advance(1)
-        cmd.begin_literal_data(b'literal', 12)
+        cmd.begin_literal_data(7, b'literal')
 
         yield from self.advance(1.9)
         cmd.close('line', 'OK')
 
         yield from cmd.wait()
-        self.assertEqual(Response('OK', ['line']), cmd.response)
+        self.assertEqual(Response('OK', [b'literal', 'line']), cmd.response)
 
     @asyncio.coroutine
-    def test_command_end_literal_data_resets_timer(self):
+    def test_command_append_data_resets_timer(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
-        cmd.begin_literal_data(b'data', 4)
+        cmd.begin_literal_data(4, b'da')
 
         yield from self.advance(1.9)
-        cmd.end_literal_data()
+        cmd.append_literal_data(b'ta')
 
         yield from self.advance(1.9)
         cmd.close('line', 'OK')
@@ -175,12 +208,10 @@ class TestAioimaplibCommand(asynctest.ClockedTestCase):
     @asyncio.coroutine
     def test_command_append_literal_data_resets_timer(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
-        cmd.begin_literal_data(b'literal', 12)
+        cmd.begin_literal_data(12, b'literal')
 
         yield from self.advance(1.9)
         cmd.append_literal_data(b' data')
-        yield from self.advance(1.9)
-        cmd.end_literal_data()
 
         yield from self.advance(1.9)
         cmd.close('line', 'OK')
@@ -206,7 +237,7 @@ class TestAioimaplibCommand(asynctest.ClockedTestCase):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
 
         yield from self.advance(1)
-        cmd.begin_literal_data('literal', 12)
+        cmd.begin_literal_data(12, b'literal')
 
         yield from self.advance(3)
         with self.assertRaises(asyncio.TimeoutError):
@@ -331,7 +362,7 @@ class TestAioimaplib(AioWithImapServer):
         result, data = yield from imap_client.fetch('1', '(RFC822)')
 
         self.assertEqual('OK', result)
-        self.assertEqual([b'* 1 FETCH (UID 1 RFC822 {360}', mail.as_bytes(), 'FETCH completed.'], data)
+        self.assertEqual(['1 FETCH (UID 1 RFC822 {360}', mail.as_bytes(), ')', 'FETCH completed.'], data)
 
     @asyncio.coroutine
     def test_fetch_by_uid_without_body(self):
@@ -353,7 +384,8 @@ class TestAioimaplib(AioWithImapServer):
         imap_receive(mail)
 
         response = (yield from imap_client.uid('fetch', '1', '(RFC822)'))
-
+        print(mail.as_bytes())
+        print(response.lines)
         self.assertEqual('OK', response.result)
         self.assertEquals(mail.as_bytes(), response.lines[1])
 
