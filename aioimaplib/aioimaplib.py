@@ -231,7 +231,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def data_received(self, d):
         log.debug('Received : %s' % d)
         try:
-            self._handle_responses(d, self._handle_line, self.incomplete_line, self.current_command)
+            self._handle_responses(self.incomplete_line + d, self._handle_line, self.current_command)
             self.incomplete_line = b''
             self.current_command = None
         except IncompleteLiteral as incomplete_literal:
@@ -242,10 +242,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             log.debug('Incomplete line, storing partial : %s' % incomplete_read.partial)
             self.incomplete_line = incomplete_read.partial
 
-    def _handle_responses(self, d, line_handler, incomplete_line=b'', current_cmd=None):
-        if not d:
+    def _handle_responses(self, data, line_handler, current_cmd=None):
+        if not data:
             return
-        data = incomplete_line + d
         if current_cmd is not None and current_cmd.has_literal_data():
             data = current_cmd.append_literal_data(data)
 

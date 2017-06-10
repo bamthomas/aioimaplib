@@ -96,8 +96,9 @@ class TestAioimaplibUtils(unittest.TestCase):
             self.line_handler.assert_has_calls([call('* 12 FETCH (BODY[HEADER] {4}', None), call(')', cmd)])
             self.line_handler.reset_mock()
 
-        self.imap_protocol._handle_responses(b'HEADER] {5}\r\nyo2\r\n)\r\nTAG OK STORE completed.\r\n',
-                                             self.line_handler, expected.exception.partial)
+        self.imap_protocol._handle_responses(expected.exception.partial +
+                                             b'HEADER] {5}\r\nyo2\r\n)\r\nTAG OK STORE completed.\r\n',
+                                             self.line_handler)
         self.line_handler.assert_has_calls([call('* 13 FETCH (BODY[HEADER] {5}', None),
                                             call(')', cmd),
                                            call('TAG OK STORE completed.', None)])
@@ -111,8 +112,9 @@ class TestAioimaplibUtils(unittest.TestCase):
             self.imap_protocol._handle_responses(b'* LIST () "/" {7}\r\nfoo/', self.line_handler)
             self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None)])
 
-        self.imap_protocol._handle_responses(b'bar\r\n* LIST () "/" baz\r\nTAG OK LIST completed\r\n', self.line_handler,
-                                             expected.exception.partial, expected.exception.cmd)
+        self.imap_protocol._handle_responses(expected.exception.partial +
+                                             b'bar\r\n* LIST () "/" baz\r\nTAG OK LIST completed\r\n',
+                                             self.line_handler, expected.exception.cmd)
         self.line_handler.assert_has_calls([call('* LIST () "/" baz', None),
                                             call('TAG OK LIST completed', None)])
         self.assertEqual([b'foo/bar'], cmd.response.lines)
@@ -124,8 +126,8 @@ class TestAioimaplibUtils(unittest.TestCase):
             self.imap_protocol._handle_responses(b'* LIST () "/" {7}\r\nfoo/', self.line_handler)
             self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None)])
 
-        self.imap_protocol._handle_responses(b'bar\r\nTAG OK LIST completed\r\n', self.line_handler,
-                                             expected.exception.partial, expected.exception.cmd)
+        self.imap_protocol._handle_responses(expected.exception.partial + b'bar\r\nTAG OK LIST completed\r\n',
+                                             self.line_handler, expected.exception.cmd)
         self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None),
                                             call('', Command('NIL', 'unused')),
                                             call('TAG OK LIST completed', None)])
