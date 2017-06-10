@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.7.1
+------
+- [refactor] adding incomplete line before calling _handle_responses
+
 V0.7.0
 ------
 - [fix] generalization of literal treatment
