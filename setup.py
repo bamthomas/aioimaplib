@@ -15,9 +15,15 @@ with open(os.path.join(here, 'CHANGES.rst')) as changes:
 
 NAME = 'aioimaplib'
 
-requires = [
+tests_require = [
+    'nose',
+    'asynctest',
+    'mock',
+    'pytz',
+    'tzlocal',
+    'imaplib2',
+    'docutils'
 ]
-
 setup(
     name=NAME,
     version='0.7.1',
@@ -39,5 +45,6 @@ setup(
     include_package_data=True,
     zip_safe=False,
     test_suite="nose.collector",  
-    install_requires=requires,
+    install_requires=[],
+    tests_require=tests_require,
 )
