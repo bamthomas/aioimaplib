@@ -25,6 +25,8 @@ from math import ceil
 import re
 from copy import deepcopy
 from functools import update_wrapper
+
+import sys
 from pytz import utc
 
 log = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ log.addHandler(sh)
 
 NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
 
+UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
 
 class ServerState(object):
     def __init__(self):
@@ -295,7 +298,7 @@ class ImapProtocol(asyncio.Protocol):
             args.pop()
             by_uid = True
 
-        charset, keyword, unkeyword, older, younger = None, None, None, None, None
+        charset, keyword, unkeyword, older, younger, range_ = None, None, None, None, None, None
         if args and 'CHARSET' == args[-1].upper():
             args.pop()
             charset = args.pop()
@@ -311,18 +314,29 @@ class ImapProtocol(asyncio.Protocol):
         if args and 'YOUNGER' == args[-1].upper():
             args.pop()
             younger = int(args.pop())
+        match_range = None if len(args) == 0 else UID_RANGE_RE.match(args[-1])
+        if match_range:
+            args.pop()
+            start = int(match_range.group('start'))
+            if match_range.group('end') == '*':
+                end = sys.maxsize
+            else:
+                end = int(match_range.group('end')) + 1
+            range_ = range(start, end)
+
         all = 'ALL' in args
 
         self.send_untagged_line(
             'SEARCH {msg_uids}'.format(msg_uids=' '.join(
-                self.memory_search(all, keyword, unkeyword, older, younger, by_uid=by_uid))))
+                self.memory_search(all, keyword, unkeyword, older, younger, by_uid=by_uid, range_=range_))))
         self.send_tagged_line(tag, 'OK %sSEARCH completed' % ('UID ' if by_uid else ''))
 
-    def memory_search(self, all, keyword, unkeyword, older, younger, by_uid=False):
+    def memory_search(self, all, keyword, unkeyword, older, younger, by_uid=False, range_=None):
         def item_match(msg):
             return all or \
                    (keyword is not None and keyword in msg.flags) or \
                    (unkeyword is not None and unkeyword not in msg.flags) or \
+                   (range_ is not None and msg.uid in range_) or \
                    (older is not None and datetime.now(tz=utc) - timedelta(seconds=older) > msg.date) or \
                    (younger is not None and datetime.now(tz=utc) - timedelta(seconds=younger) < msg.date)
 

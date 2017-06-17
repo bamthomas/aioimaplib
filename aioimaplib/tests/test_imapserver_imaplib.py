@@ -216,6 +216,24 @@ class TestImapServerWithImaplib(WithImapServer):
         self.assertEqual([b'2'], data)
 
     @asyncio.coroutine
+    def test_search_by_uid_range(self):
+        imap_receive(Mail.create(['user']))
+        imap_receive(Mail.create(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        _, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'search', None, '1:2')), 1)
+        self.assertEqual([b'1 2'], data)
+
+        _, data = yield from asyncio.wait_for(
+                    self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'search', None, '1:*')), 1)
+        self.assertEqual([b'1 2'], data)
+
+        _, data = yield from asyncio.wait_for(
+                    self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'search', None, '1:1')), 1)
+        self.assertEqual([b'1'], data)
+
+    @asyncio.coroutine
     def test_expunge_messages(self):
         imap_receive(Mail.create(['user']))
         imap_receive(Mail.create(['user']))
