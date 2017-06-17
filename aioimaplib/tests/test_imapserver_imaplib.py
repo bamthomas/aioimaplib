@@ -130,7 +130,7 @@ class TestImapServerWithImaplib(WithImapServer):
         self.assertEqual([b'1'], data)
 
     @asyncio.coroutine
-    def test_fetch_one_messages_by_uid(self):
+    def test_fetch_one_message_by_uid(self):
         mail = Mail.create(['user'], mail_from='me', subject='hello', content='pleased to meet you, wont you guess my name ?')
         imap_receive(mail)
         imap_client = yield from self.login_user('user', 'pass', select=True)
@@ -139,7 +139,19 @@ class TestImapServerWithImaplib(WithImapServer):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(RFC822)')), 1)
 
         self.assertEqual('OK', result)
-        self.assertEqual([(b'1 (UID 1 RFC822 {360}', mail.as_bytes()), b')'], data)
+        self.assertEqual([(b'1 (RFC822 {360}', mail.as_bytes()), b')'], data)
+
+    @asyncio.coroutine
+    def test_fetch_one_message_by_uid_with_bodypeek(self):
+        mail = Mail.create(['user'], mail_from='me', subject='hello', content='this mail is still unread')
+        imap_receive(mail)
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        result, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(UID BODY.PEEK[])')), 1)
+
+        self.assertEqual('OK', result)
+        self.assertEqual([(b'1 (UID 1 BODY.PEEK[] {340}', mail.as_bytes()), b')'], data)
 
     @asyncio.coroutine
     def test_fetch_one_messages_by_uid_without_body(self):

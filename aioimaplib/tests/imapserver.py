@@ -149,7 +149,7 @@ def critical_section(next_state):
     return decorator
 
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\+\-]+)?$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\[\]\+\-]+)?$)')
 
 
 class ImapProtocol(asyncio.Protocol):
@@ -349,18 +349,30 @@ class ImapProtocol(asyncio.Protocol):
             arg_list = list(args[1:])
         uid = int(arg_list[0])
         parts = arg_list[1:]
+        parts_str = ' '.join(parts)
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
             if message.uid == uid:
-                message_body = message.as_bytes()
-                uid_bytes = ('%d' % message.uid).encode()
-                if 'RFC822' in ' '.join(parts):
-                    self.send_raw_untagged_line(uid_bytes + b' FETCH (UID ' + uid_bytes + b' RFC822 {' +
-                                            ('%d' % len(message_body)).encode() + b'}\r\n' + message_body + b')',
-                                            max_chunk_size=self.fetch_chunk_size)
-                else:
-                    self.send_untagged_line('{uid} FETCH (UID {uid} FLAGS ({flags}))'.format(
-                        uid=uid, flags=' '.join(message.flags)))
+                response = self._build_fetch_response(message, parts)
+                if 'BODY.PEEK' not in parts_str and ('BODY[]' in parts_str or 'RFC822' in parts_str):
+                    message.flags.append('\Seen')
+                self.send_raw_untagged_line(response)
         self.send_tagged_line(tag, 'OK FETCH completed.')
+
+    def _build_fetch_response(self, message, parts):
+        response = ('%d FETCH (' % message.uid).encode()
+        for idx, part in enumerate(parts):
+            if part.startswith('(') or part.endswith(')'):
+                part = part.strip('()')
+            if idx != 0:
+                response += b' '
+            if part == 'UID':
+                response += ('UID %s' % message.uid).encode()
+            if part == 'BODY[]' or part == 'BODY.PEEK[]' or part == 'RFC822':
+                response += ('%s {%s}\r\n' % (part, len(message.as_bytes()))).encode() + message.as_bytes()
+            if part == 'FLAGS':
+                response += ('FLAGS (%s)' % ' '.join(message.flags)).encode()
+        response += b')'
+        return response
 
     def append(self, tag, *args):
         mailbox_name = args[0]
