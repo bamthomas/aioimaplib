@@ -1,6 +1,14 @@
 Changes
 =======
 
+V0.7.2
+------
+- [fix] bug when incomplete literal occured before a tagged status line
+- [tests] imapserver search with uid range
+- [tests] better fetch request handling
+- [log] Limit partials' log to 100 characters
+- [build] Add tests' requires in setup.py
+
 V0.7.1
 ------
 - [refactor] adding incomplete line before calling _handle_responses
