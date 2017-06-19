@@ -104,20 +104,21 @@ class TestAioimaplibUtils(unittest.TestCase):
                                            call('TAG OK STORE completed.', None)])
         self.assertEqual([b'yo\r\n', b'yo2\r\n'], cmd.response.lines)
 
-    def test_unconplete_line_during_litteral(self):
+    def test_unconplete_lines_during_litteral(self):
         cmd = Command('LIST', 'TAG')
         self.line_handler.side_effect = [cmd, cmd, cmd, cmd]
 
-        with self.assertRaises(IncompleteLiteral) as expected:
-            self.imap_protocol._handle_responses(b'* LIST () "/" {7}\r\nfoo/', self.line_handler)
-            self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None)])
+        with self.assertRaises(IncompleteLiteral) as expected1:
+            self.imap_protocol._handle_responses(b'* LIST () "/" {11}\r\nfoo/', self.line_handler)
+            self.line_handler.assert_has_calls([call('* LIST () "/" {11}', None)])
+        with self.assertRaises(IncompleteLiteral) as expected2:
+            self.imap_protocol._handle_responses(b'bar/', self.line_handler, expected1.exception.cmd)
 
-        self.imap_protocol._handle_responses(expected.exception.partial +
-                                             b'bar\r\n* LIST () "/" baz\r\nTAG OK LIST completed\r\n',
-                                             self.line_handler, expected.exception.cmd)
-        self.line_handler.assert_has_calls([call('* LIST () "/" baz', None),
+        self.imap_protocol._handle_responses(b'baz\r\n* LIST () "/" qux\r\nTAG OK LIST completed\r\n',
+                                             self.line_handler, expected2.exception.cmd)
+        self.line_handler.assert_has_calls([call('* LIST () "/" qux', None),
                                             call('TAG OK LIST completed', None)])
-        self.assertEqual([b'foo/bar'], cmd.response.lines)
+        self.assertEqual([b'foo/bar/baz'], cmd.response.lines)
 
     def test_unconplete_line_during_litteral_no_cmd_found(self):
         self.line_handler.side_effect = [None, None, None, None]
@@ -126,7 +127,7 @@ class TestAioimaplibUtils(unittest.TestCase):
             self.imap_protocol._handle_responses(b'* LIST () "/" {7}\r\nfoo/', self.line_handler)
             self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None)])
 
-        self.imap_protocol._handle_responses(expected.exception.partial + b'bar\r\nTAG OK LIST completed\r\n',
+        self.imap_protocol._handle_responses(b'bar\r\nTAG OK LIST completed\r\n',
                                              self.line_handler, expected.exception.cmd)
         self.line_handler.assert_has_calls([call('* LIST () "/" {7}', None),
                                             call('', Command('NIL', 'unused')),

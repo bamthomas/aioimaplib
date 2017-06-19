@@ -122,13 +122,13 @@ class Command(object):
         self._literal_data = b''
         return self.append_literal_data(literal_data)
 
-    def has_literal_data(self):
+    def wait_literal_data(self):
         return self._expected_size != 0 and len(self._literal_data) != self._expected_size
 
     def append_literal_data(self, data):
         nb_bytes_to_add = self._expected_size - len(self._literal_data)
         self._literal_data += data[0:nb_bytes_to_add]
-        if not self.has_literal_data():
+        if not self.wait_literal_data():
             self.append_to_resp(self._literal_data)
             self._end_literal_data()
         self._reset_timer()
@@ -180,9 +180,8 @@ class CommandTimeout(asyncio.TimeoutError):
         self.command = command
 
 
-class IncompleteLiteral(asyncio.IncompleteReadError):
-    def __init__(self, partial, expected, cmd):
-        super().__init__(partial, expected)
+class IncompleteLiteral(Exception):
+    def __init__(self, cmd):
         self.cmd = cmd
 
 
@@ -235,8 +234,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.incomplete_line = b''
             self.current_command = None
         except IncompleteLiteral as incomplete_literal:
-            log.debug('Incomplete literal, storing partial : %s' % incomplete_literal.partial[:100])
-            self.incomplete_line = incomplete_literal.partial
             self.current_command = incomplete_literal.cmd
         except asyncio.IncompleteReadError as incomplete_read:
             log.debug('Incomplete line, storing partial : %s' % incomplete_read.partial[:100])
@@ -245,8 +242,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def _handle_responses(self, data, line_handler, current_cmd=None):
         if not data:
             return
-        if current_cmd is not None and current_cmd.has_literal_data():
+        if current_cmd is not None and current_cmd.wait_literal_data():
             data = current_cmd.append_literal_data(data)
+            if current_cmd.wait_literal_data():
+                raise IncompleteLiteral(current_cmd)
 
         line, separator, tail = data.partition(CRLF)
         if not separator:
@@ -254,35 +253,31 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         cmd = line_handler(line.decode(), current_cmd)
 
-        has_literal = literal_data_re.match(line)
-        if has_literal:
-            size = int(has_literal.group('size'))
+        begin_literal = literal_data_re.match(line)
+        if begin_literal:
+            size = int(begin_literal.group('size'))
             if cmd is None:
                 cmd = Command('NIL', 'unused')
             cmd.begin_literal_data(size)
-
-            if size > len(tail):
-                raise IncompleteLiteral(tail, b'incomplete literal', cmd)
-
-            after_literal = cmd.append_literal_data(tail)
-            self._handle_responses(after_literal, line_handler, current_cmd=cmd)
+            self._handle_responses(tail, line_handler, current_cmd=cmd)
         else:
             self._handle_responses(tail, line_handler)
 
     def _handle_line(self, line, current_cmd):
         if not line:
             return
-        if current_cmd is not None:
+
+        if self.state == CONNECTED:
+            asyncio.async(self.welcome(line))
+        elif tagged_status_response_re.match(line):
+            self._response_done(line)
+        elif current_cmd is not None:
             current_cmd.append_to_resp(line)
             return current_cmd
-        elif self.state == CONNECTED:
-            asyncio.async(self.welcome(line))
         elif line.startswith('*'):
             return self._untagged_response(line.replace('* ', ''))
         elif line.startswith('+'):
             self._continuation(line.replace('+ ', ''))
-        elif tagged_status_response_re.match(line):
-            self._response_done(line)
         else:
             log.info('unknown data received %s' % line)
 
@@ -501,6 +496,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return command
 
     def _response_done(self, line):
+        log.debug('tagged status %s' % line)
         tag, _, response = line.partition(' ')
 
         if self.pending_sync_command is not None:
