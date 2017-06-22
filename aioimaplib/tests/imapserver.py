@@ -517,7 +517,7 @@ class MockImapServer(object):
         else:
             self.loop = loop
 
-    def imap_receive(self, mail, imap_user=None, mailbox='INBOX'):
+    def receive(self, mail, imap_user=None, mailbox='INBOX'):
         """
         :param imap_user: str
         :type mail: Mail
@@ -532,7 +532,7 @@ class MockImapServer(object):
                 uids.append(self._server_state.imap_receive(to, mail, mailbox))
             return uids
 
-    def get_imapconnection(self, user):
+    def get_connection(self, user):
         return self._server_state.get_connection(user)
 
     def run_server(self, host='localhost', port=1143, fetch_chunk_size=0):

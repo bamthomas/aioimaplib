@@ -324,8 +324,8 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_search_two_messages(self):
-        self.imapserver.imap_receive(Mail.create(['user']))
-        self.imapserver.imap_receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         result, data = yield from imap_client.search('ALL')
@@ -347,9 +347,9 @@ class TestAioimaplib(AioWithImapServer):
     @asyncio.coroutine
     def test_search_three_messages_by_uid(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        self.imapserver.imap_receive(Mail.create(['user']))  # id=1 uid=1
-        self.imapserver.imap_receive(Mail.create(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=2
-        self.imapserver.imap_receive(Mail.create(['user']))  # id=2 uid=3
+        self.imapserver.receive(Mail.create(['user']))  # id=1 uid=1
+        self.imapserver.receive(Mail.create(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=2
+        self.imapserver.receive(Mail.create(['user']))  # id=2 uid=3
 
         self.assertEqual('1 2', (yield from imap_client.search('ALL')).lines[0])
         self.assertEqual('1 3', (yield from imap_client.uid_search('ALL')).lines[0])
@@ -360,7 +360,7 @@ class TestAioimaplib(AioWithImapServer):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         mail = Mail.create(['user'], mail_from='me', subject='hello',
                            content='pleased to meet you, wont you guess my name ?')
-        self.imapserver.imap_receive(mail)
+        self.imapserver.receive(mail)
 
         result, data = yield from imap_client.fetch('1', '(RFC822)')
 
@@ -372,7 +372,7 @@ class TestAioimaplib(AioWithImapServer):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         mail = Mail.create(['user'], mail_from='me', subject='hello',
                            content='pleased to meet you, wont you guess my name ?')
-        self.imapserver.imap_receive(mail)
+        self.imapserver.receive(mail)
 
         response = (yield from imap_client.uid('fetch', '1', '(UID FLAGS)'))
 
@@ -384,7 +384,7 @@ class TestAioimaplib(AioWithImapServer):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         mail = Mail.create(['user'], mail_from='me', subject='hello',
                            content='pleased to meet you, wont you guess my name ?')
-        self.imapserver.imap_receive(mail)
+        self.imapserver.receive(mail)
 
         response = (yield from imap_client.uid('fetch', '1', '(RFC822)'))
         print(mail.as_bytes())
@@ -399,7 +399,7 @@ class TestAioimaplib(AioWithImapServer):
         idle = asyncio.async(imap_client.idle())
         self.assertEquals('idling', (yield from imap_client.wait_server_push()))
 
-        self.imapserver.imap_receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
+        self.imapserver.receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
 
         self.assertEquals('1 EXISTS', (yield from imap_client.wait_server_push()))
         self.assertEquals('1 RECENT', (yield from imap_client.wait_server_push()))
@@ -427,8 +427,8 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_store_and_search_by_keyword(self):
-        self.imapserver.imap_receive(Mail.create(['user']))
-        self.imapserver.imap_receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
         self.assertEqual('', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
 
@@ -439,8 +439,8 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_expunge_messages(self):
-        self.imapserver.imap_receive(Mail.create(['user']))
-        self.imapserver.imap_receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         self.assertEquals(('OK', ['1 EXPUNGE', '2 EXPUNGE', 'EXPUNGE completed.']), (yield from imap_client.expunge()))
@@ -449,8 +449,8 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_copy_messages(self):
-        self.imapserver.imap_receive(Mail.create(['user']))
-        self.imapserver.imap_receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         result, _ = yield from imap_client.copy('1', '2', 'MAILBOX')
@@ -460,7 +460,7 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_copy_messages_by_uid(self):
-        self.imapserver.imap_receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         result, _ = yield from imap_client.uid('copy', '1', 'MAILBOX')
@@ -481,7 +481,7 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_concurrency_2_executing_same_async_commands_sequentially(self):
-        self.imapserver.imap_receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         f1 = asyncio.async(imap_client.fetch('1', '(RFC822)'))
@@ -494,7 +494,7 @@ class TestAioimaplib(AioWithImapServer):
     @asyncio.coroutine
     def test_concurrency_3_executing_async_commands_in_parallel(self):
         # cf valid example in https://tools.ietf.org/html/rfc3501#section-5.5
-        self.imapserver.imap_receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         store = asyncio.async(imap_client.store('1', '+FLAGS FOO'))
@@ -508,7 +508,7 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_concurrency_4_sync_command_waits_for_async_commands_to_finish(self):
-        self.imapserver.imap_receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         asyncio.async(imap_client.copy('1', 'MBOX'))
@@ -564,11 +564,11 @@ class TestAioimaplib(AioWithImapServer):
     @asyncio.coroutine
     def test_close(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        self.assertEquals(imapserver.SELECTED, self.imapserver.get_imapconnection('user').state)
+        self.assertEquals(imapserver.SELECTED, self.imapserver.get_connection('user').state)
 
         self.assertEquals(('OK', ['CLOSE completed.']), (yield from imap_client.close()))
 
-        self.assertEquals(imapserver.AUTH, self.imapserver.get_imapconnection('user').state)
+        self.assertEquals(imapserver.AUTH, self.imapserver.get_connection('user').state)
 
     @asyncio.coroutine
     def test_status(self):
@@ -630,9 +630,9 @@ class TestAioimaplib(AioWithImapServer):
 
     @asyncio.coroutine
     def test_rfc5032_within(self):
-        self.imapserver.imap_receive(Mail.create(['user'], date=datetime.now(tz=utc) - timedelta(seconds=84600 * 3)))  # 1
-        self.imapserver.imap_receive(Mail.create(['user'], date=datetime.now(tz=utc) - timedelta(seconds=84600)))  # 2
-        self.imapserver.imap_receive(Mail.create(['user']))  # 3
+        self.imapserver.receive(Mail.create(['user'], date=datetime.now(tz=utc) - timedelta(seconds=84600 * 3)))  # 1
+        self.imapserver.receive(Mail.create(['user'], date=datetime.now(tz=utc) - timedelta(seconds=84600)))  # 2
+        self.imapserver.receive(Mail.create(['user']))  # 3
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         self.assertEquals('1', (yield from imap_client.search('OLDER', '84700')).lines[0])
