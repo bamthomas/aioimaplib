@@ -22,12 +22,11 @@ from datetime import datetime
 import asyncio
 
 import functools
-from functools import partial
 
 import asynctest
 import pytz
 from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import ServerState, Mail
+from aioimaplib.tests.imapserver import ServerState, Mail, MockImapServer
 
 
 class TestMailToString(unittest.TestCase):
@@ -110,13 +109,12 @@ class TestServerState(unittest.TestCase):
 
 class WithImapServer(asynctest.ClockedTestCase):
     def setUp(self):
-        factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64, loop=self.loop),
-                                          'localhost', 12345)
-        self.server = self.loop.run_until_complete(factory)
+        self.imapserver = MockImapServer(loop=self.loop)
+        self.server = self.imapserver.run_server(host='localhost', port=12345, fetch_chunk_size=64)
 
     @asyncio.coroutine
     def tearDown(self):
-        imapserver.reset()
+        self.imapserver.reset()
         self.server.close()
         yield from asyncio.wait_for(self.server.wait_closed(), 1)
 

@@ -509,38 +509,39 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK DELAY completed.')
 
 
-_SERVER_STATE = ServerState()
+class MockImapServer(object):
+    def __init__(self, loop=None) -> None:
+        self._server_state = ServerState()
+        if loop is None:
+            self.loop = asyncio.get_event_loop()
+        else:
+            self.loop = loop
 
+    def imap_receive(self, mail, imap_user=None, mailbox='INBOX'):
+        """
+        :param imap_user: str
+        :type mail: Mail
+        :type mailbox: str
+        :type to_list: list
+        """
+        if imap_user is not None:
+            return [self._server_state.imap_receive(imap_user, mail, mailbox)]
+        else:
+            uids = list()
+            for to in mail.to:
+                uids.append(self._server_state.imap_receive(to, mail, mailbox))
+            return uids
 
-def imap_receive(mail, imap_user=None, mailbox='INBOX'):
-    """
-    :param imap_user: str
-    :type mail: Mail
-    :type mailbox: str
-    :type to_list: list
-    """
-    global _SERVER_STATE
-    if imap_user is not None:
-        return [_SERVER_STATE.imap_receive(imap_user, mail, mailbox)]
-    else:
-        uids = list()
-        for to in mail.to:
-            uids.append(_SERVER_STATE.imap_receive(to, mail, mailbox))
-        return uids
+    def get_imapconnection(self, user):
+        return self._server_state.get_connection(user)
 
+    def run_server(self, host='localhost', port=1143, fetch_chunk_size=0):
+        return self.loop.run_until_complete(self.loop.create_server(
+            lambda: ImapProtocol(self._server_state, fetch_chunk_size, self.loop),
+            host, port))
 
-def get_imapconnection(user):
-    return _SERVER_STATE.get_connection(user)
-
-
-def create_imap_protocol(fetch_chunk_size=0, loop=asyncio.get_event_loop()):
-    protocol = ImapProtocol(_SERVER_STATE, fetch_chunk_size, loop)
-    return protocol
-
-
-def reset():
-    global _SERVER_STATE
-    _SERVER_STATE.reset()
+    def reset(self):
+        self._server_state.reset()
 
 
 class Mail(object):
@@ -608,6 +609,7 @@ class Mail(object):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    factory = loop.create_server(create_imap_protocol, 'localhost', 1143)
+    server = MockImapServer()
+    factory = server.create_server()
     server = loop.run_until_complete(factory)
     loop.run_forever()

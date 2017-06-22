@@ -18,7 +18,7 @@ import asyncio
 import email
 
 import os
-from aioimaplib.tests.imapserver import imap_receive, Mail
+from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.test_aioimaplib import AioWithImapServer
 
 
@@ -29,7 +29,7 @@ class TestAioimaplibAcceptance(AioWithImapServer):
             imap_client = yield from self.login_user('user@mail', 'pass', select=True)
             mail = Mail(email.message_from_binary_file(msg))
 
-            imap_receive(mail, imap_user='user@mail')
+            self.imapserver.imap_receive(mail, imap_user='user@mail')
 
             result, data = yield from imap_client.fetch('1', '(RFC822)')
 
