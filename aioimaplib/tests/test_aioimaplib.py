@@ -18,7 +18,6 @@ import asyncio
 import logging
 import unittest
 from datetime import datetime, timedelta
-from functools import partial
 
 import asynctest
 
@@ -555,6 +554,13 @@ class TestAioimaplib(AioWithImapServer):
     def test_noop(self):
         imap_client = yield from self.login_user('user', 'pass')
         self.assertEquals(('OK', ['NOOP completed.']), (yield from imap_client.noop()))
+
+    @asyncio.coroutine
+    def test_noop_with_untagged_data(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        self.imapserver.receive(Mail.create(['user']))
+
+        self.assertEquals(('OK', ['1 EXISTS', '1 RECENT', 'NOOP completed.']), (yield from imap_client.noop()))
 
     @asyncio.coroutine
     def test_check(self):

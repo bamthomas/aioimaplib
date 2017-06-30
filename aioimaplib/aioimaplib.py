@@ -492,7 +492,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if command is not None:
                 command.append_to_resp(text)
             else:
-                log.info('ignored untagged response : %s' % line)
+                # noop is async and servers can send untagged responses
+                command = self.pending_async_commands.get('NOOP')
+                if command is not None:
+                    command.append_to_resp(line)
+                else:
+                    log.info('ignored untagged response : %s' % line)
         return command
 
     def _response_done(self, line):

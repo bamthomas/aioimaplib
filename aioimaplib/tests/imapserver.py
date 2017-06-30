@@ -17,6 +17,7 @@ import asyncio
 import email
 import logging
 import uuid
+from collections import deque
 from datetime import datetime, timedelta
 from email.header import Header
 import email.mime.nonmultipart
@@ -159,6 +160,7 @@ class ImapProtocol(asyncio.Protocol):
     IDLE_STILL_HERE_PERIOD_SECONDS = 10
 
     def __init__(self, server_state, fetch_chunk_size=0, loop=asyncio.get_event_loop()):
+        self.state_to_send = list()
         self.delay_seconds = 0
         self.loop = loop
         self.fetch_chunk_size = fetch_chunk_size
@@ -425,6 +427,9 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK COPY completed.')
 
     def noop(self, tag, *args):
+        if len(self.state_to_send) > 0:
+            for line in deque(self.state_to_send):
+                self.send_untagged_line(line)
         self.send_tagged_line(tag, 'OK NOOP completed.')
 
     def check(self, tag, *args):
@@ -503,6 +508,9 @@ class ImapProtocol(asyncio.Protocol):
         if self.idle_tag:
             self.send_untagged_line('{uid} EXISTS'.format(uid=uid))
             self.send_untagged_line('{uid} RECENT'.format(uid=uid))
+        else:
+            self.state_to_send.append('{uid} EXISTS'.format(uid=uid))
+            self.state_to_send.append('{uid} RECENT'.format(uid=uid))
 
     def delay(self, tag, *args):
         self.delay_seconds = int(args[0])
