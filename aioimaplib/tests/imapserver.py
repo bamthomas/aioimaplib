@@ -609,7 +609,5 @@ class Mail(object):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    server = MockImapServer()
-    factory = server.create_server()
-    server = loop.run_until_complete(factory)
+    server = MockImapServer().run_server()
     loop.run_forever()
