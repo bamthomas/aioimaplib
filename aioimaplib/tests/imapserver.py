@@ -577,7 +577,8 @@ class Mail(object):
                in_reply_to=None,
                message_id=None,
                quoted_printable=False,
-               cc=None
+               cc=None,
+               body_subtype='plain'
                ):
         """
         :param quoted_printable: boolean
@@ -590,9 +591,10 @@ class Mail(object):
         :type date: datetime
         :param in_reply_to: str
         :param message_id: str
+        :param body_subtype: str
         """
         charset = email.charset.Charset(encoding)
-        msg = email.mime.nonmultipart.MIMENonMultipart('text', 'plain', charset=encoding)
+        msg = email.mime.nonmultipart.MIMENonMultipart('text', body_subtype, charset=encoding)
         if quoted_printable:
             charset.body_encoding = email.charset.QP
         msg.set_payload(content, charset=charset)
