@@ -549,7 +549,7 @@ class MockImapServer(object):
             other_users = list(map(lambda c: c.user_login, self._connections))
             raise ValueError("wait_state didn't find a connection to user %s among %s" % (user, other_users))
         if len(user_connections) > 1:
-            raise ValueError('wait_state is not able to handle serveral connections for user %s' % user)
+            raise ValueError("wait_state can't handle %d connections for user %s" % (len(user_connections), user))
 
         yield from user_connections[0].wait(state)
 
