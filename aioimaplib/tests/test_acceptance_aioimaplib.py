@@ -18,11 +18,21 @@ import asyncio
 import email
 
 import os
+
+from asynctest import TestCase
+
 from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.test_aioimaplib import AioWithImapServer
 
 
-class TestAioimaplibAcceptance(AioWithImapServer):
+class TestAioimaplibAcceptance(AioWithImapServer, TestCase):
+    def setUp(self):
+        self._init_server(self.loop)
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+
     @asyncio.coroutine
     def test_file_with_attachement(self):
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data/test_attachment.eml'), mode='br') as msg:

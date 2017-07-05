@@ -18,6 +18,8 @@ import asyncio
 import functools
 
 import time
+
+from asynctest import TestCase
 from imaplib2 import imaplib2
 from mock import Mock
 from aioimaplib.tests import imapserver
@@ -25,7 +27,14 @@ from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.test_imapserver import WithImapServer
 
 
-class TestImapServerIdle(WithImapServer):
+class TestImapServerIdle(WithImapServer, TestCase):
+    def setUp(self):
+        self._init_server(self.loop)
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+
     @asyncio.coroutine
     def test_idle(self):
         imap_client = yield from self.login_user('user', 'pass', select=True, lib=imaplib2.IMAP4)

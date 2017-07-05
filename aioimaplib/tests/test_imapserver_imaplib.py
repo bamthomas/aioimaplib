@@ -22,13 +22,21 @@ from datetime import datetime, timedelta
 import functools
 from email.charset import add_charset, SHORTEST
 
+from asynctest import TestCase
+
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.test_imapserver import WithImapServer
 from pytz import utc
 
 
-class TestImapServerWithImaplib(WithImapServer):
+class TestImapServerWithImaplib(WithImapServer, TestCase):
+    def setUp(self):
+        self._init_server(self.loop)
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
 
     def __init__(self, methodName='runTest'):
         super().__init__(methodName)

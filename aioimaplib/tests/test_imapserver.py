@@ -107,13 +107,14 @@ class TestServerState(unittest.TestCase):
         self.assertEquals(2, server_state.max_uid('user'))
 
 
-class WithImapServer(asynctest.ClockedTestCase):
-    def setUp(self):
-        self.imapserver = MockImapServer(loop=self.loop)
+class WithImapServer(object):
+    def _init_server(self, loop):
+        self.loop = loop
+        self.imapserver = MockImapServer(loop=loop)
         self.server = self.imapserver.run_server(host='localhost', port=12345, fetch_chunk_size=64)
 
     @asyncio.coroutine
-    def tearDown(self):
+    def _shutdown_server(self):
         self.imapserver.reset()
         self.server.close()
         yield from asyncio.wait_for(self.server.wait_closed(), 1)

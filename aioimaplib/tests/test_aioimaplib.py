@@ -259,7 +259,13 @@ class AioWithImapServer(WithImapServer):
         return imap_client
 
 
-class TestAioimaplib(AioWithImapServer):
+class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
+    def setUp(self):
+        self._init_server(self.loop)
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
 
     @asyncio.coroutine
     def test_capabilities(self):
@@ -513,40 +519,6 @@ class TestAioimaplib(AioWithImapServer):
         self.assertEquals(('OK', ['1']), (yield from asyncio.wait_for(examine, 1)))
 
     @asyncio.coroutine
-    def test_when_async_commands_timeout__they_should_be_removed_from_protocol_state(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
-        yield from (imap_client.protocol.execute(Command(
-            'DELAY', imap_client.protocol.new_tag(), '3', loop=self.loop)))
-
-        noop_task = asyncio.async(imap_client.protocol.execute(
-            Command('NOOP', imap_client.protocol.new_tag(), '', loop=self.loop, timeout=2)))
-        yield from self.advance(1)
-        self.assertEqual(1, len(imap_client.protocol.pending_async_commands))
-        yield from self.advance(1.1)
-
-        finished, pending = yield from asyncio.wait([noop_task], loop=self.loop)
-        self.assertTrue(noop_task in finished)
-        self.assertTrue(isinstance(noop_task.exception(), CommandTimeout))
-        self.assertEqual(0, len(imap_client.protocol.pending_async_commands))
-
-    @asyncio.coroutine
-    def test_when_sync_commands_timeout__they_should_be_removed_from_protocol_state(self):
-        imap_client = yield from self.login_user('user', 'pass')
-        yield from (imap_client.protocol.execute(Command(
-            'DELAY', imap_client.protocol.new_tag(), '3', loop=self.loop)))
-
-        delay_task = asyncio.async(imap_client.protocol.execute(
-            Command('DELAY', imap_client.protocol.new_tag(), '0', loop=self.loop, timeout=2)))
-        yield from self.advance(1)
-        self.assertIsNotNone(imap_client.protocol.pending_sync_command)
-        yield from self.advance(1.1)
-
-        finished, pending = yield from asyncio.wait([delay_task], loop=self.loop)
-        self.assertTrue(delay_task in finished)
-        self.assertTrue(isinstance(delay_task.exception(), CommandTimeout))
-        self.assertIsNone(imap_client.protocol.pending_sync_command)
-
-    @asyncio.coroutine
     def test_noop(self):
         imap_client = yield from self.login_user('user', 'pass')
         self.assertEquals(('OK', ['NOOP completed.']), (yield from imap_client.noop()))
@@ -639,3 +611,47 @@ class TestAioimaplib(AioWithImapServer):
 
         self.assertEquals('1', (yield from imap_client.search('OLDER', '84700')).lines[0])
         self.assertEquals('2 3', (yield from imap_client.search('YOUNGER', '84700')).lines[0])
+
+
+class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
+
+    def setUp(self):
+        self._init_server(self.loop)
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+
+    @asyncio.coroutine
+    def test_when_async_commands_timeout__they_should_be_removed_from_protocol_state(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        yield from (imap_client.protocol.execute(Command(
+            'DELAY', imap_client.protocol.new_tag(), '3', loop=self.loop)))
+
+        noop_task = asyncio.async(imap_client.protocol.execute(
+            Command('NOOP', imap_client.protocol.new_tag(), '', loop=self.loop, timeout=2)))
+        yield from self.advance(1)
+        self.assertEqual(1, len(imap_client.protocol.pending_async_commands))
+        yield from self.advance(1.1)
+
+        finished, pending = yield from asyncio.wait([noop_task], loop=self.loop)
+        self.assertTrue(noop_task in finished)
+        self.assertTrue(isinstance(noop_task.exception(), CommandTimeout))
+        self.assertEqual(0, len(imap_client.protocol.pending_async_commands))
+
+    @asyncio.coroutine
+    def test_when_sync_commands_timeout__they_should_be_removed_from_protocol_state(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        yield from (imap_client.protocol.execute(Command(
+            'DELAY', imap_client.protocol.new_tag(), '3', loop=self.loop)))
+
+        delay_task = asyncio.async(imap_client.protocol.execute(
+            Command('DELAY', imap_client.protocol.new_tag(), '0', loop=self.loop, timeout=2)))
+        yield from self.advance(1)
+        self.assertIsNotNone(imap_client.protocol.pending_sync_command)
+        yield from self.advance(1.1)
+
+        finished, pending = yield from asyncio.wait([delay_task], loop=self.loop)
+        self.assertTrue(delay_task in finished)
+        self.assertTrue(isinstance(delay_task.exception(), CommandTimeout))
+        self.assertIsNone(imap_client.protocol.pending_sync_command)
