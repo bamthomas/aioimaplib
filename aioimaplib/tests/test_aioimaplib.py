@@ -260,10 +260,6 @@ class AioWithImapServer(WithImapServer):
 
 
 class TestAioimaplib(AioWithImapServer):
-    # def setUp(self):
-    #     factory = self.loop.create_server(partial(imapserver.create_imap_protocol, fetch_chunk_size=64, loop=self.loop),
-    #                                       'localhost', 12345)
-    #     self.server = self.loop.run_until_complete(factory)
 
     @asyncio.coroutine
     def test_capabilities(self):
