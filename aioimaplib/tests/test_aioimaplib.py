@@ -24,12 +24,12 @@ import asynctest
 from aioimaplib import aioimaplib, CommandTimeout, extract_exists, IncompleteLiteral
 from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response
 from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import Mail
+from aioimaplib.tests.imapserver import Mail, IDLE
 from aioimaplib.tests.test_imapserver import WithImapServer
 from mock import Mock, call
 from pytz import utc
 
-aioimaplib.log.setLevel(logging.INFO)
+aioimaplib.log.setLevel(logging.WARNING)
 sh = logging.StreamHandler()
 sh.setLevel(logging.INFO)
 sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
@@ -388,8 +388,6 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.imapserver.receive(mail)
 
         response = (yield from imap_client.uid('fetch', '1', '(RFC822)'))
-        print(mail.as_bytes())
-        print(response.lines)
         self.assertEqual('OK', response.result)
         self.assertEquals(mail.as_bytes(), response.lines[1])
 
@@ -398,7 +396,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         idle = asyncio.async(imap_client.idle())
-        self.assertEquals('idling', (yield from imap_client.wait_server_push()))
+        yield from self.imapserver.wait_state(IDLE, 'user')
 
         self.imapserver.receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
 
@@ -412,7 +410,8 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def test_idle_stop(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         idle = asyncio.async(imap_client.idle())
-        self.assertEquals('idling', (yield from imap_client.wait_server_push()))
+        yield from self.imapserver.wait_state(IDLE, 'user')
+
         self.assertTrue((yield from imap_client.stop_wait_server_push()))
 
         self.assertEquals('stop_wait_server_push', (yield from imap_client.wait_server_push()))

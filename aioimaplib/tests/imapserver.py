@@ -15,19 +15,18 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
 import email
+import email.mime.nonmultipart
 import logging
+import re
+import sys
 import uuid
 from collections import deque
+from copy import deepcopy
 from datetime import datetime, timedelta
 from email.header import Header
-import email.mime.nonmultipart
+from functools import update_wrapper
 from math import ceil
 
-import re
-from copy import deepcopy
-from functools import update_wrapper
-
-import sys
 from pytz import utc
 
 log = logging.getLogger(__name__)
@@ -41,6 +40,7 @@ log.addHandler(sh)
 NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
 
 UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
+
 
 class ServerState(object):
     def __init__(self):
@@ -95,6 +95,7 @@ class ServerState(object):
 
     def imap_receive(self, user, mail, mailbox):
         uid = self.add_mail(user, mail, mailbox)
+        log.debug('created mail with UID: %s' % uid)
         if user in self.connections:
             self.connections[user].notify_new_mail(uid)
         return uid
@@ -520,6 +521,7 @@ class ImapProtocol(asyncio.Protocol):
 class MockImapServer(object):
     def __init__(self, loop=None) -> None:
         self._server_state = ServerState()
+        self._connections = list()
         if loop is None:
             self.loop = asyncio.get_event_loop()
         else:
@@ -540,13 +542,27 @@ class MockImapServer(object):
                 uids.append(self._server_state.imap_receive(to, mail, mailbox))
             return uids
 
+    @asyncio.coroutine
+    def wait_state(self, state, user):
+        user_connections = [connection for connection in self._connections if connection.user_login == user]
+        if len(user_connections) == 0:
+            other_users = list(map(lambda c: c.user_login, self._connections))
+            raise ValueError("wait_state didn't find a connection to user %s among %s" % (user, other_users))
+        if len(user_connections) > 1:
+            raise ValueError('wait_state is not able to handle serveral connections for user %s' % user)
+
+        yield from user_connections[0].wait(state)
+
     def get_connection(self, user):
         return self._server_state.get_connection(user)
 
     def run_server(self, host='localhost', port=1143, fetch_chunk_size=0):
-        return self.loop.run_until_complete(self.loop.create_server(
-            lambda: ImapProtocol(self._server_state, fetch_chunk_size, self.loop),
-            host, port))
+        def create_protocol():
+            protocol = ImapProtocol(self._server_state, fetch_chunk_size, self.loop)
+            self._connections.append(protocol)
+            return protocol
+
+        return self.loop.run_until_complete(self.loop.create_server(create_protocol, host, port))
 
     def reset(self):
         self._server_state.reset()

@@ -530,8 +530,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.transport.write(self.literal_data)
             self.transport.write(CRLF)
             self.literal_data = None
-        elif self.has_pending_idle_command():
-            asyncio.async(self.idle_queue.put(line))
         else:
             log.info('server says %s (ignored)' % line)
 
@@ -621,8 +619,8 @@ class IMAP4(object):
         return False
 
     @asyncio.coroutine
-    def wait_server_push(self):
-        return (yield from self.protocol.idle_queue.get())
+    def wait_server_push(self, timeout=1740):
+        return (yield from asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout))
 
     @asyncio.coroutine
     def noop(self):
