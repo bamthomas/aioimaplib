@@ -28,7 +28,7 @@ import functools
 import random
 from collections import namedtuple
 
-VINGT_NEUF_MINUTES = 1740
+TWENTY_NINE_MINUTES = 1740
 
 log = logging.getLogger(__name__)
 
@@ -620,7 +620,7 @@ class IMAP4(object):
         return False
 
     @asyncio.coroutine
-    def wait_server_push(self, timeout=VINGT_NEUF_MINUTES):
+    def wait_server_push(self, timeout=TWENTY_NINE_MINUTES):
         return (yield from asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout))
 
     @asyncio.coroutine
