@@ -1,6 +1,16 @@
 Changes
 =======
 
+
+V0.7.3
+------
+- [aiolib] added timeout for idle of 29 minutes
+- [aiolib] Remove imap's Continuation from server when connection is idled. Provide imapserver.wait_state to wait for idle in tests
+- [test][refactor] Replace WithIMapServer inheritance by mixin combinations between ClockTestCase/TestCase and WithIMapServer
+- [test] Allow to send a html email
+- [fix] handling untagged responses with noop async command
+
+
 V0.7.2
 ------
 - [fix] bug when incomplete literal occured before a tagged status line
