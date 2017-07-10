@@ -28,6 +28,8 @@ import functools
 import random
 from collections import namedtuple
 
+# to avoid imap servers to kill the connection after 30mn idling
+# cf https://www.imapwiki.org/ClientImplementation/Synchronization
 TWENTY_NINE_MINUTES = 1740
 
 log = logging.getLogger(__name__)
