@@ -156,7 +156,7 @@ To develop, just run::
     pip install -r dev-requirements.txt
     nosetests
 
-To add a imaplib or imaplib2 command you can :
+To add an imaplib or imaplib2 command you can :
 
 - add the function to the testing imapserver with a new imaplib or imaplib2 server test, i.e. test_imapserver_imaplib.py or test_imapserver_imaplib2.py respectively;
 - then add the function to the aioimaplib doing almost the same test than above but the async way in test_aioimaplib.py.
