@@ -21,10 +21,10 @@ from datetime import datetime, timedelta
 
 import asynctest
 
-from aioimaplib import aioimaplib, CommandTimeout, extract_exists, IncompleteLiteral
+from aioimaplib import aioimaplib, CommandTimeout, extract_exists, IncompleteLiteral, TWENTY_NINE_MINUTES
 from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response
 from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import Mail, IDLE
+from aioimaplib.tests.imapserver import Mail, IDLE, SELECTED
 from aioimaplib.tests.test_imapserver import WithImapServer
 from mock import Mock, call
 from pytz import utc
@@ -654,3 +654,26 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
         self.assertTrue(delay_task in finished)
         self.assertTrue(isinstance(delay_task.exception(), CommandTimeout))
         self.assertIsNone(imap_client.protocol.pending_sync_command)
+
+    @asyncio.coroutine
+    def test_idle_timeout__sends_idle_done(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        asyncio.async(imap_client.idle())
+        yield from self.imapserver.wait_state(IDLE, 'user')
+
+        yield from self.advance(TWENTY_NINE_MINUTES + 1)
+        yield from self.imapserver.wait_state(SELECTED, 'user')
+
+    @asyncio.coroutine
+    def test_wait_server_push_timeout__exits_queueget_without_timeout_error(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        asyncio.async(imap_client.idle())
+        yield from self.imapserver.wait_state(IDLE, 'user')
+
+        push_task = asyncio.async(imap_client.wait_server_push())
+        yield from self.advance(TWENTY_NINE_MINUTES + 1)
+
+        r = yield from asyncio.wait_for(push_task, 0)
+        self.assertEqual('stop_wait_server_push', r)

@@ -606,7 +606,8 @@ class IMAP4(object):
         return (yield from self.protocol.fetch(message_set, message_parts, timeout=self.timeout))
 
     @asyncio.coroutine
-    def idle(self):
+    def idle(self, timeout=TWENTY_NINE_MINUTES):
+        self.protocol.loop.call_later(timeout, self.idle_done)
         return (yield from self.protocol.idle())
 
     def idle_done(self):
@@ -621,7 +622,8 @@ class IMAP4(object):
 
     @asyncio.coroutine
     def wait_server_push(self, timeout=TWENTY_NINE_MINUTES):
-        return (yield from asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout))
+        self.protocol.loop.call_later(timeout, lambda: asyncio.async(self.stop_wait_server_push()))
+        return self.protocol.idle_queue.get()
 
     @asyncio.coroutine
     def noop(self):
