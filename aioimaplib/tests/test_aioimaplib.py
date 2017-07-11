@@ -656,16 +656,6 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
         self.assertIsNone(imap_client.protocol.pending_sync_command)
 
     @asyncio.coroutine
-    def test_idle_timeout__sends_idle_done(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
-
-        asyncio.async(imap_client.idle())
-        yield from self.imapserver.wait_state(IDLE, 'user')
-
-        yield from self.advance(TWENTY_NINE_MINUTES + 1)
-        yield from self.imapserver.wait_state(SELECTED, 'user')
-
-    @asyncio.coroutine
     def test_wait_server_push_timeout__exits_queueget_without_timeout_error(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
