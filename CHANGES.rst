@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.7.5
+------
+- [aiolib][fix] it's up to the user to send idle DONE
+
 V0.7.4
 ------
 - [aiolib] timeout for idle of 29 minutes + timeout of wait_server_push doesn't raise TimeoutException
