@@ -364,16 +364,25 @@ class ImapProtocol(asyncio.Protocol):
         arg_list = list(args)
         if arg_list[0] == 'uid':
             arg_list = list(args[1:])
-        uid = int(arg_list[0])
+        uids = self._build_fetch_range(arg_list[0])
         parts = arg_list[1:]
         parts_str = ' '.join(parts)
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
-            if message.uid == uid:
+            if message.uid in uids:
                 response = self._build_fetch_response(message, parts)
                 if 'BODY.PEEK' not in parts_str and ('BODY[]' in parts_str or 'RFC822' in parts_str):
                     message.flags.append('\Seen')
                 self.send_raw_untagged_line(response)
         self.send_tagged_line(tag, 'OK FETCH completed.')
+
+    def _build_fetch_range(self, uid_pattern):
+        range_re = re.compile(r'(\d):(\d|\*)')
+        match = range_re.match(uid_pattern)
+        if match:
+            if match.group(2) == '*':
+                return range(int(match.group(1)), sys.maxsize)
+            return range(int(match.group(1)), int(match.group(2)) + 1)
+        return [int(uid_pattern)]
 
     def _build_fetch_response(self, message, parts):
         response = ('%d FETCH (' % message.uid).encode()

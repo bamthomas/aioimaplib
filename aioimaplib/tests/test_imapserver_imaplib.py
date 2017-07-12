@@ -174,6 +174,20 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
 
     @asyncio.coroutine
+    def test_fetch_messages_by_uid_range(self):
+        mail = Mail.create(['user'], mail_from='me', subject='hello', content='whatever')
+        self.imapserver.receive(mail)
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        result, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1:1', '(UID FLAGS)')), 1)
+        self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
+
+        result, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '0:*', '(UID FLAGS)')), 1)
+        self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
+
+    @asyncio.coroutine
     def test_fetch_one_messages_by_uid_encoding_cp1252(self):
         self.imapserver.receive(Mail.create(['user'], mail_from='me', subject='hello', content='maître', encoding='cp1252'))
         imap_client = yield from self.login_user('user', 'pass', select=True)
