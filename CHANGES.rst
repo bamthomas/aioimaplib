@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.7.6
+------
+- [aiolib] idle : added loop methods
+
 V0.7.5
 ------
 - [aiolib][fix] it's up to the user to send idle DONE
