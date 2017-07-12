@@ -62,13 +62,13 @@ The RFC2177_ is implemented, to be able to wait for new mail messages without us
         yield from imap_client.login(user, password)
         yield from imap_client.select()
 
-        asyncio.async(imap_client.idle())
-        while True:
+        idle = yield from imap_client.idle_start(timeout=10)
+        while imap_client.has_pending_idle():
             msg = yield from imap_client.wait_server_push()
-            print('--> received from server: %s' % msg)
-            if 'EXISTS' in msg:
+            print(msg)
+            if msg == STOP_WAIT_SERVER_PUSH:
                 imap_client.idle_done()
-                break
+                yield from asyncio.wait_for(idle, 1)
 
         yield from imap_client.logout()
 

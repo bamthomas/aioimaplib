@@ -31,6 +31,7 @@ from collections import namedtuple
 # to avoid imap servers to kill the connection after 30mn idling
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
 TWENTY_NINE_MINUTES = 1740
+STOP_WAIT_SERVER_PUSH = 'stop_wait_server_push'
 
 log = logging.getLogger(__name__)
 
@@ -533,6 +534,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.transport.write(self.literal_data)
             self.transport.write(CRLF)
             self.literal_data = None
+        elif self.has_pending_idle_command():
+            log.debug('idle continuation line received : %s' % line)
+            self.idle_queue.put_nowait(line)
         else:
             log.info('server says %s (ignored)' % line)
 
@@ -617,14 +621,27 @@ class IMAP4(object):
     @asyncio.coroutine
     def stop_wait_server_push(self):
         if self.protocol.has_pending_idle_command():
-            yield from self.protocol.idle_queue.put('stop_wait_server_push')
+            yield from self.protocol.idle_queue.put(STOP_WAIT_SERVER_PUSH)
             return True
         return False
 
     @asyncio.coroutine
     def wait_server_push(self, timeout=TWENTY_NINE_MINUTES):
+        return (yield from asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout))
+
+    @asyncio.coroutine
+    def idle_start(self, timeout=TWENTY_NINE_MINUTES):
+        idle = asyncio.async(self.idle())
         self.protocol.loop.call_later(timeout, lambda: asyncio.async(self.stop_wait_server_push()))
-        return self.protocol.idle_queue.get()
+        yield from self.wait_idled()
+        return idle
+
+    @asyncio.coroutine
+    def wait_idled(self):
+        yield from self.wait_server_push(self.timeout)
+
+    def has_pending_idle(self):
+        return self.protocol.has_pending_idle_command()
 
     @asyncio.coroutine
     def noop(self):
