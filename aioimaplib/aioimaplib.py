@@ -17,6 +17,7 @@
 import asyncio
 import logging
 import ssl
+from copy import copy
 from datetime import datetime, timezone, timedelta
 import time
 from enum import Enum
@@ -152,6 +153,9 @@ class Command(object):
         if self._exception is not None:
             raise self._exception
 
+    def flush(self):
+        pass
+
     def _end_literal_data(self):
         self._expected_size = 0
         self._literal_data = None
@@ -167,6 +171,25 @@ class Command(object):
     def _reset_timer(self):
         self._timer.cancel()
         self._set_timer()
+
+
+class IdleCommand(Command):
+    def __init__(self, tag, queue, *args, prefix=None, untagged_resp_name=None,
+                 loop=asyncio.get_event_loop(), timeout=None):
+        super().__init__('IDLE', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name,
+                         loop=loop, timeout=timeout)
+        self.queue = queue
+        self.buffer = list()
+
+    def append_to_resp(self, line, result='Pending'):
+        if result != 'Pending':
+            super().append_to_resp(line, result)
+        else:
+            self.buffer.append(line)
+
+    def flush(self):
+        self.queue.put_nowait(copy(self.buffer))
+        self.buffer.clear()
 
 
 class Error(Exception):
@@ -245,6 +268,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def _handle_responses(self, data, line_handler, current_cmd=None):
         if not data:
+            if self.pending_sync_command is not None:
+                self.pending_sync_command.flush()
             return
         if current_cmd is not None and current_cmd.wait_literal_data():
             data = current_cmd.append_literal_data(data)
@@ -383,7 +408,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def idle(self):
         if 'IDLE' not in self.capabilities:
             Abort('server has not IDLE capability')
-        return (yield from self.execute(Command('IDLE', self.new_tag(), loop=self.loop)))
+        return (yield from self.execute(IdleCommand(self.new_tag(), self.idle_queue, loop=self.loop)))
+
+    def has_pending_idle_command(self):
+        return self.pending_sync_command is not None and self.pending_sync_command.name == 'IDLE'
 
     def idle_done(self):
         self.send('DONE')
@@ -475,17 +503,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         with (yield from self.state_condition):
             yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
 
-    def has_pending_idle_command(self):
-        return self.pending_sync_command is not None and self.pending_sync_command.name == 'IDLE'
-
     def _untagged_response(self, line):
         if self.pending_sync_command is not None:
-            if self.has_pending_idle_command():
-                asyncio.async(self.idle_queue.put(line))
-                return
-            else:
-                self.pending_sync_command.append_to_resp(line)
-                command = self.pending_sync_command
+            self.pending_sync_command.append_to_resp(line)
+            command = self.pending_sync_command
         else:
             match = message_data_re.match(line)
             if match:
@@ -534,9 +555,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.transport.write(self.literal_data)
             self.transport.write(CRLF)
             self.literal_data = None
-        elif self.has_pending_idle_command():
-            log.debug('idle continuation line received : %s' % line)
-            self.idle_queue.put_nowait(line)
+        elif self.pending_sync_command is not None:
+            log.debug('continuation line appended to pending sync command %s : %s' % (self.pending_sync_command, line))
+            self.pending_sync_command.append_to_resp(line)
         else:
             log.info('server says %s (ignored)' % line)
 

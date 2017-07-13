@@ -30,7 +30,7 @@ from aioimaplib.tests.test_imapserver import WithImapServer
 from mock import Mock, call
 from pytz import utc
 
-aioimaplib.log.setLevel(logging.WARNING)
+aioimaplib.log.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setLevel(logging.INFO)
 sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
@@ -396,16 +396,16 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def test_idle(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        idle = asyncio.async(imap_client.idle())
+        idle = yield from imap_client.idle_start(timeout=0.3)
         yield from imap_client.wait_idled()
-
         self.imapserver.receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
 
-        self.assertEquals('1 EXISTS', (yield from imap_client.wait_server_push()))
-        self.assertEquals('1 RECENT', (yield from imap_client.wait_server_push()))
+        self.assertEquals(['1 EXISTS', '1 RECENT'], (yield from imap_client.wait_server_push()))
 
         imap_client.idle_done()
         self.assertEquals(('OK', ['IDLE terminated']), (yield from asyncio.wait_for(idle, 1)))
+        with self.assertRaises(asyncio.TimeoutError):
+            yield from imap_client.wait_server_push(timeout=0.1)
 
     @asyncio.coroutine
     def test_idle_loop(self):
@@ -421,7 +421,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
                 imap_client.idle_done()
                 yield from asyncio.wait_for(idle, 1)
 
-        self.assertEqual(['1 EXISTS', '1 RECENT', STOP_WAIT_SERVER_PUSH], data)
+        self.assertEqual([['1 EXISTS', '1 RECENT'], STOP_WAIT_SERVER_PUSH], data)
 
     @asyncio.coroutine
     def test_idle_stop(self):
