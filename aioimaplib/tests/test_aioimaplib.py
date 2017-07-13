@@ -30,7 +30,7 @@ from aioimaplib.tests.test_imapserver import WithImapServer
 from mock import Mock, call
 from pytz import utc
 
-aioimaplib.log.setLevel(logging.DEBUG)
+aioimaplib.log.setLevel(logging.WARNING)
 sh = logging.StreamHandler()
 sh.setLevel(logging.INFO)
 sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
@@ -397,13 +397,14 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         idle = yield from imap_client.idle_start(timeout=0.3)
-        yield from imap_client.wait_idled()
         self.imapserver.receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
 
         self.assertEquals(['1 EXISTS', '1 RECENT'], (yield from imap_client.wait_server_push()))
 
         imap_client.idle_done()
         self.assertEquals(('OK', ['IDLE terminated']), (yield from asyncio.wait_for(idle, 1)))
+
+        self.assertTrue(imap_client._idle_waiter._cancelled)
         with self.assertRaises(asyncio.TimeoutError):
             yield from imap_client.wait_server_push(timeout=0.1)
 
@@ -674,7 +675,6 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
     @asyncio.coroutine
     def test_idle_start__exits_queueget_without_timeout_error(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-
         yield from imap_client.idle_start()
 
         push_task = asyncio.async(imap_client.wait_server_push(TWENTY_NINE_MINUTES + 2))

@@ -76,6 +76,26 @@ The RFC2177_ is implemented, to be able to wait for new mail messages without us
             loop = asyncio.get_event_loop()
             loop.run_until_complete(wait_for_new_message('my.imap.server', 'user', 'pass'))
 
+Or in a more event based style (the IDLE command is closed at each message from server):
+
+::
+
+   @asyncio.coroutine
+   def idle_loop(host, user, password):
+      imap_client = aioimaplib.IMAP4_SSL(host=host, timeout=30)
+      yield from imap_client.wait_hello_from_server()
+
+      yield from imap_client.login(user, password)
+      yield from imap_client.select()
+
+      while True:
+         print((yield from imap_client.uid('fetch', '1:*', 'FLAGS')))
+
+         idle = yield from imap_client.idle_start(timeout=60)
+         print((yield from imap_client.wait_server_push()))
+
+         imap_client.idle_done()
+         yield from asyncio.wait_for(idle, 30)
 
 Threading
 ---------

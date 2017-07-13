@@ -306,7 +306,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         elif line.startswith('*'):
             return self._untagged_response(line.replace('* ', ''))
         elif line.startswith('+'):
-            self._continuation(line.replace('+ ', ''))
+            self._continuation(line)
         else:
             log.info('unknown data received %s' % line)
 
@@ -568,6 +568,7 @@ class IMAP4(object):
         self.port = port
         self.host = host
         self.protocol = None
+        self._idle_waiter = None
         self.create_client(host, port, loop)
 
     def create_client(self, host, port, loop):
@@ -624,6 +625,8 @@ class IMAP4(object):
         return (yield from self.protocol.idle())
 
     def idle_done(self):
+        if self._idle_waiter is not None:
+            self._idle_waiter.cancel()
         self.protocol.idle_done()
 
     @asyncio.coroutine
@@ -639,14 +642,12 @@ class IMAP4(object):
 
     @asyncio.coroutine
     def idle_start(self, timeout=TWENTY_NINE_MINUTES):
+        if self._idle_waiter is not None:
+            self._idle_waiter.cancel()
         idle = asyncio.async(self.idle())
-        self.protocol.loop.call_later(timeout, lambda: asyncio.async(self.stop_wait_server_push()))
-        yield from self.wait_idled()
+        self._idle_waiter = self.protocol.loop.call_later(timeout, lambda: asyncio.async(self.stop_wait_server_push()))
+        yield from self.wait_server_push(self.timeout) # idling continuation
         return idle
-
-    @asyncio.coroutine
-    def wait_idled(self):
-        yield from self.wait_server_push(self.timeout)
 
     def has_pending_idle(self):
         return self.protocol.has_pending_idle_command()
