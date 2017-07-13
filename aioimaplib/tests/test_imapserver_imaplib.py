@@ -147,7 +147,7 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(RFC822)')), 1)
 
         self.assertEqual('OK', result)
-        self.assertEqual([(b'1 (RFC822 {360}', mail.as_bytes()), b')'], data)
+        self.assertEqual([(b'1 (UID 1 RFC822 {360}', mail.as_bytes()), b')'], data)
 
     @asyncio.coroutine
     def test_fetch_one_message_by_uid_with_bodypeek(self):
@@ -174,17 +174,31 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
 
     @asyncio.coroutine
+    def test_fetch_one_messages_by_id_without_body(self):
+        mail = Mail.create(['user'], mail_from='me', subject='hello', content='whatever')
+        self.imapserver.receive(mail)
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        result, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.fetch, '1', '(UID FLAGS)')), 1)
+        self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
+
+        result, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.fetch, '1', '(FLAGS)')), 1)
+        self.assertEqual([(b'1 (FLAGS ())')], data)
+
+    @asyncio.coroutine
     def test_fetch_messages_by_uid_range(self):
         mail = Mail.create(['user'], mail_from='me', subject='hello', content='whatever')
         self.imapserver.receive(mail)
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
         result, data = yield from asyncio.wait_for(
-            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1:1', '(UID FLAGS)')), 1)
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1:1', '(FLAGS)')), 1)
         self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
 
         result, data = yield from asyncio.wait_for(
-            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '0:*', '(UID FLAGS)')), 1)
+            self.loop.run_in_executor(None, functools.partial(imap_client.fetch, '0:*', '(UID FLAGS)')), 1)
         self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
 
     @asyncio.coroutine

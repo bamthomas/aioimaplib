@@ -362,14 +362,16 @@ class ImapProtocol(asyncio.Protocol):
 
     def fetch(self, tag, *args):
         arg_list = list(args)
+        by_uid = False
         if arg_list[0] == 'uid':
+            by_uid = True
             arg_list = list(args[1:])
-        uids = self._build_fetch_range(arg_list[0])
+        fetch_range = self._build_fetch_range(arg_list[0])
         parts = arg_list[1:]
         parts_str = ' '.join(parts)
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
-            if message.uid in uids:
-                response = self._build_fetch_response(message, parts)
+            if (by_uid and message.uid in fetch_range) or (not by_uid and message.id in fetch_range):
+                response = self._build_fetch_response(message, parts, by_uid=by_uid)
                 if 'BODY.PEEK' not in parts_str and ('BODY[]' in parts_str or 'RFC822' in parts_str):
                     message.flags.append('\Seen')
                 self.send_raw_untagged_line(response)
@@ -384,14 +386,15 @@ class ImapProtocol(asyncio.Protocol):
             return range(int(match.group(1)), int(match.group(2)) + 1)
         return [int(uid_pattern)]
 
-    def _build_fetch_response(self, message, parts):
-        response = ('%d FETCH (' % message.uid).encode()
+    def _build_fetch_response(self, message, parts, by_uid=True):
+        response = ('%d FETCH (UID %s' % (message.id, message.uid)).encode() if by_uid \
+            else ('%d FETCH (' % message.id).encode()
         for idx, part in enumerate(parts):
             if part.startswith('(') or part.endswith(')'):
                 part = part.strip('()')
-            if idx != 0:
+            if not response.endswith(b' ') and not response.endswith(b'('):
                 response += b' '
-            if part == 'UID':
+            if part == 'UID' and not by_uid:
                 response += ('UID %s' % message.uid).encode()
             if part == 'BODY[]' or part == 'BODY.PEEK[]' or part == 'RFC822':
                 response += ('%s {%s}\r\n' % (part, len(message.as_bytes()))).encode() + message.as_bytes()
