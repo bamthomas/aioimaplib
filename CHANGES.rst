@@ -1,6 +1,13 @@
 Changes
 =======
 
+
+V0.7.7
+------
+[aiolib] do not filter exists line for examine command
+[aiolib] idle : wait for the end of data frame before pushing into the queue
+[test] imapserver enhancements : accepts sequence sets/returns UID when fetch by uid
+
 V0.7.6
 ------
 - [aiolib] idle : added loop methods
