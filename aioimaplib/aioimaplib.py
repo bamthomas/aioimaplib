@@ -395,16 +395,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return response
 
     @asyncio.coroutine
-    def examine(self, mailbox='INBOX'):
-        response = yield from self.execute(
-            Command('EXAMINE', self.new_tag(), mailbox, loop=self.loop))
-
-        for line in response.lines:
-            if 'EXISTS' in line:
-                return Response(response.result, [line.replace(' EXISTS', '')])
-        return response
-
-    @asyncio.coroutine
     def idle(self):
         if 'IDLE' not in self.capabilities:
             Abort('server has not IDLE capability')
@@ -485,7 +475,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return (yield from self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop)))
 
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
-                       'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST'}
+                       'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE'}
 
     @asyncio.coroutine
     def simple_command(self, name, *args):
@@ -600,9 +590,6 @@ class IMAP4(object):
     def select(self, mailbox='INBOX'):
         return (yield from asyncio.wait_for(self.protocol.select(mailbox), self.timeout))
 
-    def examine(self, mailbox='INBOX'):
-        return (yield from asyncio.wait_for(self.protocol.examine(mailbox), self.timeout))
-
     @asyncio.coroutine
     def search(self, *criteria, charset='utf-8'):
         return (yield from asyncio.wait_for(self.protocol.search(*criteria, charset=charset), self.timeout))
@@ -671,6 +658,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def check(self):
         return (yield from asyncio.wait_for(self.protocol.simple_command('CHECK'), self.timeout))
+
+    @asyncio.coroutine
+    def examine(self, mailbox='INBOX'):
+        return (yield from asyncio.wait_for(self.protocol.simple_command('EXAMINE', mailbox), self.timeout))
 
     @asyncio.coroutine
     def status(self, mailbox, names):

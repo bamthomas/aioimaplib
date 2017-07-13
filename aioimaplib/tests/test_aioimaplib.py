@@ -320,7 +320,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def test_examine_no_messages(self):
         imap_client = yield from self.login_user('user', 'pass')
 
-        self.assertEquals(('OK', ['0']), (yield from imap_client.examine()))
+        self.assertEquals(0, extract_exists((yield from imap_client.examine())))
 
         self.assertEquals(aioimaplib.AUTH, imap_client.protocol.state)
 
@@ -531,7 +531,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         asyncio.async(imap_client.expunge())
         examine = asyncio.async(imap_client.examine('MBOX'))
 
-        self.assertEquals(('OK', ['1']), (yield from asyncio.wait_for(examine, 1)))
+        self.assertEquals(1, extract_exists((yield from asyncio.wait_for(examine, 1))))
 
     @asyncio.coroutine
     def test_noop(self):
@@ -608,14 +608,14 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     @asyncio.coroutine
     def test_append(self):
         imap_client = yield from self.login_user('user@mail', 'pass')
-        self.assertEquals(('OK', ['0']), (yield from imap_client.examine('INBOX')))
+        self.assertEquals(0, extract_exists((yield from imap_client.examine('INBOX'))))
 
         msg = Mail.create(['user@mail'], subject='append msg', content='do you see me ?')
         self.assertEquals(('OK', ['APPEND completed.']),
                           (yield from imap_client.append(msg.as_bytes(), mailbox='INBOX',
                                                          flags='FOO BAR', date=datetime.now(tz=utc), )))
 
-        self.assertEquals(('OK', ['1']), (yield from imap_client.examine('INBOX')))
+        self.assertEquals(1, extract_exists((yield from imap_client.examine('INBOX'))))
 
     @asyncio.coroutine
     def test_rfc5032_within(self):
