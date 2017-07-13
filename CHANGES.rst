@@ -1,6 +1,9 @@
 Changes
 =======
 
+V0.7.8
+------
+[aiolib] idle : added an idle_waiter for an event based idle loop
 
 V0.7.7
 ------
