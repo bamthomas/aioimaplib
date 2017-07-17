@@ -304,7 +304,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             current_cmd.append_to_resp(line)
             return current_cmd
         elif line.startswith('*'):
-            return self._untagged_response(line.replace('* ', ''))
+            return self._untagged_response(line)
         elif line.startswith('+'):
             self._continuation(line)
         else:
@@ -494,6 +494,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
 
     def _untagged_response(self, line):
+        line = line.replace('* ', '')
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
             command = self.pending_sync_command
