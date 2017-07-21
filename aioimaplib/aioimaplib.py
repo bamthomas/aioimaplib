@@ -427,8 +427,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                     prefix='UID' if by_uid else '', untagged_resp_name='FETCH', loop=self.loop)))
 
     @asyncio.coroutine
-    def expunge(self):
-        return (yield from self.execute(Command('EXPUNGE', self.new_tag(), loop=self.loop)))
+    def expunge(self, *args, by_uid=False):
+        return (yield from self.execute(
+            Command('EXPUNGE', self.new_tag(), *args,
+                    prefix='UID' if by_uid else '', loop=self.loop)))
 
     @asyncio.coroutine
     def uid(self, command, *criteria):
@@ -441,8 +443,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             return (yield from self.store(*criteria, by_uid=True))
         if command.upper() == 'COPY':
             return (yield from self.copy(*criteria, by_uid=True))
-        else:
-            raise Abort('command UID only possible with COPY, FETCH or STORE (was %s)' % command.upper())
+        if command.upper() == 'EXPUNGE':
+            if 'UIDPLUS' not in self.capabilities:
+                raise Abort('EXPUNGE with uids is only valid with UIDPLUS capability. UIDPLUS not in (%s)' % self.capabilities)
+            return (yield from self.expunge(*criteria, by_uid=True))
+        raise Abort('command UID only possible with COPY, FETCH, EXPUNGE (w/UIDPLUS) or STORE (was %s)' % command.upper())
 
     @asyncio.coroutine
     def copy(self, *args, by_uid=True):

@@ -369,7 +369,7 @@ class ImapProtocol(asyncio.Protocol):
         if arg_list[0] == 'uid':
             by_uid = True
             arg_list = list(args[1:])
-        fetch_range = self._build_fetch_range(arg_list[0])
+        fetch_range = self._build_sequence_range(arg_list[0])
         parts = arg_list[1:]
         parts_str = ' '.join(parts)
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
@@ -380,7 +380,7 @@ class ImapProtocol(asyncio.Protocol):
                 self.send_raw_untagged_line(response)
         self.send_tagged_line(tag, 'OK FETCH completed.')
 
-    def _build_fetch_range(self, uid_pattern):
+    def _build_sequence_range(self, uid_pattern):
         range_re = re.compile(r'(\d):(\d|\*)')
         match = range_re.match(uid_pattern)
         if match:
@@ -428,10 +428,17 @@ class ImapProtocol(asyncio.Protocol):
             self.server_state.add_mail(m.get('To'), Mail(m), mailbox_name)
 
     def expunge(self, tag, *args):
+        expunge_range = range(0, sys.maxsize)
+        uid_response = ''
+        if args and args[0] == 'uid':
+            uid_response = 'UID '
+            if len(args) > 1:
+                expunge_range = self._build_sequence_range(args[1])
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox).copy():
-            self.server_state.remove(message, self.user_login, self.user_mailbox)
-            self.send_untagged_line('{msg_uid} EXPUNGE'.format(msg_uid=message.uid))
-        self.send_tagged_line(tag, 'OK EXPUNGE completed.')
+            if message.uid in expunge_range:
+                self.server_state.remove(message, self.user_login, self.user_mailbox)
+                self.send_untagged_line('{msg_uid} EXPUNGE'.format(msg_uid=message.uid))
+        self.send_tagged_line(tag, 'OK %sEXPUNGE completed.' % uid_response)
 
     def capability(self, tag, *args):
         self.send_untagged_line('CAPABILITY IMAP4rev1 %s' % self.capabilities)

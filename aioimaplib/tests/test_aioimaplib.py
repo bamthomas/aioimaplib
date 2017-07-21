@@ -274,7 +274,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
-        self.assertEquals(['IMAP4rev1', 'LITERAL+', 'IDLE'], imap_client.protocol.capabilities)
+        self.assertEquals(['IMAP4rev1', 'IDLE', 'UIDPLUS'], imap_client.protocol.capabilities)
 
     @asyncio.coroutine
     def test_login(self):
@@ -339,12 +339,12 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def test_uid_with_illegal_command(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        for command in {'COPY', 'FETCH', 'STORE'}.symmetric_difference(Commands.keys()):
+        for command in {'COPY', 'FETCH', 'STORE', 'EXPUNGE'}.symmetric_difference(Commands.keys()):
             with self.assertRaises(aioimaplib.Abort) as expected:
                 yield from imap_client.uid(command)
 
             self.assertEqual(expected.exception.args,
-                             ('command UID only possible with COPY, FETCH or STORE (was %s)' % command,))
+                             ('command UID only possible with COPY, FETCH, EXPUNGE (w/UIDPLUS) or STORE (was %s)' % command,))
 
     @asyncio.coroutine
     def test_search_three_messages_by_uid(self):
@@ -628,6 +628,16 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertEquals('1', (yield from imap_client.search('OLDER', '84700')).lines[0])
         self.assertEquals('2 3', (yield from imap_client.search('YOUNGER', '84700')).lines[0])
 
+    @asyncio.coroutine
+    def test_rfc4315_uidplus_expunge(self):
+        self.imapserver.receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        self.assertEquals(('OK', ['1 EXPUNGE', 'UID EXPUNGE completed.']), (yield from imap_client.uid('expunge', '1:1')))
+
+        self.assertEquals(1, extract_exists((yield from imap_client.select())))
+
 
 class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
@@ -637,10 +647,17 @@ class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def tearDown(self):
         yield from self._shutdown_server()
 
-    def test_idle_messages_without_uidplus_return_error(self):
+    @asyncio.coroutine
+    def test_idle_messages_without_idle_capability_abort_command(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         with self.assertRaises(Abort):
             yield from imap_client.idle()
+
+    @asyncio.coroutine
+    def test_expunge_messages_without_uidplus_capability_abort_command(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        with self.assertRaises(Abort):
+            yield from imap_client.uid('expunge', '1:1')
 
 
 class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
