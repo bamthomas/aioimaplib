@@ -41,6 +41,7 @@ NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', '
 
 UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
 
+CAPABILITIES = 'IDLE UIDPLUS'
 
 class ServerState(object):
     def __init__(self):
@@ -160,7 +161,9 @@ command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\
 class ImapProtocol(asyncio.Protocol):
     IDLE_STILL_HERE_PERIOD_SECONDS = 10
 
-    def __init__(self, server_state, fetch_chunk_size=0, loop=asyncio.get_event_loop()):
+    def __init__(self, server_state, fetch_chunk_size=0, capabilities=CAPABILITIES,
+                 loop=asyncio.get_event_loop()):
+        self.capabilities = capabilities
         self.state_to_send = list()
         self.delay_seconds = 0
         self.loop = loop
@@ -431,7 +434,7 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK EXPUNGE completed.')
 
     def capability(self, tag, *args):
-        self.send_untagged_line('CAPABILITY IMAP4rev1 LITERAL+ IDLE')
+        self.send_untagged_line('CAPABILITY IMAP4rev1 %s' % self.capabilities)
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
 
     def copy(self, tag, *args):
@@ -531,9 +534,10 @@ class ImapProtocol(asyncio.Protocol):
 
 
 class MockImapServer(object):
-    def __init__(self, loop=None) -> None:
+    def __init__(self, capabilities=CAPABILITIES, loop=None) -> None:
         self._server_state = ServerState()
         self._connections = list()
+        self.capabilities = capabilities
         if loop is None:
             self.loop = asyncio.get_event_loop()
         else:
@@ -570,7 +574,7 @@ class MockImapServer(object):
 
     def run_server(self, host='localhost', port=1143, fetch_chunk_size=0):
         def create_protocol():
-            protocol = ImapProtocol(self._server_state, fetch_chunk_size, self.loop)
+            protocol = ImapProtocol(self._server_state, fetch_chunk_size, self.capabilities, self.loop)
             self._connections.append(protocol)
             return protocol
 

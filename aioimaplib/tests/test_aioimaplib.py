@@ -23,7 +23,7 @@ import asynctest
 
 from aioimaplib import aioimaplib, CommandTimeout, extract_exists, IncompleteLiteral, \
     TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH
-from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response
+from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response, Abort
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.test_imapserver import WithImapServer
@@ -627,6 +627,20 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
 
         self.assertEquals('1', (yield from imap_client.search('OLDER', '84700')).lines[0])
         self.assertEquals('2 3', (yield from imap_client.search('YOUNGER', '84700')).lines[0])
+
+
+class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
+    def setUp(self):
+        self._init_server(self.loop, capabilities='')
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+
+    def test_idle_messages_without_uidplus_return_error(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        with self.assertRaises(Abort):
+            yield from imap_client.idle()
 
 
 class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):

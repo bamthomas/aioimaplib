@@ -108,9 +108,12 @@ class TestServerState(unittest.TestCase):
 
 
 class WithImapServer(object):
-    def _init_server(self, loop):
+    def _init_server(self, loop, capabilities=None):
         self.loop = loop
-        self.imapserver = MockImapServer(loop=loop)
+        if capabilities is not None:
+            self.imapserver = MockImapServer(loop=loop, capabilities=capabilities)
+        else:
+            self.imapserver = MockImapServer(loop=loop)
         self.server = self.imapserver.run_server(host='localhost', port=12345, fetch_chunk_size=64)
 
     @asyncio.coroutine

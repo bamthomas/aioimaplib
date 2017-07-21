@@ -397,7 +397,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def idle(self):
         if 'IDLE' not in self.capabilities:
-            Abort('server has not IDLE capability')
+            raise Abort('server has not IDLE capability')
         return (yield from self.execute(IdleCommand(self.new_tag(), self.idle_queue, loop=self.loop)))
 
     def has_pending_idle_command(self):
