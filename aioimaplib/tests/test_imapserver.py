@@ -25,8 +25,10 @@ import functools
 
 import asynctest
 import pytz
+import sys
+
 from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import ServerState, Mail, MockImapServer
+from aioimaplib.tests.imapserver import ServerState, Mail, MockImapServer, ImapProtocol
 
 
 class TestMailToString(unittest.TestCase):
@@ -82,6 +84,12 @@ class TestMailToString(unittest.TestCase):
 
         mail = imapserver.Mail.create(['user'], mail_from='Test <test@test>', subject='subject')
         self.assertEquals(mail.email.get('From'), 'Test <test@test>')
+
+    def test_build_sequence_range(self):
+        self.assertEqual(range(1, 3), ImapProtocol(None)._build_sequence_range('1:2'))
+        self.assertEqual(range(1, 12), ImapProtocol(None)._build_sequence_range('1:11'))
+        self.assertEqual(range(1, sys.maxsize), ImapProtocol(None)._build_sequence_range('1:*'))
+        self.assertEqual([42], ImapProtocol(None)._build_sequence_range('42'))
 
 
 class TestServerState(unittest.TestCase):

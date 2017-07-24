@@ -381,7 +381,7 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK FETCH completed.')
 
     def _build_sequence_range(self, uid_pattern):
-        range_re = re.compile(r'(\d):(\d|\*)')
+        range_re = re.compile(r'(\d):(\d+|\*)')
         match = range_re.match(uid_pattern)
         if match:
             if match.group(2) == '*':
