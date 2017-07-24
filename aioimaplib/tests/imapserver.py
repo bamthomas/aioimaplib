@@ -43,6 +43,12 @@ UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
 
 CAPABILITIES = 'IDLE UIDPLUS'
 
+
+class InvalidUidSet(RuntimeError):
+    def __init__(self, *args) -> None:
+        super().__init__(*args)
+
+
 class ServerState(object):
     def __init__(self):
         self.mailboxes = dict()
@@ -369,7 +375,10 @@ class ImapProtocol(asyncio.Protocol):
         if arg_list[0] == 'uid':
             by_uid = True
             arg_list = list(args[1:])
-        fetch_range = self._build_sequence_range(arg_list[0])
+        try:
+            fetch_range = self._build_sequence_range(arg_list[0])
+        except InvalidUidSet:
+            return self.error(tag, 'Error in IMAP command: Invalid uidset')
         parts = arg_list[1:]
         parts_str = ' '.join(parts)
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
@@ -381,12 +390,20 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK FETCH completed.')
 
     def _build_sequence_range(self, uid_pattern):
-        range_re = re.compile(r'(\d):(\d+|\*)')
+        range_re = re.compile(r'(\d+):(\d+|\*)')
         match = range_re.match(uid_pattern)
         if match:
+            start = int(match.group(1))
+            if start <= 0:
+                raise InvalidUidSet()
+
             if match.group(2) == '*':
-                return range(int(match.group(1)), sys.maxsize)
-            return range(int(match.group(1)), int(match.group(2)) + 1)
+                return range(start, sys.maxsize)
+
+            end = int(match.group(2))
+            if end <= 0 or end < start:
+                raise InvalidUidSet()
+            return range(start, end + 1)
         return [int(uid_pattern)]
 
     def _build_fetch_response(self, message, parts, by_uid=True):
@@ -433,7 +450,10 @@ class ImapProtocol(asyncio.Protocol):
         if args and args[0] == 'uid':
             uid_response = 'UID '
             if len(args) > 1:
-                expunge_range = self._build_sequence_range(args[1])
+                try:
+                    expunge_range = self._build_sequence_range(args[1])
+                except InvalidUidSet:
+                    return self.error(tag, 'Error in IMAP command: Invalid uidset')
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox).copy():
             if message.uid in expunge_range:
                 self.server_state.remove(message, self.user_login, self.user_mailbox)

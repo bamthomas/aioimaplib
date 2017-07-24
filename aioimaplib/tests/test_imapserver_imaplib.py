@@ -198,7 +198,7 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
 
         result, data = yield from asyncio.wait_for(
-            self.loop.run_in_executor(None, functools.partial(imap_client.fetch, '0:*', '(UID FLAGS)')), 1)
+            self.loop.run_in_executor(None, functools.partial(imap_client.fetch, '1:*', '(UID FLAGS)')), 1)
         self.assertEqual([(b'1 (UID 1 FLAGS ())')], data)
 
     @asyncio.coroutine

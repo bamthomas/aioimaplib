@@ -28,7 +28,7 @@ import pytz
 import sys
 
 from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import ServerState, Mail, MockImapServer, ImapProtocol
+from aioimaplib.tests.imapserver import ServerState, Mail, MockImapServer, ImapProtocol, InvalidUidSet
 
 
 class TestMailToString(unittest.TestCase):
@@ -88,8 +88,19 @@ class TestMailToString(unittest.TestCase):
     def test_build_sequence_range(self):
         self.assertEqual(range(1, 3), ImapProtocol(None)._build_sequence_range('1:2'))
         self.assertEqual(range(1, 12), ImapProtocol(None)._build_sequence_range('1:11'))
+        self.assertEqual(range(1234, 12346), ImapProtocol(None)._build_sequence_range('1234:12345'))
         self.assertEqual(range(1, sys.maxsize), ImapProtocol(None)._build_sequence_range('1:*'))
         self.assertEqual([42], ImapProtocol(None)._build_sequence_range('42'))
+
+    def test_build_sequence_badrange(self):
+        with self.assertRaises(InvalidUidSet):
+            ImapProtocol(None)._build_sequence_range('0:2')
+
+        with self.assertRaises(InvalidUidSet):
+            ImapProtocol(None)._build_sequence_range('2:0')
+
+        with self.assertRaises(InvalidUidSet):
+            ImapProtocol(None)._build_sequence_range('2:1')
 
 
 class TestServerState(unittest.TestCase):
