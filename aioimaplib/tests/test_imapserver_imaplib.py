@@ -150,6 +150,22 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         self.assertEqual([(b'1 (UID 1 RFC822 {360}', mail.as_bytes()), b')'], data)
 
     @asyncio.coroutine
+    def test_fetch_bad_range(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        with self.assertRaises(Exception) as expected:
+            yield from asyncio.wait_for(
+                self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '0:*', '(RFC822)')), 1)
+
+        self.assertEqual('UID command error: BAD [b\'Error in IMAP command: Invalid uidset\']', str(expected.exception))
+
+        with self.assertRaises(Exception) as expected:
+            yield from asyncio.wait_for(
+                self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '2:0', '(RFC822)')), 1)
+
+        self.assertEqual('UID command error: BAD [b\'Error in IMAP command: Invalid uidset\']', str(expected.exception))
+
+    @asyncio.coroutine
     def test_fetch_one_message_by_uid_with_bodypeek(self):
         mail = Mail.create(['user'], mail_from='me', subject='hello', content='this mail is still unread')
         self.imapserver.receive(mail)
