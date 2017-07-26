@@ -31,7 +31,6 @@ from collections import namedtuple
 
 # to avoid imap servers to kill the connection after 30mn idling
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
-from functools import reduce
 
 TWENTY_NINE_MINUTES = 1740
 STOP_WAIT_SERVER_PUSH = 'stop_wait_server_push'
@@ -235,9 +234,10 @@ class CommandTimeout(asyncio.TimeoutError):
         self.command = command
 
 
-class IncompleteCommand(Exception):
-    def __init__(self, cmd):
+class IncompleteRead(Exception):
+    def __init__(self, cmd, data=b''):
         self.cmd = cmd
+        self.data = data
 
 
 def change_state(coro):
@@ -288,29 +288,26 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self._handle_responses(self.incomplete_line + d, self._handle_line, self.current_command)
             self.incomplete_line = b''
             self.current_command = None
-        except IncompleteCommand as incomplete_command:
-            self.current_command = incomplete_command.cmd
-            self.incomplete_line = b''
-        except asyncio.IncompleteReadError as incomplete_read:
-            log.debug('Incomplete line, storing partial : %s' % incomplete_read.partial[:100])
-            self.incomplete_line = incomplete_read.partial
+        except IncompleteRead as incomplete_read:
+            self.current_command = incomplete_read.cmd
+            self.incomplete_line = incomplete_read.data
 
     def _handle_responses(self, data, line_handler, current_cmd=None):
         if not data:
             if self.pending_sync_command is not None:
                 self.pending_sync_command.flush()
             if current_cmd is not None and current_cmd.wait_data():
-                raise IncompleteCommand(current_cmd)
+                raise IncompleteRead(current_cmd)
             return
 
         if current_cmd is not None and current_cmd.wait_literal_data():
             data = current_cmd.append_literal_data(data)
             if current_cmd.wait_literal_data():
-                raise IncompleteCommand(current_cmd)
+                raise IncompleteRead(current_cmd)
 
         line, separator, tail = data.partition(CRLF)
         if not separator:
-            raise asyncio.IncompleteReadError(data, b'line should end with CRLF')
+            raise IncompleteRead(current_cmd, data)
 
         cmd = line_handler(line.decode(), current_cmd)
 

@@ -162,7 +162,7 @@ class TestAioimaplibUtils(unittest.TestCase):
         cmd = FetchCommand('TAG')
         self.imap_protocol._handle_line = MagicMock(return_value=cmd)
 
-        line = b'* 12 FETCH (FLAGS (\Seen) BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028\r\n'
+        line = b'* 12 FETCH (FLAGS (\Seen) BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028 \r\n'
         cmd.append_to_resp(line.decode())
         self.imap_protocol.data_received(line)
         line = b'92))\r\nTAG OK FETCH completed\r\n'
@@ -170,8 +170,19 @@ class TestAioimaplibUtils(unittest.TestCase):
         self.imap_protocol.data_received(line)
 
         self.imap_protocol._handle_line.assert_has_calls(
-            [call('* 12 FETCH (FLAGS (\Seen) BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028', None),
+            [call('* 12 FETCH (FLAGS (\Seen) BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028 ', None),
              call('92))', cmd), call('TAG OK FETCH completed', None)])
+
+    def test_uncomplete_fetch_with_uncomplete_line(self):
+        cmd = FetchCommand('TAG')
+        self.imap_protocol._handle_line = MagicMock(return_value=cmd)
+
+        self.imap_protocol.data_received(b'* 21 FETCH (FLAGS (\Seen) BODY[] {16}\r\nuncomplete fetch')
+        self.imap_protocol.data_received(b')\r\nTAG OK FETCH completed\r\n')
+
+        self.imap_protocol._handle_line.assert_has_calls(
+            [call('* 21 FETCH (FLAGS (\Seen) BODY[] {16}', None),
+             call(')', cmd), call('TAG OK FETCH completed', None)])
 
     def test_command_repr(self):
         self.assertEqual('tag NAME', str(Command('NAME', 'tag')))
