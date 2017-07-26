@@ -1,6 +1,14 @@
 Changes
 =======
 
+V0.7.9
+------
+[aiolib] adds uncomplete fetch command with uncomplete line
+[aiolib] adds uncomplete fetch command BODY without literal
+[aiolib] adds rfc4315 uidplus : expunge with uids
+[test] handles uidset better in imap server
+[test] refactor testing IMAP4ClientProtocol.data_received instead of _handle_responses
+
 V0.7.8
 ------
 [aiolib] idle : added an idle_waiter for an event based idle loop
