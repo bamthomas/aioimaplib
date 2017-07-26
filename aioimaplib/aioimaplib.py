@@ -31,6 +31,8 @@ from collections import namedtuple
 
 # to avoid imap servers to kill the connection after 30mn idling
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
+from functools import reduce
+
 TWENTY_NINE_MINUTES = 1740
 STOP_WAIT_SERVER_PUSH = 'stop_wait_server_push'
 
@@ -130,6 +132,9 @@ class Command(object):
     def wait_literal_data(self):
         return self._expected_size != 0 and len(self._literal_data) != self._expected_size
 
+    def wait_data(self):
+        return self.wait_literal_data()
+
     def append_literal_data(self, data):
         nb_bytes_to_add = self._expected_size - len(self._literal_data)
         self._literal_data += data[0:nb_bytes_to_add]
@@ -173,6 +178,29 @@ class Command(object):
         self._set_timer()
 
 
+class FetchCommand(Command):
+    FETCH_MESSAGE_DATA_RE = re.compile(r'[0-9]+ FETCH \(')
+
+    def __init__(self, tag, *args, prefix=None, untagged_resp_name=None,
+                 loop=asyncio.get_event_loop(), timeout=None):
+        super().__init__('FETCH', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name,
+                         loop=loop, timeout=timeout)
+
+    def wait_data(self):
+        if self.response is None:
+            return False
+        last_fetch_index = 0
+        for index, line in enumerate(self.response.lines):
+            if isinstance(line, str) and self.FETCH_MESSAGE_DATA_RE.match(line):
+                last_fetch_index = index
+        return not matched_parenthesis(''.join(filter(lambda l: isinstance(l, str),
+                                                      self.response.lines[last_fetch_index:])))
+
+
+def matched_parenthesis(string):
+    return string.count('(') == string.count(')')
+
+
 class IdleCommand(Command):
     def __init__(self, tag, queue, *args, prefix=None, untagged_resp_name=None,
                  loop=asyncio.get_event_loop(), timeout=None):
@@ -207,7 +235,7 @@ class CommandTimeout(asyncio.TimeoutError):
         self.command = command
 
 
-class IncompleteLiteral(Exception):
+class IncompleteCommand(Exception):
     def __init__(self, cmd):
         self.cmd = cmd
 
@@ -260,8 +288,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self._handle_responses(self.incomplete_line + d, self._handle_line, self.current_command)
             self.incomplete_line = b''
             self.current_command = None
-        except IncompleteLiteral as incomplete_literal:
-            self.current_command = incomplete_literal.cmd
+        except IncompleteCommand as incomplete_command:
+            self.current_command = incomplete_command.cmd
             self.incomplete_line = b''
         except asyncio.IncompleteReadError as incomplete_read:
             log.debug('Incomplete line, storing partial : %s' % incomplete_read.partial[:100])
@@ -271,11 +299,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if not data:
             if self.pending_sync_command is not None:
                 self.pending_sync_command.flush()
+            if current_cmd is not None and current_cmd.wait_data():
+                raise IncompleteCommand(current_cmd)
             return
+
         if current_cmd is not None and current_cmd.wait_literal_data():
             data = current_cmd.append_literal_data(data)
             if current_cmd.wait_literal_data():
-                raise IncompleteLiteral(current_cmd)
+                raise IncompleteCommand(current_cmd)
 
         line, separator, tail = data.partition(CRLF)
         if not separator:
@@ -289,6 +320,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if cmd is None:
                 cmd = Command('NIL', 'unused')
             cmd.begin_literal_data(size)
+            self._handle_responses(tail, line_handler, current_cmd=cmd)
+        elif cmd is not None and cmd.wait_data():
             self._handle_responses(tail, line_handler, current_cmd=cmd)
         else:
             self._handle_responses(tail, line_handler)
@@ -418,8 +451,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def fetch(self, message_set, message_parts, by_uid=False, timeout=None):
         return (yield from self.execute(
-            Command('FETCH', self.new_tag(), message_set, message_parts,
-                    prefix='UID' if by_uid else '', loop=self.loop, timeout=timeout)))
+            FetchCommand(self.new_tag(), message_set, message_parts,
+                         prefix='UID' if by_uid else '', loop=self.loop, timeout=timeout)))
 
     @asyncio.coroutine
     def store(self, *args, by_uid=False):

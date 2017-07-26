@@ -23,8 +23,8 @@ import asynctest
 from mock import call, MagicMock
 from pytz import utc
 
-from aioimaplib import aioimaplib, CommandTimeout, extract_exists, IncompleteLiteral, \
-    TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH
+from aioimaplib import aioimaplib, CommandTimeout, extract_exists, \
+    TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH, FetchCommand
 from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response, Abort
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
@@ -157,11 +157,65 @@ class TestAioimaplibUtils(unittest.TestCase):
                                             call(')', cmd), call('TAG OK FETCH completed', None)])
         self.assertEqual([b'on the dot'], cmd.response.lines)
 
+    # cf 1st FETCH in https://tools.ietf.org/html/rfc3501#section-8 example
+    def test_uncomplete_fetch_message_attributes_without_literal(self):
+        cmd = FetchCommand('TAG')
+        self.imap_protocol._handle_line = MagicMock(return_value=cmd)
+
+        line = b'* 12 FETCH (FLAGS (\Seen) BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028\r\n'
+        cmd.append_to_resp(line.decode())
+        self.imap_protocol.data_received(line)
+        line = b'92))\r\nTAG OK FETCH completed\r\n'
+        cmd.append_to_resp(line.decode())
+        self.imap_protocol.data_received(line)
+
+        self.imap_protocol._handle_line.assert_has_calls(
+            [call('* 12 FETCH (FLAGS (\Seen) BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028', None),
+             call('92))', cmd), call('TAG OK FETCH completed', None)])
+
     def test_command_repr(self):
         self.assertEqual('tag NAME', str(Command('NAME', 'tag')))
         self.assertEqual('tag NAME arg1 arg2', str(Command('NAME', 'tag', 'arg1', 'arg2')))
         self.assertEqual('tag UID NAME arg', str(Command('NAME', 'tag', 'arg', prefix='UID')))
         self.assertEqual('tag UID NAME', str(Command('NAME', 'tag', prefix='UID')))
+
+
+class TestFetchWaitsForAllMessageAttributes(unittest.TestCase):
+    def test_empty_fetch(self):
+        self.assertFalse(FetchCommand('TAG').wait_data())
+
+    def test_simple_fetch(self):
+        fetch = FetchCommand('TAG')
+        fetch.append_to_resp('12 FETCH (FLAGS (\Seen))')
+
+        self.assertFalse(fetch.wait_data())
+
+    def test_simple_fetch_with_two_lines(self):
+        fetch = FetchCommand('TAG')
+        fetch.append_to_resp('12 FETCH (FLAGS (\Seen) BODY ("TEXT" "PLAIN" ("CHARSET" "US-ASCII") NIL NIL "7BIT" 3028')
+        self.assertTrue(fetch.wait_data())
+
+        fetch.append_to_resp('92))')
+        self.assertFalse(fetch.wait_data())
+
+    def test_fetch_with_litteral(self):
+        fetch = FetchCommand('TAG')
+        fetch.append_to_resp('12 FETCH (FLAGS () BODY[] {13}')
+        fetch.begin_literal_data(13, b'literal (data')
+        fetch.append_to_resp(')')
+
+        self.assertFalse(fetch.wait_data())
+
+    def test_fetch_only_the_last_message_data(self):
+        fetch = FetchCommand('TAG')
+        fetch.append_to_resp('12 FETCH (FLAGS (\Seen)') # not closed on purpose
+        self.assertTrue(fetch.wait_data())
+
+        fetch.append_to_resp('13 FETCH (FLAGS (\Seen)')
+        self.assertTrue(fetch.wait_data())
+
+        fetch.append_to_resp(')')
+        self.assertFalse(fetch.wait_data())
 
 
 class TestAioimaplibCommand(asynctest.ClockedTestCase):
