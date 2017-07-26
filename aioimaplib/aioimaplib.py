@@ -262,6 +262,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.current_command = None
         except IncompleteLiteral as incomplete_literal:
             self.current_command = incomplete_literal.cmd
+            self.incomplete_line = b''
         except asyncio.IncompleteReadError as incomplete_read:
             log.debug('Incomplete line, storing partial : %s' % incomplete_read.partial[:100])
             self.incomplete_line = incomplete_read.partial

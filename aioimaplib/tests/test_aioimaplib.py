@@ -20,6 +20,8 @@ import unittest
 from datetime import datetime, timedelta
 
 import asynctest
+from mock import Mock, call, MagicMock
+from pytz import utc
 
 from aioimaplib import aioimaplib, CommandTimeout, extract_exists, IncompleteLiteral, \
     TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH
@@ -27,8 +29,6 @@ from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Respon
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.test_imapserver import WithImapServer
-from mock import Mock, call
-from pytz import utc
 
 aioimaplib.log.setLevel(logging.WARNING)
 sh = logging.StreamHandler()
@@ -156,6 +156,18 @@ class TestAioimaplibUtils(unittest.TestCase):
                                              call(')))', cmd)])
 
         self.assertEqual([b'G\xe9n\xe9ration 3.ics', b'G\xe9n\xe9ration 3.ics'], cmd.response.lines)
+
+    def test_uncomplete_line_followed_by_uncomplete_literal(self):
+        cmd = Command('FETCH', 'TAG')
+        self.imap_protocol._handle_line = MagicMock(return_value=cmd)
+
+        self.imap_protocol.data_received(b'* 2 FETCH (')
+        self.imap_protocol.data_received(b'FLAGS () UID 160016 BODY[] {10}\r\non the ')
+        self.imap_protocol.data_received(b'dot)\r\nTAG OK FETCH completed\r\n')
+
+        self.imap_protocol._handle_line.assert_has_calls([call('* 2 FETCH (FLAGS () UID 160016 BODY[] {10}', None),
+                                            call(')', cmd), call('TAG OK FETCH completed', None)])
+        self.assertEqual([b'on the dot'], cmd.response.lines)
 
     def test_command_repr(self):
         self.assertEqual('tag NAME', str(Command('NAME', 'tag')))
