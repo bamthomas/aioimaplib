@@ -340,6 +340,8 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
 
         self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
         self.assertEquals(['IMAP4rev1', 'IDLE', 'UIDPLUS'], imap_client.protocol.capabilities)
+        self.assertTrue(imap_client.has_capability('IDLE'))
+        self.assertTrue(imap_client.has_capability('UIDPLUS'))
 
     @asyncio.coroutine
     def test_login(self):

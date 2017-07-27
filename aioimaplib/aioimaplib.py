@@ -741,6 +741,9 @@ class IMAP4(object):
     def close(self):
         return (yield from asyncio.wait_for(self.protocol.close(), self.timeout))
 
+    def has_capability(self, capability):
+        return capability in self.protocol.capabilities
+
 
 def extract_exists(response):
     for line in response.lines:
