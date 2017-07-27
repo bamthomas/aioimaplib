@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.7.10
+-------
+[aiolib] adds IMAP4.has_capability function
+
 V0.7.9
 ------
 [aiolib] adds uncomplete fetch command with uncomplete line
