@@ -516,7 +516,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         self.assertEqual('', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
 
-        self.assertEquals('OK', (yield from imap_client.uid('store', '1', '+FLAGS FOO')).result)
+        self.assertEquals('OK', (yield from imap_client.uid('store', '1', '+FLAGS (FOO)')).result)
 
         self.assertEqual('1', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
         self.assertEqual('2', (yield from imap_client.uid_search('UNKEYWORD FOO', charset=None)).lines[0])
@@ -581,7 +581,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        store = asyncio.async(imap_client.store('1', '+FLAGS FOO'))
+        store = asyncio.async(imap_client.store('1', '+FLAGS (FOO)'))
         copy = asyncio.async(imap_client.copy('1', 'MBOX'))
         expunge = asyncio.async(imap_client.expunge())
 

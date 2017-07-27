@@ -161,7 +161,7 @@ def critical_section(next_state):
     return decorator
 
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\[\]\+\-]+)?$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\[\]\+\-\\]+)?$)')
 
 
 class ImapProtocol(asyncio.Protocol):
@@ -360,11 +360,11 @@ class ImapProtocol(asyncio.Protocol):
         arg_list = list(args)
         if arg_list[0] == 'uid':
             arg_list = list(args[1:])
-        uid = int(arg_list[0])  # args = ['12', '+FLAGS', 'FOO']
-        flag = arg_list[2]  # only support one flag and do not handle replacement (without + sign)
+        uid = int(arg_list[0])  # args = ['12', '+FLAGS', '(FOO)']
+        flags = ' '.join(arg_list[2:]).strip('()').split() # only support one flag and do not handle replacement (without + sign)
         for message in self.server_state.get_mailbox_messages(self.user_login, self.user_mailbox):
             if message.uid == uid:
-                message.flags.append(flag)
+                message.flags.extend(flags)
                 self.send_untagged_line('{uid} FETCH (UID {uid} FLAGS ({flags}))'.format(
                     uid=uid, flags=' '.join(message.flags)))
         self.send_tagged_line(tag, 'OK Store completed.')

@@ -242,6 +242,21 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         self.assertEqual(2, len(data))
 
     @asyncio.coroutine
+    def test_store(self):
+        self.imapserver.receive(Mail.create(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        result, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'store', '1', '+FLAGS.SILENT (\Seen \Answered)')), 1)
+        self.assertEqual('OK', result)
+
+        result, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', 'UID (FLAGS)')), 1)
+
+        self.assertEqual('OK', result)
+        self.assertEqual([b'1 (UID 1 FLAGS (\Seen \Answered))'], data)
+
+    @asyncio.coroutine
     def test_store_and_search_by_keyword(self):
         self.imapserver.receive(Mail.create(['user']))
         self.imapserver.receive(Mail.create(['user']))
@@ -254,7 +269,7 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         self.assertEqual([b''], data)
 
         result, data = yield from asyncio.wait_for(
-            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'store', '1', '+FLAGS FOO')), 1)
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'store', '1', '+FLAGS (FOO)')), 1)
         self.assertEqual('OK', result)
 
         result, data = yield from asyncio.wait_for(
