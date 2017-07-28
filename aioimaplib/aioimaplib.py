@@ -266,7 +266,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport = None
         self.state = STARTED
         self.state_condition = asyncio.Condition()
-        self.capabilities = ()
+        self.capabilities = set()
         self.pending_async_commands = dict()
         self.pending_sync_command = None
         self.idle_queue = asyncio.Queue()
@@ -397,6 +397,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         if 'OK' == response.result:
             self.state = AUTH
+            for line in response.lines:
+                if 'CAPABILITY' in line:
+                    self.capabilities = self.capabilities.union(set(line.replace('CAPABILITY', '').strip().split()))
         return response
 
     @change_state
@@ -489,8 +492,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def capability(self):
         response = yield from self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
-        self.capabilities = response.lines[0].split()
-        version = self.capabilities[0].upper()
+        capability_list = response.lines[0].split()
+        self.capabilities = set(capability_list)
+        version = capability_list[0].upper()
         if version not in AllowedVersions:
             raise Error('server not IMAP4 compliant')
         else:

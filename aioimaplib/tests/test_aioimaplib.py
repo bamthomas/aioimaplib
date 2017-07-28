@@ -339,9 +339,8 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
-        self.assertEquals(['IMAP4rev1', 'IDLE', 'UIDPLUS'], imap_client.protocol.capabilities)
-        self.assertTrue(imap_client.has_capability('IDLE'))
-        self.assertTrue(imap_client.has_capability('UIDPLUS'))
+        self.assertEquals(['IMAP4rev1', 'YESAUTH'], imap_client.protocol.capabilities)
+        self.assertTrue(imap_client.has_capability('YESAUTH'))
 
     @asyncio.coroutine
     def test_login(self):
@@ -353,6 +352,9 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertEquals(aioimaplib.AUTH, imap_client.protocol.state)
         self.assertEqual('OK', result)
         self.assertEqual('LOGIN completed', data[-1])
+        self.assertTrue(imap_client.has_capability('IDLE'))
+        self.assertTrue(imap_client.has_capability('UIDPLUS'))
+
 
     @asyncio.coroutine
     def test_login_twice(self):

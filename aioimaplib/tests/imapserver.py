@@ -245,7 +245,7 @@ class ImapProtocol(asyncio.Protocol):
     def login(self, tag, *args):
         self.user_login = args[0]
         self.server_state.login(self.user_login, self)
-        self.send_untagged_line('CAPABILITY IMAP4rev1')
+        self.send_untagged_line('CAPABILITY IMAP4rev1 %s' % self.capabilities)
         self.send_tagged_line(tag, 'OK LOGIN completed')
 
     @critical_section(next_state=LOGOUT)
@@ -461,7 +461,7 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK %sEXPUNGE completed.' % uid_response)
 
     def capability(self, tag, *args):
-        self.send_untagged_line('CAPABILITY IMAP4rev1 %s' % self.capabilities)
+        self.send_untagged_line('CAPABILITY IMAP4rev1 YESAUTH')
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
 
     def copy(self, tag, *args):
