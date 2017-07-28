@@ -1,6 +1,10 @@
 Changes
 =======
 
+V0.7.11
+-------
+[aiolib] adds rfc6851 move
+
 V0.7.10
 -------
 [aiolib] adds IMAP4.has_capability function
