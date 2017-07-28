@@ -69,6 +69,7 @@ Commands = {
     'LOGOUT':       Cmd('LOGOUT',       (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.sync),
     'LSUB':         Cmd('LSUB',         (AUTH, SELECTED),           Exec.async),
     'MYRIGHTS':     Cmd('MYRIGHTS',     (AUTH, SELECTED),           Exec.async),
+    'MOVE':         Cmd('MOVE',         (SELECTED,),                Exec.sync),
     'NAMESPACE':    Cmd('NAMESPACE',    (AUTH, SELECTED),           Exec.async),
     'NOOP':         Cmd('NOOP',         (NONAUTH, AUTH, SELECTED),  Exec.async),
     'RENAME':       Cmd('RENAME',       (AUTH, SELECTED),           Exec.async),
@@ -477,6 +478,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             return (yield from self.store(*criteria, by_uid=True))
         if command.upper() == 'COPY':
             return (yield from self.copy(*criteria, by_uid=True))
+        if command.upper() == 'MOVE':
+            return (yield from self.move(*criteria, by_uid=True))
         if command.upper() == 'EXPUNGE':
             if 'UIDPLUS' not in self.capabilities:
                 raise Abort('EXPUNGE with uids is only valid with UIDPLUS capability. UIDPLUS not in (%s)' % self.capabilities)
@@ -484,9 +487,17 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         raise Abort('command UID only possible with COPY, FETCH, EXPUNGE (w/UIDPLUS) or STORE (was %s)' % command.upper())
 
     @asyncio.coroutine
-    def copy(self, *args, by_uid=True):
+    def copy(self, *args, by_uid=False):
         return (yield from self.execute(
             Command('COPY', self.new_tag(), *args, prefix='UID' if by_uid else '', loop=self.loop)))
+
+    @asyncio.coroutine
+    def move(self, uid_set, mailbox, by_uid=False):
+        if 'MOVE' not in self.capabilities:
+            raise Abort('server has not MOVE capability')
+
+        return (yield from self.execute(
+            Command('MOVE', self.new_tag(), uid_set, mailbox, prefix='UID' if by_uid else '', loop=self.loop)))
 
     @asyncio.coroutine
     def capability(self):
@@ -744,6 +755,10 @@ class IMAP4(object):
     @asyncio.coroutine
     def close(self):
         return (yield from asyncio.wait_for(self.protocol.close(), self.timeout))
+
+    @asyncio.coroutine
+    def move(self, uid_set, mailbox):
+        return (yield from asyncio.wait_for(self.protocol.move(uid_set, mailbox), self.timeout))
 
     def has_capability(self, capability):
         return capability in self.protocol.capabilities

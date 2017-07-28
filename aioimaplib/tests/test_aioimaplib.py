@@ -339,7 +339,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
-        self.assertEquals(['IMAP4rev1', 'YESAUTH'], imap_client.protocol.capabilities)
+        self.assertEquals({'IMAP4rev1', 'YESAUTH'}, imap_client.protocol.capabilities)
         self.assertTrue(imap_client.has_capability('YESAUTH'))
 
     @asyncio.coroutine
@@ -408,7 +408,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def test_uid_with_illegal_command(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        for command in {'COPY', 'FETCH', 'STORE', 'EXPUNGE'}.symmetric_difference(Commands.keys()):
+        for command in {'COPY', 'FETCH', 'STORE', 'EXPUNGE', 'MOVE'}.symmetric_difference(Commands.keys()):
             with self.assertRaises(aioimaplib.Abort) as expected:
                 yield from imap_client.uid(command)
 
@@ -707,6 +707,30 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
 
         self.assertEquals(1, extract_exists((yield from imap_client.select())))
 
+    @asyncio.coroutine
+    def test_rfc6851_move(self):
+        self.imapserver.receive(Mail.create(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        uidvalidity = self.imapserver.get_connection('user').uidvalidity
+
+        self.assertEqual(('OK', ['OK [COPYUID %d 1:1 1:1]' % uidvalidity, '1 EXPUNGE', 'Done']),
+                         (yield from imap_client.move('1:1', 'Trash')))
+
+        self.assertEquals(0, extract_exists((yield from imap_client.select())))
+        self.assertEquals(1, extract_exists((yield from imap_client.select('Trash'))))
+
+    @asyncio.coroutine
+    def test_rfc6851_uidmove(self):
+        self.imapserver.receive(Mail.create(['user']))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        uidvalidity = self.imapserver.get_connection('user').uidvalidity
+
+        self.assertEqual(('OK', ['OK [COPYUID %d 1:1 1:1]' % uidvalidity, '1 EXPUNGE', 'Done']),
+                         (yield from imap_client.uid('move', '1:1', 'Trash')))
+
+        self.assertEquals(0, extract_exists((yield from imap_client.select())))
+        self.assertEquals(1, extract_exists((yield from imap_client.select('Trash'))))
+
 
 class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
@@ -727,6 +751,18 @@ class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         with self.assertRaises(Abort):
             yield from imap_client.uid('expunge', '1:1')
+
+    @asyncio.coroutine
+    def test_move_without_move_capability_abort_command(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        with self.assertRaises(Abort):
+            yield from imap_client.move('1:1', 'Trash')
+
+    @asyncio.coroutine
+    def test_uidmove_without_move_capability_abort_command(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+        with self.assertRaises(Abort):
+            yield from imap_client.uid('move', '1:1', 'Trash')
 
 
 class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):

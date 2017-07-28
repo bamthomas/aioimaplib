@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from email.header import Header
 from functools import update_wrapper
 from math import ceil
+from operator import attrgetter
 
 from pytz import utc
 
@@ -41,7 +42,7 @@ NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', '
 
 UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
 
-CAPABILITIES = 'IDLE UIDPLUS'
+CAPABILITIES = 'IDLE UIDPLUS MOVE'
 
 
 class InvalidUidSet(RuntimeError):
@@ -142,6 +143,17 @@ class ServerState(object):
             self.mailboxes[user][dest_mailbox] = list()
         self.mailboxes[user][dest_mailbox] += to_copy
 
+    def move(self, user, src_mailbox, dest_mailbox, id_range, msg_attribute):
+        id_getter = attrgetter(msg_attribute)
+        to_move = [msg for msg in self.mailboxes[user][src_mailbox] if id_getter(msg) in id_range]
+        id_moved = []
+        for msg in to_move:
+            self.remove(msg, user, src_mailbox)
+            id_moved.append(self.add_mail(user, msg, dest_mailbox))
+        if len(id_moved) == 0:
+            id_moved.append(0)
+        return range(min(id_moved), max(id_moved) + 1)
+
 
 def critical_section(next_state):
     @asyncio.coroutine
@@ -169,6 +181,7 @@ class ImapProtocol(asyncio.Protocol):
 
     def __init__(self, server_state, fetch_chunk_size=0, capabilities=CAPABILITIES,
                  loop=asyncio.get_event_loop()):
+        self.uidvalidity = int(datetime.now().timestamp())
         self.capabilities = capabilities
         self.state_to_send = list()
         self.delay_seconds = 0
@@ -468,6 +481,24 @@ class ImapProtocol(asyncio.Protocol):
         message_set, mailbox = args[0:-1], args[-1]
         self.server_state.copy(self.user_login, self.user_mailbox, mailbox, message_set)
         self.send_tagged_line(tag, 'OK COPY completed.')
+
+    def move(self, tag, *args):
+        args_list = list(args)
+        args_list.reverse()
+        msg_attribute = 'id'
+        if args[-1] == 'uid':
+            msg_attribute = 'uid'
+        mailbox, message_set = args_list[0:2]
+        seq_range = self._build_sequence_range(message_set)
+        seq_moved = self.server_state.move(self.user_login, self.user_mailbox, mailbox, seq_range, msg_attribute)
+        if 'UIDPLUS' in self.capabilities:
+            self.send_untagged_line(
+                'OK [COPYUID %d %d:%d %d:%d]' % (self.uidvalidity,
+                                                 seq_range.start, seq_range.stop-1,
+                                                 seq_moved.start, seq_moved.stop-1))
+        for msg_id in seq_moved:
+            self.send_untagged_line('{msg_id} EXPUNGE'.format(msg_id=msg_id))
+        self.send_tagged_line(tag, 'OK Done')
 
     def noop(self, tag, *args):
         if len(self.state_to_send) > 0:
