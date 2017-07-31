@@ -173,7 +173,7 @@ def critical_section(next_state):
     return decorator
 
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\[\]\+\-\\]+)?$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\[\]\+\-\\\%]+)?$)')
 
 
 class ImapProtocol(asyncio.Protocol):
@@ -572,7 +572,7 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK RENAME completed.')
 
     def list(self, tag, *args):
-        mailbox_pattern = args[0]
+        mailbox_pattern = args[0].replace('*', '.*').replace('%', '.*')
 
         for mb in self.server_state.list(self.user_login, mailbox_pattern):
             self.send_untagged_line('LIST () "/" %s' % mb)
