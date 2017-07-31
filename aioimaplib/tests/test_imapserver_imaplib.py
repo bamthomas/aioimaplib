@@ -427,14 +427,14 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         imap_client = yield from self.login_user('user', 'pass')
         self.assertEquals(('OK', [b'() "/" INBOX']),
                           (yield from asyncio.wait_for(
-                              self.loop.run_in_executor(None, functools.partial(imap_client.list, '', '*')), 1)))
+                              self.loop.run_in_executor(None, functools.partial(imap_client.list, '""', '*')), 1)))
 
         yield from asyncio.wait_for(
                               self.loop.run_in_executor(None, functools.partial(imap_client.create, 'MYBOX')), 1)
 
         self.assertEquals(('OK', [b'() "/" INBOX', b'() "/" MYBOX']),
                           (yield from asyncio.wait_for(
-                              self.loop.run_in_executor(None, functools.partial(imap_client.list, '', '%')), 1)))
+                              self.loop.run_in_executor(None, functools.partial(imap_client.list, '""', '%')), 1)))
 
     @asyncio.coroutine
     def test_append(self):

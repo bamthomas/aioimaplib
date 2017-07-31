@@ -121,9 +121,12 @@ class ServerState(object):
         mb_re = re.compile(mailbox_search)
         return [mb for mb in self.subcriptions[user] if mb_re.match(mb)]
 
-    def list(self, user, mailbox_pattern):
+    def list(self, user, reference, mailbox_pattern):
+        mb = self.mailboxes[user]
+        for path_item in reference.split('/'):
+            mb = self.mailboxes[user].get(path_item, self.mailboxes[user])
         mb_re = re.compile(mailbox_pattern)
-        return sorted([mb for mb in self.mailboxes[user].keys() if mb_re.match(mb)])
+        return sorted([mb for mb in mb.keys() if mb_re.match(mb)])
 
     def remove(self, message, user, mailbox):
         self.mailboxes[user][mailbox].remove(message)
@@ -572,9 +575,10 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK RENAME completed.')
 
     def list(self, tag, *args):
-        mailbox_pattern = args[0].replace('*', '.*').replace('%', '.*')
+        reference = args[0]
+        mailbox_pattern = args[1].replace('*', '.*').replace('%', '.*')
 
-        for mb in self.server_state.list(self.user_login, mailbox_pattern):
+        for mb in self.server_state.list(self.user_login, reference, mailbox_pattern):
             self.send_untagged_line('LIST () "/" %s' % mb)
         self.send_tagged_line(tag, 'OK LIST completed.')
 

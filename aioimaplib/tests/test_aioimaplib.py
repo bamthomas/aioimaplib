@@ -669,11 +669,11 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     @asyncio.coroutine
     def test_list(self):
         imap_client = yield from self.login_user('user', 'pass')
-        self.assertEquals(('OK', ['() "/" INBOX', 'LIST completed.']), (yield from imap_client.list('', '.*')))
+        self.assertEquals(('OK', ['() "/" INBOX', 'LIST completed.']), (yield from imap_client.list('""', '.*')))
 
         yield from imap_client.create('MYBOX')
         self.assertEquals(('OK', ['() "/" INBOX', '() "/" MYBOX', 'LIST completed.']),
-                          (yield from imap_client.list('', '.*')))
+                          (yield from imap_client.list('""', '.*')))
 
     @asyncio.coroutine
     def test_append(self):
