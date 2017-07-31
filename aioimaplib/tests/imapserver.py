@@ -51,6 +51,8 @@ class InvalidUidSet(RuntimeError):
 
 
 class ServerState(object):
+    DEFAULT_MAILBOXES = ['INBOX', 'Trash', 'Sent', 'Drafts']
+
     def __init__(self):
         self.mailboxes = dict()
         self.connections = dict()
@@ -88,7 +90,8 @@ class ServerState(object):
     def login(self, user_login, protocol):
         if user_login not in self.mailboxes:
             self.mailboxes[user_login] = dict()
-            self.mailboxes[user_login]['INBOX'] = list()
+        for mb in self.DEFAULT_MAILBOXES:
+            self.create_mailbox_if_not_exists(user_login, mb)
         if user_login not in self.connections:
             self.connections[user_login] = protocol
         if user_login not in self.subcriptions:
