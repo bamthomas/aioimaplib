@@ -731,6 +731,13 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertEquals(0, extract_exists((yield from imap_client.select())))
         self.assertEquals(1, extract_exists((yield from imap_client.select('Trash'))))
 
+    @asyncio.coroutine
+    def test_rfc5161_enable(self):
+        imap_client = yield from self.login_user('user', 'pass')
+
+        self.assertEqual(('OK', ['X-GOOD-IDEA CONDSTORE enabled']),
+                         (yield from imap_client.enable('X-GOOD-IDEA CONDSTORE')))
+
 
 class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
@@ -763,6 +770,12 @@ class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         with self.assertRaises(Abort):
             yield from imap_client.uid('move', '1:1', 'Trash')
+
+    @asyncio.coroutine
+    def test_enable_without_enable_capability_abort_command(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        with self.assertRaises(Abort):
+            yield from imap_client.enable('CAPABILITY')
 
 
 class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):

@@ -42,7 +42,7 @@ NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', '
 
 UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
 
-CAPABILITIES = 'IDLE UIDPLUS MOVE'
+CAPABILITIES = 'IDLE UIDPLUS MOVE ENABLE'
 
 
 class InvalidUidSet(RuntimeError):
@@ -476,6 +476,9 @@ class ImapProtocol(asyncio.Protocol):
     def capability(self, tag, *args):
         self.send_untagged_line('CAPABILITY IMAP4rev1 YESAUTH')
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
+
+    def enable(self, tag, *args):
+        self.send_tagged_line(tag, 'OK %s enabled' % ' '.join(args))
 
     def copy(self, tag, *args):
         message_set, mailbox = args[0:-1], args[-1]

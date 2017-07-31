@@ -56,6 +56,7 @@ Commands = {
     'CREATE':       Cmd('CREATE',       (AUTH, SELECTED),           Exec.async),
     'DELETE':       Cmd('DELETE',       (AUTH, SELECTED),           Exec.async),
     'DELETEACL':    Cmd('DELETEACL',    (AUTH, SELECTED),           Exec.async),
+    'ENABLE':       Cmd('ENABLE',       (AUTH,),                    Exec.sync),
     'EXAMINE':      Cmd('EXAMINE',      (AUTH, SELECTED),           Exec.sync),
     'EXPUNGE':      Cmd('EXPUNGE',      (SELECTED,),                Exec.async),
     'FETCH':        Cmd('FETCH',        (SELECTED,),                Exec.async),
@@ -526,7 +527,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return (yield from self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop)))
 
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
-                       'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE'}
+                       'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE', 'ENABLE'}
 
     @asyncio.coroutine
     def simple_command(self, name, *args):
@@ -759,6 +760,13 @@ class IMAP4(object):
     @asyncio.coroutine
     def move(self, uid_set, mailbox):
         return (yield from asyncio.wait_for(self.protocol.move(uid_set, mailbox), self.timeout))
+
+    @asyncio.coroutine
+    def enable(self, capability):
+        if 'ENABLE' not in self.protocol.capabilities:
+            raise Abort('server has not ENABLE capability')
+
+        return (yield from asyncio.wait_for(self.protocol.simple_command('ENABLE', capability), self.timeout))
 
     def has_capability(self, capability):
         return capability in self.protocol.capabilities
