@@ -469,12 +469,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                     prefix='UID' if by_uid else '', loop=self.loop)))
 
     @asyncio.coroutine
-    def uid(self, command, *criteria):
+    def uid(self, command, *criteria, timeout=None):
         if self.state not in Commands.get('UID').valid_states:
             raise Abort('command UID illegal in state %s' % self.state)
 
         if command.upper() == 'FETCH':
-            return (yield from self.fetch(criteria[0], criteria[1], by_uid=True))
+            return (yield from self.fetch(criteria[0], criteria[1], by_uid=True, timeout=timeout))
         if command.upper() == 'STORE':
             return (yield from self.store(*criteria, by_uid=True))
         if command.upper() == 'COPY':
@@ -513,7 +513,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.imap_version = version
 
     @asyncio.coroutine
-    def append(self, message_bytes, mailbox='INBOX', flags=None, date=None):
+    def append(self, message_bytes, mailbox='INBOX', flags=None, date=None, timeout=None):
         args = [mailbox]
         if flags is not None:
             if (flags[0], flags[-1]) != ('(', ')'):
@@ -524,7 +524,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             args.append(time2internaldate(date))
         args.append('{%s}' % len(message_bytes))
         self.literal_data = message_bytes
-        return (yield from self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop)))
+        return (yield from self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop, timeout=timeout)))
 
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
                        'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE', 'ENABLE'}
@@ -655,7 +655,7 @@ class IMAP4(object):
 
     @asyncio.coroutine
     def uid(self, command, *criteria):
-        return (yield from asyncio.wait_for(self.protocol.uid(command, *criteria), self.timeout))
+        return (yield from self.protocol.uid(command, *criteria, timeout=self.timeout))
 
     @asyncio.coroutine
     def store(self, *criteria):
@@ -751,7 +751,7 @@ class IMAP4(object):
 
     @asyncio.coroutine
     def append(self, message_bytes, mailbox='INBOX', flags=None, date=None):
-        return (yield from asyncio.wait_for(self.protocol.append(message_bytes, mailbox, flags, date), self.timeout))
+        return (yield from self.protocol.append(message_bytes, mailbox, flags, date, timeout=self.timeout))
 
     @asyncio.coroutine
     def close(self):
