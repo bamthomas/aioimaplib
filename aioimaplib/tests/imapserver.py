@@ -180,6 +180,7 @@ def critical_section(next_state):
 
 
 command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\[\]\+\-\\\%]+)?$)')
+FETCH_HEADERS_RE = re.compile(r'.*BODY.PEEK\[HEADER.FIELDS \((?P<headers>.+)\)\].*')
 
 
 class ImapProtocol(asyncio.Protocol):
@@ -428,7 +429,7 @@ class ImapProtocol(asyncio.Protocol):
     def _build_fetch_response(self, message, parts, by_uid=True):
         response = ('%d FETCH (UID %s' % (message.id, message.uid)).encode() if by_uid \
             else ('%d FETCH (' % message.id).encode()
-        for idx, part in enumerate(parts):
+        for part in parts:
             if part.startswith('(') or part.endswith(')'):
                 part = part.strip('()')
             if not response.endswith(b' ') and not response.endswith(b'('):
@@ -437,8 +438,17 @@ class ImapProtocol(asyncio.Protocol):
                 response += ('UID %s' % message.uid).encode()
             if part == 'BODY[]' or part == 'BODY.PEEK[]' or part == 'RFC822':
                 response += ('%s {%s}\r\n' % (part, len(message.as_bytes()))).encode() + message.as_bytes()
+            if part == 'BODY.PEEK[HEADER.FIELDS':
+                fetch_header = FETCH_HEADERS_RE.match(' '.join(parts))
+                if fetch_header:
+                    headers = fetch_header.group('headers')
+                    header_key_values = ['%s: %s' % (hk, message.email.get(hk)) for hk in headers.split()]
+                    headers_string = '\r\n'.join(header_key_values)
+                    response += 'BODY[HEADER.FIELDS ({headers})] {{{size}}}\r\n{headers_string}'.\
+                        format(headers=headers, size=len(headers_string), headers_string=headers_string).encode()
             if part == 'FLAGS':
                 response += ('FLAGS (%s)' % ' '.join(message.flags)).encode()
+        response = response.strip(b' ')
         response += b')'
         return response
 

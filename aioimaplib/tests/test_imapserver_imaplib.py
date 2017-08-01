@@ -231,7 +231,7 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         self.assertEqual('maître', email.message_from_bytes(mail_content).get_payload().strip())
 
     @asyncio.coroutine
-    def test_fetch_one_message_with_UID(self):
+    def test_fetch_one_messages_out_of_two(self):
         self.imapserver.receive(Mail.create(['user'], mail_from='me', subject='hello', content='maître'))
         self.imapserver.receive(Mail.create(['user'], mail_from='you', subject='yo', content='bro'))
         imap_client = yield from self.login_user('user', 'pass', select=True)
@@ -240,6 +240,17 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(RFC822)')), 1)
 
         self.assertEqual(2, len(data))
+
+    @asyncio.coroutine
+    def test_fetch_one_message_with_headers(self):
+        self.imapserver.receive(Mail.create(['user'], mail_from='me', subject='hello', content='maître'))
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        _, data = yield from asyncio.wait_for(
+            self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(BODY.PEEK[HEADER.FIELDS (Content-type From)])')), 1)
+
+        self.assertEqual(b'1 (UID 1 BODY[HEADER.FIELDS (Content-type From)] {53}', data[0][0])
+        self.assertEqual(b'Content-type: text/plain; charset="utf-8"\r\nFrom: <me>', data[0][1])
 
     @asyncio.coroutine
     def test_store(self):
