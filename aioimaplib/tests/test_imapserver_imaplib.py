@@ -249,8 +249,8 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         _, data = yield from asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.uid, 'fetch', '1', '(BODY.PEEK[HEADER.FIELDS (Content-type From)])')), 1)
 
-        self.assertEqual(b'1 (UID 1 BODY[HEADER.FIELDS (Content-type From)] {53}', data[0][0])
-        self.assertEqual(b'Content-type: text/plain; charset="utf-8"\r\nFrom: <me>', data[0][1])
+        self.assertEqual(b'1 (UID 1 BODY[HEADER.FIELDS (Content-type From)] {57}', data[0][0])
+        self.assertEqual(b'Content-type: text/plain; charset="utf-8"\r\nFrom: <me>\r\n\r\n', data[0][1])
 
     @asyncio.coroutine
     def test_store(self):

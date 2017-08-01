@@ -39,10 +39,9 @@ sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s " +
 log.addHandler(sh)
 
 NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
-
 UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
-
 CAPABILITIES = 'IDLE UIDPLUS MOVE ENABLE'
+CRLF = b'\r\n'
 
 
 class InvalidUidSet(RuntimeError):
@@ -246,7 +245,7 @@ class ImapProtocol(asyncio.Protocol):
 
     def send_raw_untagged_line(self, raw_response, continuation=False, max_chunk_size=0):
         prefix = b'+ ' if continuation else b'* '
-        raw_line = prefix + raw_response + b'\r\n'
+        raw_line = prefix + raw_response + CRLF
         if max_chunk_size:
             for nb_chunk in range(ceil(len(raw_line) / max_chunk_size)):
                 chunk_start_index = nb_chunk * max_chunk_size
@@ -442,8 +441,8 @@ class ImapProtocol(asyncio.Protocol):
                 fetch_header = FETCH_HEADERS_RE.match(' '.join(parts))
                 if fetch_header:
                     headers = fetch_header.group('headers')
-                    header_key_values = ['%s: %s' % (hk, message.email.get(hk)) for hk in headers.split()]
-                    headers_string = '\r\n'.join(header_key_values)
+                    header_key_values = ['%s: %s' % (hk, message.email.get(hk, '')) for hk in headers.split()]
+                    headers_string = '\r\n'.join(header_key_values) + '\r\n\r\n'
                     response += 'BODY[HEADER.FIELDS ({headers})] {{{size}}}\r\n{headers_string}'.\
                         format(headers=headers, size=len(headers_string), headers_string=headers_string).encode()
             if part == 'FLAGS':
@@ -460,7 +459,7 @@ class ImapProtocol(asyncio.Protocol):
 
     def append_literal(self, data):
         tag, mailbox_name, size = self.append_literal_command
-        if data == b'\r\n':
+        if data == CRLF:
             self.send_tagged_line(tag, 'OK APPEND completed.')
             self.append_literal_command = None
             return
@@ -688,7 +687,8 @@ class Mail(object):
                message_id=None,
                quoted_printable=False,
                cc=None,
-               body_subtype='plain'
+               body_subtype='plain',
+               references=None
                ):
         """
         :param quoted_printable: boolean
@@ -702,6 +702,7 @@ class Mail(object):
         :param in_reply_to: str
         :param message_id: str
         :param body_subtype: str
+        :param references: list
         """
         charset = email.charset.Charset(encoding)
         msg = email.mime.nonmultipart.MIMENonMultipart('text', body_subtype, charset=encoding)
@@ -725,6 +726,9 @@ class Mail(object):
             msg['In-Reply-To'] = '<%s>' % in_reply_to
         if cc is not None:
             msg['Cc'] = ', '.join(cc)
+        if references is not None:
+            ' '.join(['<%s>' % ref for ref in references])
+
         return Mail(msg, date=date)
 
 if __name__ == '__main__':
