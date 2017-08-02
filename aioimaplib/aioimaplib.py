@@ -628,6 +628,9 @@ class IMAP4(object):
         self.protocol = IMAP4ClientProtocol(loop)
         loop.create_task(loop.create_connection(lambda: self.protocol, host, port))
 
+    def get_state(self):
+        return self.protocol.state
+
     @asyncio.coroutine
     def wait_hello_from_server(self):
         yield from asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.timeout)
