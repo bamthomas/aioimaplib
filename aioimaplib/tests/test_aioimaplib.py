@@ -25,7 +25,7 @@ from pytz import utc
 
 from aioimaplib import aioimaplib, CommandTimeout, extract_exists, \
     TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH, FetchCommand
-from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response, Abort
+from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response, Abort, AioImapException
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.test_imapserver import WithImapServer
@@ -234,7 +234,7 @@ class TestAioimaplibCommand(asynctest.ClockedTestCase):
     def test_command_timeout(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=1)
         yield from self.advance(2)
-        with self.assertRaises(asyncio.TimeoutError):
+        with self.assertRaises(AioImapException):
             yield from cmd.wait()
 
     @asyncio.coroutine
@@ -308,7 +308,7 @@ class TestAioimaplibCommand(asynctest.ClockedTestCase):
         cmd.begin_literal_data(12, b'literal')
 
         yield from self.advance(3)
-        with self.assertRaises(asyncio.TimeoutError):
+        with self.assertRaises(AioImapException):
             yield from cmd.wait()
 
 
