@@ -221,7 +221,12 @@ class IdleCommand(Command):
         self.buffer.clear()
 
 
-class Error(Exception):
+class AioImapException(Exception):
+    def __init__(self, reason):
+        super().__init__(reason)
+
+
+class Error(AioImapException):
     def __init__(self, reason):
         super().__init__(reason)
 
@@ -231,12 +236,12 @@ class Abort(Error):
         super().__init__(reason)
 
 
-class CommandTimeout(asyncio.TimeoutError):
+class CommandTimeout(AioImapException):
     def __init__(self, command):
         self.command = command
 
 
-class IncompleteRead(Exception):
+class IncompleteRead(AioImapException):
     def __init__(self, cmd, data=b''):
         self.cmd = cmd
         self.data = data
