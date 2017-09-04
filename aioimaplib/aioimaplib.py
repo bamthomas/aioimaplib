@@ -217,7 +217,8 @@ class IdleCommand(Command):
             self.buffer.append(line)
 
     def flush(self):
-        self.queue.put_nowait(copy(self.buffer))
+        for item in self.buffer:
+            self.queue.put_nowait(copy(item))
         self.buffer.clear()
 
 
