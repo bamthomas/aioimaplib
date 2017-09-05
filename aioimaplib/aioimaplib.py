@@ -596,8 +596,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         command.close(response_text, result=response_result)
 
     def _continuation(self, line):
-        if 'literal data' in line:
-            # APPEND case
+        if self.pending_sync_command is not None and self.pending_sync_command.name == 'APPEND':
             if self.literal_data is None:
                 Abort('asked for literal data but have no literal data to send')
             self.transport.write(self.literal_data)
