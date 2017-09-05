@@ -1,6 +1,11 @@
 Changes
 =======
 
+V0.7.12
+-------
+[aiolib] fix issue #24
+[aiolib] fix issue #27
+
 V0.7.11
 -------
 [aiolib] adds rfc6851 move
