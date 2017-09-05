@@ -24,7 +24,7 @@ from mock import call, MagicMock
 from pytz import utc
 
 from aioimaplib import aioimaplib, CommandTimeout, extract_exists, \
-    TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH, FetchCommand
+    TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH, FetchCommand, IdleCommand
 from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response, Abort, AioImapException
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
@@ -191,6 +191,20 @@ class TestAioimaplibUtils(unittest.TestCase):
         self.assertEqual('tag UID NAME', str(Command('NAME', 'tag', prefix='UID')))
 
 
+class TestDataReceived(unittest.TestCase):
+    def setUp(self):
+        self.imap_protocol = IMAP4ClientProtocol(None)
+
+    def test_when_idle_continuation_line_in_same_dataframe_as_status_update(self):
+        queue = asyncio.Queue()
+        cmd = IdleCommand('TAG', queue)
+        self.imap_protocol.pending_sync_command = cmd
+        self.imap_protocol.data_received(b'+ idling\r\n* 1 EXISTS\r\n* 1 RECENT\r\n')
+
+        self.assertEqual(['+ idling'], queue.get_nowait())
+        self.assertEqual(['1 EXISTS', '1 RECENT'], queue.get_nowait())
+
+
 class TestFetchWaitsForAllMessageAttributes(unittest.TestCase):
     def test_empty_fetch(self):
         self.assertFalse(FetchCommand('TAG').wait_data())
@@ -355,7 +369,6 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertTrue(imap_client.has_capability('IDLE'))
         self.assertTrue(imap_client.has_capability('UIDPLUS'))
 
-
     @asyncio.coroutine
     def test_login_twice(self):
         with self.assertRaises(aioimaplib.Error) as expected:
@@ -500,7 +513,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
 
         self.assertTrue((yield from imap_client.stop_wait_server_push()))
 
-        self.assertEquals('stop_wait_server_push', (yield from imap_client.wait_server_push()))
+        self.assertEquals(STOP_WAIT_SERVER_PUSH, (yield from imap_client.wait_server_push()))
 
         imap_client.idle_done()
         yield from asyncio.wait_for(idle, 1)

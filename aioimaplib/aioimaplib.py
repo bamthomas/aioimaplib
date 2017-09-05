@@ -217,8 +217,9 @@ class IdleCommand(Command):
             self.buffer.append(line)
 
     def flush(self):
-        self.queue.put_nowait(copy(self.buffer))
-        self.buffer.clear()
+        if self.buffer:
+            self.queue.put_nowait(copy(self.buffer))
+            self.buffer.clear()
 
 
 class AioImapException(Exception):
@@ -605,6 +606,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         elif self.pending_sync_command is not None:
             log.debug('continuation line appended to pending sync command %s : %s' % (self.pending_sync_command, line))
             self.pending_sync_command.append_to_resp(line)
+            self.pending_sync_command.flush()
         else:
             log.info('server says %s (ignored)' % line)
 
