@@ -23,7 +23,9 @@ import uuid
 from collections import deque
 from copy import deepcopy
 from datetime import datetime, timedelta
+from email._policybase import compat32, Compat32
 from email.header import Header
+from email.message import Message
 from functools import update_wrapper
 from math import ceil
 from operator import attrgetter
@@ -441,10 +443,11 @@ class ImapProtocol(asyncio.Protocol):
                 fetch_header = FETCH_HEADERS_RE.match(' '.join(parts))
                 if fetch_header:
                     headers = fetch_header.group('headers')
-                    header_key_values = ['%s: %s' % (hk, message.email.get(hk, '')) for hk in headers.split()]
-                    headers_string = '\r\n'.join(header_key_values) + '\r\n\r\n'
-                    response += 'BODY[HEADER.FIELDS ({headers})] {{{size}}}\r\n{headers_string}'.\
-                        format(headers=headers, size=len(headers_string), headers_string=headers_string).encode()
+                    message_headers = Message(policy=Compat32(linesep='\r\n'))
+                    for hk in headers.split():
+                        message_headers[hk] = message.email.get(hk, '')
+                    response += (b'BODY[HEADER.FIELDS (%s)] {%d}\r\n%s' %
+                                 (headers.encode(), len(message_headers.as_bytes()), message_headers.as_bytes()))
             if part == 'FLAGS':
                 response += ('FLAGS (%s)' % ' '.join(message.flags)).encode()
         response = response.strip(b' ')
