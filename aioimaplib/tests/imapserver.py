@@ -446,8 +446,8 @@ class ImapProtocol(asyncio.Protocol):
                     message_headers = Message(policy=Compat32(linesep='\r\n'))
                     for hk in headers.split():
                         message_headers[hk] = message.email.get(hk, '')
-                    response += (b'BODY[HEADER.FIELDS (%s)] {%d}\r\n%s' %
-                                 (headers.encode(), len(message_headers.as_bytes()), message_headers.as_bytes()))
+                    response += ('BODY[HEADER.FIELDS (%s)] {%d}\r\n' %
+                                 (headers, len(message_headers.as_bytes()))).encode() + message_headers.as_bytes()
             if part == 'FLAGS':
                 response += ('FLAGS (%s)' % ' '.join(message.flags)).encode()
         response = response.strip(b' ')
