@@ -130,7 +130,7 @@ class ServerState(object):
         return sorted([mb for mb in mb.keys() if mb_re.match(mb)])
 
     def remove(self, message, user, mailbox):
-        self.mailboxes[user][mailbox].remove(message)
+        self.remove_byid(user, mailbox, message.id)
 
     def delete_mailbox(self, user, mailbox):
         if mailbox in self.mailboxes[user]:
