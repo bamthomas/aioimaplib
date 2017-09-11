@@ -432,11 +432,14 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def test_search_three_messages_by_uid(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         self.imapserver.receive(Mail.create(['user']))  # id=1 uid=1
-        self.imapserver.receive(Mail.create(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=2
-        self.imapserver.receive(Mail.create(['user']))  # id=2 uid=3
+        self.imapserver.receive(Mail.create(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=1
+        self.imapserver.receive(Mail.create(['user']))  # id=2 uid=2
 
         self.assertEqual('1 2', (yield from imap_client.search('ALL')).lines[0])
-        self.assertEqual('1 3', (yield from imap_client.uid_search('ALL')).lines[0])
+        self.assertEqual('1 2', (yield from imap_client.uid_search('ALL')).lines[0])
+
+        yield from imap_client.select('OTHER_MAILBOX')
+        self.assertEqual('1', (yield from imap_client.uid_search('ALL')).lines[0])
 
     @asyncio.coroutine
     def test_fetch(self):

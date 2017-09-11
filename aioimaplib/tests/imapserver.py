@@ -23,7 +23,7 @@ import uuid
 from collections import deque
 from copy import deepcopy
 from datetime import datetime, timedelta
-from email._policybase import compat32, Compat32
+from email._policybase import Compat32
 from email.header import Header
 from email.message import Message
 from functools import update_wrapper
@@ -71,22 +71,19 @@ class ServerState(object):
         if mailbox not in self.mailboxes[to]:
             self.mailboxes[to][mailbox] = list()
         m = deepcopy(mail)
-        m.id = self.max_id(to, mailbox) + 1
-        m.uid = self.max_uid(to) + 1
+        m.id = len(self.mailboxes[to][mailbox]) + 1
+        m.uid = self.max_uid(to, mailbox) + 1
         self.mailboxes[to][mailbox].append(m)
         return m.uid
 
-    def max_uid(self, user):
-        if user not in self.mailboxes: return 0
-        return max(map(lambda mailbox: max(mailbox, default=Mail(user), key=lambda msg: msg.uid).uid,
-                       self.mailboxes[user].values()))
+    def max_uid(self, user, mailbox):
+        if user not in self.mailboxes or mailbox not in self.mailboxes[user] \
+            or len(self.mailboxes[user][mailbox]) == 0: return 0
+        return max(self.mailboxes[user][mailbox], key=lambda msg: msg.uid).uid
 
     def max_id(self, user, mailbox):
-        if user not in self.mailboxes or \
-                mailbox not in self.mailboxes[user] or \
-                len(self.mailboxes[user][mailbox]) == 0:
-            return 0
-        return max(self.mailboxes[user][mailbox], key=lambda msg: msg.id).id
+        if user not in self.mailboxes or mailbox not in self.mailboxes[user]: return 0
+        return len(self.mailboxes[user][mailbox])
 
     def login(self, user_login, protocol):
         if user_login not in self.mailboxes:
@@ -160,6 +157,14 @@ class ServerState(object):
         if len(id_moved) == 0:
             id_moved.append(0)
         return range(min(id_moved), max(id_moved) + 1)
+
+    def remove_byid(self, user, mailbox, id):
+        msg = self.mailboxes[user][mailbox].pop(id-1)
+        self._reindex(user, mailbox)
+        return msg
+
+    def _reindex(self, user, mailbox):
+        for idx, msg in enumerate(self.mailboxes[user][mailbox]): msg.id = idx + 1
 
 
 def critical_section(next_state):
@@ -543,9 +548,9 @@ class ImapProtocol(asyncio.Protocol):
         if 'RECENT' in data_items:
             status_response += ' RECENT %s' % len([m for m in mailbox if 'RECENT' in m.flags])
         if 'UIDNEXT' in data_items:
-            status_response += ' UIDNEXT %s' % (self.server_state.max_uid(self.user_login) + 1)
+            status_response += ' UIDNEXT %s' % (self.server_state.max_uid(self.user_login, self.user_mailbox) + 1)
         if 'UIDVALIDITY' in data_items:
-            status_response += ' UIDVALIDITY %s' % (self.server_state.max_uid(self.user_login) + 1)
+            status_response += ' UIDVALIDITY %s' % (self.server_state.max_uid(self.user_login, self.user_mailbox) + 1)
         if 'UNSEEN' in data_items:
             status_response += ' UNSEEN %s' % len([m for m in mailbox if 'UNSEEN' in m.flags])
         status_response += ')'

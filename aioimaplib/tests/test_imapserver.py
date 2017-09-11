@@ -105,7 +105,7 @@ class TestMailToString(unittest.TestCase):
 
 class TestServerState(unittest.TestCase):
     def test_max_ids_with_no_user(self):
-        self.assertEquals(0, ServerState().max_uid('user'))
+        self.assertEquals(0, ServerState().max_uid('user', 'INBOX'))
         self.assertEquals(0, ServerState().max_id('user', 'INBOX'))
 
     def test_max_ids_one_user_one_mail(self):
@@ -113,17 +113,35 @@ class TestServerState(unittest.TestCase):
         server_state.add_mail('user', Mail.create(['user']))
 
         self.assertEquals(1, server_state.max_id('user', 'INBOX'))
-        self.assertEquals(1, server_state.max_uid('user'))
+        self.assertEquals(1, server_state.max_uid('user', 'INBOX'))
         self.assertEquals(0, server_state.max_id('user', 'OTHER_MAILBOX'))
 
-    def test_max_ids_one_user_two_mails_one_per_mailbox(self):
+    def test_max_ids_one_user_three_mails_in_two_mailboxes(self):
         server_state = ServerState()
+        server_state.add_mail('user', Mail.create(['user']), mailbox='INBOX')
         server_state.add_mail('user', Mail.create(['user']), mailbox='INBOX')
         server_state.add_mail('user', Mail.create(['user']), mailbox='OUTBOX')
 
-        self.assertEquals(1, server_state.max_id('user', 'INBOX'))
         self.assertEquals(1, server_state.max_id('user', 'OUTBOX'))
-        self.assertEquals(2, server_state.max_uid('user'))
+        self.assertEquals(2, server_state.max_id('user', 'INBOX'))
+        self.assertEquals(2, server_state.max_uid('user', 'INBOX'))
+
+    def test_reprocess_ids_if_a_message_is_removed(self):
+        server_state = ServerState()
+        server_state.add_mail('user', Mail.create(['user'], 'from1'), mailbox='INBOX')
+        server_state.add_mail('user', Mail.create(['user'], 'from2'), mailbox='INBOX')
+        server_state.add_mail('user', Mail.create(['user'], 'from3'), mailbox='INBOX')
+
+        server_state.remove_byid('user', 'INBOX', 1)
+        self.assertEqual(1, server_state.get_mailbox_messages('user', 'INBOX')[0].id)
+        self.assertEqual(2, server_state.get_mailbox_messages('user', 'INBOX')[1].id)
+        self.assertEquals(2, server_state.max_id('user', 'INBOX'))
+        self.assertEquals(3, server_state.max_uid('user', 'INBOX'))
+
+        server_state.remove_byid('user', 'INBOX', 1)
+        self.assertEqual(1, server_state.get_mailbox_messages('user', 'INBOX')[0].id)
+        self.assertEquals(1, server_state.max_id('user', 'INBOX'))
+        self.assertEquals(3, server_state.max_uid('user', 'INBOX'))
 
 
 class WithImapServer(object):
