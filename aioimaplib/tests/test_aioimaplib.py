@@ -699,9 +699,10 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertEquals(0, extract_exists((yield from imap_client.examine('INBOX'))))
 
         msg = Mail.create(['user@mail'], subject='append msg', content='do you see me ?')
-        self.assertEquals(('OK', ['APPEND completed.']),
-                          (yield from imap_client.append(msg.as_bytes(), mailbox='INBOX',
-                                                         flags='FOO BAR', date=datetime.now(tz=utc), )))
+        response = yield from imap_client.append(msg.as_bytes(), mailbox='INBOX', flags='FOO BAR',
+                                                 date=datetime.now(tz=utc), )
+        self.assertEquals('OK', response.result)
+        self.assertTrue('1] APPEND completed' in response.lines[0])
 
         self.assertEquals(1, extract_exists((yield from imap_client.examine('INBOX'))))
 

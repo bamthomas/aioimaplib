@@ -323,8 +323,9 @@ class ImapProtocol(asyncio.Protocol):
         self.send_untagged_line('OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.')
         self.send_untagged_line('{nb_messages} EXISTS'.format(nb_messages=len(mailbox)))
         self.send_untagged_line('{nb_messages} RECENT'.format(nb_messages=0))
-        self.send_untagged_line('OK [UIDVALIDITY 1400426466] UIDs valid')
-        self.send_untagged_line('OK [UIDNEXT {next_uid}] Predicted next UID'.format(next_uid=len(mailbox) + 1))
+        self.send_untagged_line('OK [UIDVALIDITY {uidvalidity}] UIDs valid'.format(uidvalidity=self.uidvalidity))
+        self.send_untagged_line('OK [UIDNEXT {next_uid}] Predicted next UID'.format(
+            next_uid=self.server_state.max_uid(self.user_login, mailbox_name) + 1))
         self.send_tagged_line(tag, 'OK [READ] Select completed (0.000 secs).')
 
     def search(self, tag, *args_param):
@@ -468,7 +469,11 @@ class ImapProtocol(asyncio.Protocol):
     def append_literal(self, data):
         tag, mailbox_name, size = self.append_literal_command
         if data == CRLF:
-            self.send_tagged_line(tag, 'OK APPEND completed.')
+            if 'UIDPLUS' in self.capabilities:
+                self.send_tagged_line(tag, 'OK [APPENDUID %s %s] APPEND completed.' %
+                                      (self.uidvalidity, self.server_state.max_uid(self.user_login, mailbox_name)))
+            else:
+                self.send_tagged_line(tag, 'OK APPEND completed.')
             self.append_literal_command = None
             return
 
@@ -550,7 +555,7 @@ class ImapProtocol(asyncio.Protocol):
         if 'UIDNEXT' in data_items:
             status_response += ' UIDNEXT %s' % (self.server_state.max_uid(self.user_login, self.user_mailbox) + 1)
         if 'UIDVALIDITY' in data_items:
-            status_response += ' UIDVALIDITY %s' % (self.server_state.max_uid(self.user_login, self.user_mailbox) + 1)
+            status_response += ' UIDVALIDITY %s' % self.uidvalidity
         if 'UNSEEN' in data_items:
             status_response += ' UNSEEN %s' % len([m for m in mailbox if 'UNSEEN' in m.flags])
         status_response += ')'

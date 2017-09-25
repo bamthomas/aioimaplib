@@ -448,10 +448,9 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
             self.loop.run_in_executor(None, functools.partial(imap_client.select, 'INBOX', readonly=True)), 2)))
 
         msg = Mail.create(['user@mail'], subject='append msg', content='do you see me ?')
-        self.assertEquals(('OK', [b'APPEND completed.']),
-                          (yield from asyncio.wait_for(
+        self.assertEquals('OK', (yield from asyncio.wait_for(
                               self.loop.run_in_executor(None, functools.partial(
-                                  imap_client.append, 'INBOX', 'FOO BAR', datetime.now(tz=utc), msg.as_bytes())), 2)))
+                                  imap_client.append, 'INBOX', 'FOO BAR', datetime.now(tz=utc), msg.as_bytes())), 2))[0])
 
         self.assertEquals(('OK', [b'1']), (yield from asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.select, 'INBOX', readonly=True)), 2)))
