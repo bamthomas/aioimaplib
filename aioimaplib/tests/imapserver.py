@@ -483,7 +483,7 @@ class ImapProtocol(asyncio.Protocol):
             self.append_literal_command = None
         else:
             m = email.message_from_bytes(data)
-            self.server_state.add_mail(m.get('To'), Mail(m), mailbox_name)
+            self.server_state.add_mail(self.user_login, Mail(m), mailbox_name)
 
     def expunge(self, tag, *args):
         expunge_range = range(0, sys.maxsize)
