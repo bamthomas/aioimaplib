@@ -269,7 +269,7 @@ tagged_status_response_re = re.compile(r'[A-Z0-9]+ ((OK)|(NO)|(BAD))')
 
 
 class IMAP4ClientProtocol(asyncio.Protocol):
-    def __init__(self, loop):
+    def __init__(self, loop, conn_lost_cb=None):
         self.loop = loop
         self.transport = None
         self.state = STARTED
@@ -282,6 +282,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.literal_data = None
         self.incomplete_line = b''
         self.current_command = None
+        self.conn_lost_cb = conn_lost_cb
 
         self.tagnum = 0
         self.tagpre = int2ap(random.randint(4096, 65535))
@@ -299,6 +300,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         except IncompleteRead as incomplete_read:
             self.current_command = incomplete_read.cmd
             self.incomplete_line = incomplete_read.data
+
+    def connection_lost(self, exc):
+        log.debug('connection lost: %s', exc)
+        if self.conn_lost_cb is not None:
+            self.conn_lost_cb(exc)
 
     def _handle_responses(self, data, line_handler, current_cmd=None):
         if not data:
@@ -348,9 +354,6 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self._continuation(line)
         else:
             log.info('unknown data received %s' % line)
-
-    def connection_lost(self, exc):
-        self.transport.close()
 
     def send(self, line):
         data = ('%s\r\n' % line).encode()
@@ -622,16 +625,16 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 class IMAP4(object):
     TIMEOUT_SECONDS = 10
 
-    def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS):
+    def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS, conn_lost_cb=None):
         self.timeout = timeout
         self.port = port
         self.host = host
         self.protocol = None
         self._idle_waiter = None
-        self.create_client(host, port, loop)
+        self.create_client(host, port, loop, conn_lost_cb)
 
-    def create_client(self, host, port, loop):
-        self.protocol = IMAP4ClientProtocol(loop)
+    def create_client(self, host, port, loop, conn_lost_cb=None):
+        self.protocol = IMAP4ClientProtocol(loop, conn_lost_cb)
         loop.create_task(loop.create_connection(lambda: self.protocol, host, port))
 
     def get_state(self):
@@ -792,8 +795,8 @@ class IMAP4_SSL(IMAP4):
                  timeout=IMAP4.TIMEOUT_SECONDS):
         super().__init__(host, port, loop, timeout)
 
-    def create_client(self, host, port, loop):
-        self.protocol = IMAP4ClientProtocol(loop)
+    def create_client(self, host, port, loop, conn_lost_cb=None):
+        self.protocol = IMAP4ClientProtocol(loop, conn_lost_cb)
         ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         loop.create_task(loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 

@@ -329,7 +329,7 @@ class TestAioimaplibCommand(asynctest.ClockedTestCase):
 class AioWithImapServer(WithImapServer):
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
-        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
+        imap_client = lib(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         yield from imap_client.login(login, password)
@@ -850,3 +850,20 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
 
         r = yield from asyncio.wait_for(push_task, 0)
         self.assertEqual(STOP_WAIT_SERVER_PUSH, r)
+
+
+class TestAioimaplibCallback(AioWithImapServer, asynctest.TestCase):
+    def setUp(self):
+        self._init_server(self.loop)
+
+    @asyncio.coroutine
+    def test_callback_is_called_when_connection_is_lost(self):
+        queue = asyncio.Queue()
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3, conn_lost_cb=(
+            lambda m: queue.put_nowait('called with %s' % m)))
+        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+        yield from imap_client.login('login', 'password')
+
+        yield from self._shutdown_server()
+
+        self.assertEqual('called with None', (yield from asyncio.wait_for(queue.get(), timeout=2)))
