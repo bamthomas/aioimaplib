@@ -1,6 +1,13 @@
 Changes
 =======
 
+V0.7.13
+-------
+[aiolib] adds a connection lost callback
+[test] imapserver : added APPENDUID response for APPEND cmd
+[test][fix] imapserver append should add to the connected user mb
+[test] imapserver : more accurate building of message headers (using python email module)
+
 V0.7.12
 -------
 [aiolib] fix issue #24
