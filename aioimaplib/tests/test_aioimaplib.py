@@ -370,6 +370,19 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertTrue(imap_client.has_capability('UIDPLUS'))
 
     @asyncio.coroutine
+    def test_login_with_special_characters(self):
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
+        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+
+        result, data = yield from imap_client.login('user', 'pass"word')
+
+        self.assertEquals(aioimaplib.AUTH, imap_client.protocol.state)
+        self.assertEqual('OK', result)
+        self.assertEqual('LOGIN completed', data[-1])
+        self.assertTrue(imap_client.has_capability('IDLE'))
+        self.assertTrue(imap_client.has_capability('UIDPLUS'))
+
+    @asyncio.coroutine
     def test_login_twice(self):
         with self.assertRaises(aioimaplib.Error) as expected:
             imap_client = yield from self.login_user('user', 'pass')
