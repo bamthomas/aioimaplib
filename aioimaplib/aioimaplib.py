@@ -93,8 +93,12 @@ Commands = {
 Response = namedtuple('Response', 'result lines')
 
 
-# copied from https://github.com/mjs/imapclient (imapclient/imapclient.py), 3-clause BSD license
-def _quote(arg):
+def quoted(arg):
+    """ Given a string, return a quoted string as per RFC 3501, section 9.
+
+        Implementation copied from https://github.com/mjs/imapclient
+        (imapclient/imapclient.py), 3-clause BSD license
+    """
     if isinstance(arg, str):
         arg = arg.replace('\\', '\\\\')
         arg = arg.replace('"', '\\"')
@@ -417,7 +421,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def login(self, user, password):
         response = yield from self.execute(
-            Command('LOGIN', self.new_tag(), user, '%s' % _quote(password), loop=self.loop))
+            Command('LOGIN', self.new_tag(), user, '%s' % quoted(password), loop=self.loop))
 
         if 'OK' == response.result:
             self.state = AUTH
