@@ -16,6 +16,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
 import logging
+import os
+import ssl
 import unittest
 from datetime import datetime, timedelta
 
@@ -28,6 +30,7 @@ from aioimaplib import aioimaplib, CommandTimeout, extract_exists, \
 from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response, Abort, AioImapException
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
+from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
 from aioimaplib.tests.test_imapserver import WithImapServer
 
 aioimaplib.log.setLevel(logging.WARNING)
@@ -880,3 +883,35 @@ class TestAioimaplibCallback(AioWithImapServer, asynctest.TestCase):
         yield from self._shutdown_server()
 
         self.assertEqual('called with None', (yield from asyncio.wait_for(queue.get(), timeout=2)))
+
+
+class TestAioimaplibSSL(WithImapServer, asynctest.TestCase):
+    """ Test the aioimaplib with SSL
+
+        SSL is handled transparently by asyncio, so we don't
+        need to repeat all the tests - just ensure the encrypted
+        connection happens
+    """
+    def setUp(self):
+        self._cert_file, self._cert_key = create_temp_self_signed_cert()
+
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_context.load_cert_chain(self._cert_file, self._cert_key)
+
+        self._init_server(self.loop, ssl_context=ssl_context)
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+        os.remove(self._cert_file)
+        os.remove(self._cert_key)
+
+    @asyncio.coroutine
+    def test_client_can_connect_to_server_over_ssl(self):
+        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=self._cert_file)
+        imap_client = aioimaplib.IMAP4_SSL(port=12345, loop=self.loop, ssl_context=ssl_context)
+        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+
+        self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
+        self.assertEquals({'IMAP4rev1', 'YESAUTH'}, imap_client.protocol.capabilities)
+        self.assertTrue(imap_client.has_capability('YESAUTH'))
