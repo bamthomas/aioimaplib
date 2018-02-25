@@ -145,13 +145,15 @@ class TestServerState(unittest.TestCase):
 
 
 class WithImapServer(object):
-    def _init_server(self, loop, capabilities=None):
+    def _init_server(self, loop, capabilities=None, ssl_context=None):
         self.loop = loop
         if capabilities is not None:
             self.imapserver = MockImapServer(loop=loop, capabilities=capabilities)
         else:
             self.imapserver = MockImapServer(loop=loop)
-        self.server = self.imapserver.run_server(host='localhost', port=12345, fetch_chunk_size=64)
+        self.server = self.imapserver.run_server(
+            host='localhost', port=12345, fetch_chunk_size=64, ssl_context=ssl_context
+        )
 
     @asyncio.coroutine
     def _shutdown_server(self):

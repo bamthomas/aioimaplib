@@ -662,13 +662,14 @@ class MockImapServer(object):
     def get_connection(self, user):
         return self._server_state.get_connection(user)
 
-    def run_server(self, host='localhost', port=1143, fetch_chunk_size=0):
+    def run_server(self, host='localhost', port=1143, fetch_chunk_size=0, ssl_context=None):
         def create_protocol():
             protocol = ImapProtocol(self._server_state, fetch_chunk_size, self.capabilities, self.loop)
             self._connections.append(protocol)
             return protocol
 
-        return self.loop.run_until_complete(self.loop.create_server(create_protocol, host, port))
+        server = self.loop.create_server(create_protocol, host, port, ssl=ssl_context)
+        return self.loop.run_until_complete(server)
 
     def reset(self):
         self._server_state.reset()
