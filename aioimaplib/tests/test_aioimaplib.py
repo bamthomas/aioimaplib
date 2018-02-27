@@ -463,9 +463,13 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.imapserver.receive(mail)
 
         result, data = yield from imap_client.fetch('1', '(RFC822)')
+        content = mail.as_bytes()
 
         self.assertEqual('OK', result)
-        self.assertEqual(['1 FETCH (RFC822 {360}', mail.as_bytes(), ')', 'FETCH completed.'], data)
+        self.assertEqual([
+            '1 FETCH (RFC822 {%s}' % len(content), content, ')',
+            'FETCH completed.'
+        ], data)
 
     @asyncio.coroutine
     def test_fetch_by_uid_without_body(self):
