@@ -184,7 +184,6 @@ To add an imaplib or imaplib2 command you can :
 Not unit tested
 ---------------
 - PREAUTH
-- SSL
 
 TODO
 ----

@@ -642,17 +642,17 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 class IMAP4(object):
     TIMEOUT_SECONDS = 10
 
-    def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS, conn_lost_cb=None):
+    def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS, conn_lost_cb=None, ssl_context=None):
         self.timeout = timeout
         self.port = port
         self.host = host
         self.protocol = None
         self._idle_waiter = None
-        self.create_client(host, port, loop, conn_lost_cb)
+        self.create_client(host, port, loop, conn_lost_cb, ssl_context)
 
-    def create_client(self, host, port, loop, conn_lost_cb=None):
+    def create_client(self, host, port, loop, conn_lost_cb=None, ssl_context=None):
         self.protocol = IMAP4ClientProtocol(loop, conn_lost_cb)
-        loop.create_task(loop.create_connection(lambda: self.protocol, host, port))
+        loop.create_task(loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 
     def get_state(self):
         return self.protocol.state
@@ -809,13 +809,13 @@ def extract_exists(response):
 
 class IMAP4_SSL(IMAP4):
     def __init__(self, host='localhost', port=IMAP4_SSL_PORT, loop=asyncio.get_event_loop(),
-                 timeout=IMAP4.TIMEOUT_SECONDS):
-        super().__init__(host, port, loop, timeout)
+                 timeout=IMAP4.TIMEOUT_SECONDS, ssl_context=None):
+        super().__init__(host, port, loop, timeout, None, ssl_context)
 
-    def create_client(self, host, port, loop, conn_lost_cb=None):
-        self.protocol = IMAP4ClientProtocol(loop, conn_lost_cb)
-        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        loop.create_task(loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
+    def create_client(self, host, port, loop, conn_lost_cb=None, ssl_context=None):
+        if ssl_context is None:
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        super().create_client(host, port, loop, conn_lost_cb, ssl_context)
 
 
 # functions from imaplib

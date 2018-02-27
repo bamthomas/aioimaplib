@@ -17,6 +17,8 @@
 import asyncio
 import email
 import imaplib
+import os
+import ssl
 from datetime import datetime, timedelta
 
 import functools
@@ -26,6 +28,7 @@ from asynctest import TestCase
 
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
+from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
 from aioimaplib.tests.test_imapserver import WithImapServer
 from pytz import utc
 
@@ -477,3 +480,44 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
 
         self.assertEquals([b'1'], (yield from asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.search, 'utf-8', 'OLDER', '84700')), 1))[1])
+
+
+class TestSSLImapServerWithImaplib(WithImapServer, TestCase):
+    """ Test the imap server implementation with SSL enabled.
+
+        SSL is handled transparently by asyncio, so we don't
+        need to repeat all the tests - just ensure the encrypted
+        connection happens
+    """
+    def setUp(self):
+        self._cert_file, self._cert_key = create_temp_self_signed_cert()
+
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_context.load_cert_chain(self._cert_file, self._cert_key)
+
+        self._init_server(self.loop, ssl_context=ssl_context)
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+        os.remove(self._cert_file)
+        os.remove(self._cert_key)
+
+    def __init__(self, methodName='runTest'):
+        super().__init__(methodName)
+        add_charset('utf-8', SHORTEST, None, 'utf-8')
+        add_charset('cp1252', SHORTEST, None, 'cp1252')
+
+    @asyncio.coroutine
+    def test_client_can_connect_to_server_over_ssl(self):
+        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=self._cert_file)
+
+        pending_imap = self.loop.run_in_executor(None, functools.partial(
+            imaplib.IMAP4_SSL,
+            host='localhost',
+            port=12345,
+            ssl_context=ssl_context)
+        )
+        imap_client = yield from asyncio.wait_for(pending_imap, 1)
+
+        self.assertEqual('NONAUTH', imap_client.state)
