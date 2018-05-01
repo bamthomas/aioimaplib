@@ -1,6 +1,12 @@
 Changes
 =======
 
+V0.7.14
+-------
+[fix] when there is ::1 as localhost in /etc/hosts in a docker container
+[test] tests with SSL
+[aiolib] quote password properly in IMAP dialog
+
 V0.7.13
 -------
 [aiolib] adds a connection lost callback
