@@ -642,7 +642,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 class IMAP4(object):
     TIMEOUT_SECONDS = 10
 
-    def __init__(self, host='localhost', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS, conn_lost_cb=None, ssl_context=None):
+    def __init__(self, host='127.0.0.1', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS, conn_lost_cb=None, ssl_context=None):
         self.timeout = timeout
         self.port = port
         self.host = host
@@ -808,7 +808,7 @@ def extract_exists(response):
 
 
 class IMAP4_SSL(IMAP4):
-    def __init__(self, host='localhost', port=IMAP4_SSL_PORT, loop=asyncio.get_event_loop(),
+    def __init__(self, host='127.0.0.1', port=IMAP4_SSL_PORT, loop=asyncio.get_event_loop(),
                  timeout=IMAP4.TIMEOUT_SECONDS, ssl_context=None):
         super().__init__(host, port, loop, timeout, None, ssl_context)
 

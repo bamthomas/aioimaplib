@@ -6,7 +6,7 @@ from OpenSSL import crypto
 
 def create_temp_self_signed_cert():
     """ Create a self signed SSL certificate in temporary files for host
-        'localhost'
+        '127.0.0.1'
 
     Returns a tuple containing the certificate file name and the key
     file name.
@@ -24,7 +24,7 @@ def create_temp_self_signed_cert():
     cert.get_subject().L = "London"
     cert.get_subject().O = "aioimaplib"
     cert.get_subject().OU = "aioimaplib"
-    cert.get_subject().CN = 'localhost'
+    cert.get_subject().CN = '127.0.0.1'
     cert.set_serial_number(1000)
     cert.gmtime_adj_notBefore(0)
     cert.gmtime_adj_notAfter(10 * 365 * 24 * 60 * 60)

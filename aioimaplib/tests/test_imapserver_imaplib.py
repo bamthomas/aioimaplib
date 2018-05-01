@@ -48,14 +48,14 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
 
     @asyncio.coroutine
     def test_server_greetings_and_capabilities(self):
-        pending_imap = self.loop.run_in_executor(None, functools.partial(imaplib.IMAP4, host='localhost', port=12345))
+        pending_imap = self.loop.run_in_executor(None, functools.partial(imaplib.IMAP4, host='127.0.0.1', port=12345))
         imap_client = yield from asyncio.wait_for(pending_imap, 1)
 
         self.assertEqual('NONAUTH', imap_client.state)
 
     @asyncio.coroutine
     def test_server_login(self):
-        pending_imap = self.loop.run_in_executor(None, functools.partial(imaplib.IMAP4, host='localhost', port=12345))
+        pending_imap = self.loop.run_in_executor(None, functools.partial(imaplib.IMAP4, host='127.0.0.1', port=12345))
         imap_client = yield from asyncio.wait_for(pending_imap, 1)
 
         pending_login = self.loop.run_in_executor(None, functools.partial(imap_client.login, 'user', 'pass'))
@@ -514,7 +514,7 @@ class TestSSLImapServerWithImaplib(WithImapServer, TestCase):
 
         pending_imap = self.loop.run_in_executor(None, functools.partial(
             imaplib.IMAP4_SSL,
-            host='localhost',
+            host='127.0.0.1',
             port=12345,
             ssl_context=ssl_context)
         )

@@ -152,7 +152,7 @@ class WithImapServer(object):
         else:
             self.imapserver = MockImapServer(loop=loop)
         self.server = self.imapserver.run_server(
-            host='localhost', port=12345, fetch_chunk_size=64, ssl_context=ssl_context
+            host='127.0.0.1', port=12345, fetch_chunk_size=64, ssl_context=ssl_context
         )
 
     @asyncio.coroutine
@@ -164,7 +164,7 @@ class WithImapServer(object):
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=imaplib.IMAP4):
         imap_client = yield from asyncio.wait_for(
-            self.loop.run_in_executor(None, functools.partial(lib, host='localhost', port=12345)), 1)
+            self.loop.run_in_executor(None, functools.partial(lib, host='127.0.0.1', port=12345)), 1)
 
         yield from asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.login, login, password)), 1)
