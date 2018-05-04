@@ -455,6 +455,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @change_state
     @asyncio.coroutine
+    def authenticate(self, mechanism, ):
+        response = yield from self.execute(Command('AUTHENTICATE', self.new_tag(), mechanism.upper(), loop=self.loop))
+        if response.result == 'OK':
+            pass
+        return response
+
+    @change_state
+    @asyncio.coroutine
     def logout(self):
         response = (yield from self.execute(Command('LOGOUT', self.new_tag(), loop=self.loop)))
         if 'OK' == response.result:

@@ -192,8 +192,6 @@ TODO
 .. _rfc4314: https://tools.ietf.org/html/rfc4314
 .. _rfc2087: https://tools.ietf.org/html/rfc2087
 .. _rfc5256: https://tools.ietf.org/html/rfc5256
-.. _rfc2971: https://tools.ietf.org/html/rfc2971
-.. _rfc2342: https://tools.ietf.org/html/rfc2342
 .. _rfc4469: https://tools.ietf.org/html/rfc4469
 
 - 23/25 IMAP4rev1 commands are implemented from the main rfc3501_. 'STARTTLS' and 'AUTHENTICATE' are still missing.
@@ -201,8 +199,6 @@ TODO
 - 'SETACL' 'DELETEACL' 'GETACL' 'MYRIGHTS' 'LISTRIGHTS' from ACL rfc4314_
 - 'GETQUOTA': 'GETQUOTAROOT': 'SETQUOTA' from quota rfc2087_
 - 'SORT' and 'THREAD' from the rfc5256_
-- 'ID' from the rfc2971_
-- 'NAMESPACE' from rfc2342_
 - 'CATENATE' from rfc4469_
 - tests with other servers
 
