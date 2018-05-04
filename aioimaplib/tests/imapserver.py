@@ -1,4 +1,4 @@
-#    aioimaplib : an IMAPrev4 lib using python asyncio 
+#    aioimaplib : an IMAPrev4 lib using python asyncio
 #    Copyright (C) 2016  Bruno Thomas
 #
 #    This program is free software: you can redistribute it and/or modify
@@ -502,8 +502,12 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK %sEXPUNGE completed.' % uid_response)
 
     def capability(self, tag, *args):
-        self.send_untagged_line('CAPABILITY IMAP4rev1 YESAUTH')
+        self.send_untagged_line('CAPABILITY IMAP4rev1 YESAUTH NAMESPACE')
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
+
+    def namespace(self, tag):
+        self.send_untagged_line('NAMESPACE (("" "/")) NIL NIL')
+        self.send_tagged_line(tag, 'OK NAMESPACE command completed')
 
     def enable(self, tag, *args):
         self.send_tagged_line(tag, 'OK %s enabled' % ' '.join(args))

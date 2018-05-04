@@ -556,6 +556,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                        'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE', 'ENABLE'}
 
     @asyncio.coroutine
+    def namespace(self):
+        if 'NAMESPACE' not in self.capabilities:
+            raise Abort('server has not NAMESPACE capability')
+        return (yield from self.execute(Command('NAMESPACE', self.new_tag(), loop=self.loop)))
+
+    @asyncio.coroutine
     def simple_command(self, name, *args):
         if name not in self.simple_commands:
             raise NotImplementedError('simple command only available for %s' % self.simple_commands)
@@ -733,6 +739,10 @@ class IMAP4(object):
 
     def has_pending_idle(self):
         return self.protocol.has_pending_idle_command()
+
+    @asyncio.coroutine
+    def namespace(self):
+        return (yield from asyncio.wait_for(self.protocol.namespace(), self.timeout))
 
     @asyncio.coroutine
     def noop(self):

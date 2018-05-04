@@ -356,7 +356,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
-        self.assertEquals({'IMAP4rev1', 'YESAUTH'}, imap_client.protocol.capabilities)
+        self.assertEquals({'IMAP4rev1', 'YESAUTH', 'NAMESPACE'}, imap_client.protocol.capabilities)
         self.assertTrue(imap_client.has_capability('YESAUTH'))
 
     @asyncio.coroutine
@@ -777,6 +777,13 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertEqual(('OK', ['X-GOOD-IDEA CONDSTORE enabled']),
                          (yield from imap_client.enable('X-GOOD-IDEA CONDSTORE')))
 
+    @asyncio.coroutine
+    def test_rfc2342_namespace(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        response = yield from imap_client.namespace()
+
+        self.assertEqual(('OK', ['(("" "/")) NIL NIL', 'NAMESPACE command completed']), response)
+
 
 class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
@@ -815,6 +822,12 @@ class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
         imap_client = yield from self.login_user('user', 'pass')
         with self.assertRaises(Abort):
             yield from imap_client.enable('CAPABILITY')
+
+    @asyncio.coroutine
+    def test_namespace_without_namespace_capability_abort_command(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        with self.assertRaises(Abort):
+            yield from imap_client.namespace()
 
 
 class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
