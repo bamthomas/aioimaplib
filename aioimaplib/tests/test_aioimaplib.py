@@ -784,6 +784,12 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
 
         self.assertEqual(('OK', ['(("" "/")) NIL NIL', 'NAMESPACE command completed']), response)
 
+    @asyncio.coroutine
+    def test_rfc2971_id(self):
+        imap_client = yield from self.login_user('user', 'pass')
+        response = yield from imap_client.id()
+        self.assertEqual(('OK', ['ID command completed']), response)
+
 
 class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
