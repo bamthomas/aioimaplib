@@ -42,7 +42,7 @@ log.addHandler(sh)
 
 NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
 UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
-CAPABILITIES = 'IDLE UIDPLUS MOVE ENABLE'
+CAPABILITIES = 'IDLE UIDPLUS MOVE ENABLE NAMESPACE'
 CRLF = b'\r\n'
 
 
@@ -502,7 +502,7 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK %sEXPUNGE completed.' % uid_response)
 
     def capability(self, tag, *args):
-        self.send_untagged_line('CAPABILITY IMAP4rev1 YESAUTH NAMESPACE')
+        self.send_untagged_line('CAPABILITY IMAP4rev1 YESAUTH')
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
 
     def namespace(self, tag):
