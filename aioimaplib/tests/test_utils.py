@@ -15,7 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from unittest import TestCase
-from aioimaplib import quoted
+from aioimaplib import quoted, arguments_rfs2971, ID_MAX_FIELD_LEN, ID_MAX_VALUE_LEN
 
 
 class TestQuote(TestCase):
@@ -33,3 +33,26 @@ class TestQuote(TestCase):
 
     def test_quote_returns_bytes_when_input_is_bytes(self):
         self.assertTrue(isinstance(quoted(b'hello'), bytes))
+
+
+class TestArgument(TestCase):
+    def test_arguments_rfs2971_empty(self):
+        self.assertEqual(['NIL'], arguments_rfs2971())
+
+    def test_arguments_rfs2971_with_kwargs(self):
+        self.assertEqual(['(', '"name"', '"test"', ')'], arguments_rfs2971(name='test'))
+
+    def test_arguments_rfs2971_with_max_items(self):
+        with self.assertRaises(ValueError):
+            fields = range(31)
+            arguments_rfs2971(**{str(field): field for field in fields})
+
+    def test_arguments_rfs2971_with_max_field_length(self):
+        with self.assertRaises(ValueError):
+            field = 'test' * (ID_MAX_FIELD_LEN + 1)
+            arguments_rfs2971(**{field: 'test'})
+
+    def test_arguments_rfs2971_with_max_value_length(self):
+        with self.assertRaises(ValueError):
+            value = 'test' * (ID_MAX_VALUE_LEN + 1)
+            arguments_rfs2971(field=value)

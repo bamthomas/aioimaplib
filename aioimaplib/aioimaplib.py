@@ -42,6 +42,10 @@ IMAP4_SSL_PORT = 993
 STARTED, CONNECTED, NONAUTH, AUTH, SELECTED, LOGOUT = 'STARTED', 'CONNECTED', 'NONAUTH', 'AUTH', 'SELECTED', 'LOGOUT'
 CRLF = b'\r\n'
 
+ID_MAX_PAIRS_COUNT = 30
+ID_MAX_FIELD_LEN = 30
+ID_MAX_VALUE_LEN = 1024
+
 AllowedVersions = ('IMAP4REV1', 'IMAP4')
 Exec = Enum('Exec', 'sync async')
 Cmd = namedtuple('Cmd', 'name           valid_states                exec')
@@ -108,6 +112,25 @@ def quoted(arg):
         arg = arg.replace(b'"', b'\\"')
         q = b'"'
     return q + arg + q
+
+
+def arguments_rfs2971(**kwargs):
+    if kwargs:
+        if len(kwargs) > ID_MAX_PAIRS_COUNT:
+            raise ValueError('Must not send more than 30 field-value pairs')
+        args = ['(']
+        for field, value in kwargs.items():
+            field = quoted(str(field))
+            value = quoted(str(value)) if value is not None else 'NIL'
+            if len(field) > ID_MAX_FIELD_LEN:
+                raise ValueError('Field: {} must not be longer than 30'.format(field))
+            if len(value) > ID_MAX_VALUE_LEN:
+                raise ValueError('Field: {} value: {} must not be longer than 1024'.format(field, value))
+            args.extend((field, value))
+        args.append(')')
+    else:
+        args = ['NIL']
+    return args
 
 
 class Command(object):
@@ -552,6 +575,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.literal_data = message_bytes
         return (yield from self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop, timeout=timeout)))
 
+    @asyncio.coroutine
+    def id(self, **kwargs):
+        args = arguments_rfs2971(**kwargs)
+        return (yield from self.execute(Command('ID', self.new_tag(), *args, loop=self.loop)))
+
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
                        'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE', 'ENABLE'}
 
@@ -739,6 +767,10 @@ class IMAP4(object):
 
     def has_pending_idle(self):
         return self.protocol.has_pending_idle_command()
+
+    @asyncio.coroutine
+    def id(self, **kwargs):
+        return (yield from asyncio.wait_for(self.protocol.id(**kwargs), self.timeout))
 
     @asyncio.coroutine
     def namespace(self):

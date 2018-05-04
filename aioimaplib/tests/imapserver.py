@@ -535,6 +535,10 @@ class ImapProtocol(asyncio.Protocol):
             self.send_untagged_line('{msg_id} EXPUNGE'.format(msg_id=msg_id))
         self.send_tagged_line(tag, 'OK Done')
 
+    def id(self, tag, *args):
+        self.send_untagged_line('NIL')
+        self.send_tagged_line(tag, 'OK ID command completed')
+
     def noop(self, tag, *args):
         if len(self.state_to_send) > 0:
             for line in deque(self.state_to_send):
