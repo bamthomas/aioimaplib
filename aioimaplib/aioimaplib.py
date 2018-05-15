@@ -15,6 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
+import binascii
 import logging
 import ssl
 from copy import copy
@@ -133,6 +134,29 @@ def arguments_rfs2971(**kwargs):
     return args
 
 
+def base64_encode(data):
+    oup = b''
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    while data:
+        if len(data) > 48:
+            t = data[:48]
+            data = data[48:]
+        else:
+            t = data
+            data = ''
+        e = binascii.b2a_base64(t)
+        if e:
+            oup = oup + e[:-1]
+    return oup
+
+
+def base64_decode(data):
+    if not data:
+        return ''
+    return binascii.a2b_base64(data)
+
+
 class Command(object):
     def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=asyncio.get_event_loop(), timeout=None):
         self.name = name
@@ -234,8 +258,9 @@ class FetchCommand(Command):
         for index, line in enumerate(self.response.lines):
             if isinstance(line, str) and self.FETCH_MESSAGE_DATA_RE.match(line):
                 last_fetch_index = index
-        return not matched_parenthesis(''.join(filter(lambda l: isinstance(l, str),
-                                                      self.response.lines[last_fetch_index:])))
+        return not matched_parenthesis(
+            ''.join(filter(lambda l: isinstance(l, str), self.response.lines[last_fetch_index:]))
+        )
 
 
 def matched_parenthesis(string):
@@ -260,6 +285,17 @@ class IdleCommand(Command):
         if self.buffer:
             self.queue.put_nowait(copy(self.buffer))
             self.buffer.clear()
+
+
+class AuthenticateCommand(Command):
+    def __init__(self, tag, *args, prefix=None, untagged_resp_name=None,
+                 loop=asyncio.get_event_loop(), timeout=None):
+        super().__init__(
+            'AUTHENTICATE', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name, loop=loop, timeout=timeout
+        )
+
+    def flush(self):
+        pass
 
 
 class AioImapException(Exception):
@@ -455,10 +491,20 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @change_state
     @asyncio.coroutine
-    def authenticate(self, mechanism, ):
-        response = yield from self.execute(Command('AUTHENTICATE', self.new_tag(), mechanism.upper(), loop=self.loop))
+    def authenticate(self, mechanism, user, password, login_func):
+        data = login_func(mechanism, user, password)
+        if data is None:
+            data = '*'
+        else:
+            data = base64_encode(data)
+        response = yield from self.execute(
+            AuthenticateCommand(self.new_tag(), mechanism, loop=self.loop)
+        )
         if response.result == 'OK':
-            pass
+            self.state = AUTH
+            for line in response.lines:
+                if 'CAPABILITY' in line:
+                    self.capabilities = self.capabilities.union(set(line.replace('CAPABILITY', '').strip().split()))
         return response
 
     @change_state
@@ -708,6 +754,13 @@ class IMAP4(object):
         return (yield from asyncio.wait_for(self.protocol.login(user, password), self.timeout))
 
     @asyncio.coroutine
+    def authenticate(self, mechanism, user, password, login_func):
+        return (yield from asyncio.wait_for(
+            self.protocol.authenticate(mechanism, user, password, login_func),
+            self.timeout
+        ))
+
+    @asyncio.coroutine
     def logout(self):
         return (yield from asyncio.wait_for(self.protocol.logout(), self.timeout))
 
@@ -879,8 +932,10 @@ def int2ap(num):
         val += ap[mod:mod + 1]
     return val
 
+
 Months = ' Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')
-Mon2num = {s.encode():n+1 for n, s in enumerate(Months[1:])}
+Mon2num = {s.encode(): n+1 for n, s in enumerate(Months[1:])}
+
 
 def time2internaldate(date_time):
     """Convert date_time to IMAP4 INTERNALDATE representation.
@@ -918,3 +973,30 @@ def time2internaldate(date_time):
         raise ValueError("date_time not of a known type")
     fmt = '"%d-{}-%Y %H:%M:%S %z"'.format(Months[dt.month])
     return dt.strftime(fmt)
+
+
+# imap = None
+#
+# def auth(m, l, p):
+#     return '\x00{}\x00{}'.format(l, p)
+#
+#
+# def login(a):
+#     loop = asyncio.get_event_loop()
+#     loop.create_task(imap.authenticate('PLAIN', 'py.krivosheev@gmail.com', '2912093wolko_dav', auth))
+#
+#
+# def main():
+#     loop = asyncio.get_event_loop()
+#     global imap
+#     imap = IMAP4_SSL(host='imap.gmail.com', timeout=30)
+#     task = loop.create_task(imap.wait_hello_from_server())
+#     task.add_done_callback(login)
+#     loop.run_forever()
+#     #
+#     import imaplib
+#     # imap = imaplib.IMAP4_SSL(host='imap.gmail.com')
+#     # imap.authenticate('PLAIN', auth)
+#
+#
+# main()
