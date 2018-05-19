@@ -15,7 +15,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from unittest import TestCase
-from aioimaplib import quoted, arguments_rfs2971, ID_MAX_FIELD_LEN, ID_MAX_VALUE_LEN
+import collections
+from aioimaplib import quoted, arguments_rfs2971, ID_MAX_FIELD_LEN, ID_MAX_VALUE_LEN, parse_capability
 
 
 class TestQuote(TestCase):
@@ -56,3 +57,16 @@ class TestArgument(TestCase):
         with self.assertRaises(ValueError):
             value = 'test' * (ID_MAX_VALUE_LEN + 1)
             arguments_rfs2971(field=value)
+
+
+class TestParseCapability(TestCase):
+    def test_parse_capability_empty(self):
+        self.assertEqual((None, collections.defaultdict(set)), parse_capability(''))
+
+    def test_parse_capability(self):
+        result = collections.defaultdict(set)
+        result['TEST'].add('')
+        result['TEST1'].add('1')
+        result['TEST1'].add('2')
+
+        self.assertEqual(('TEST', result), parse_capability('TEST TEST1=1 TEST1=2'))

@@ -160,6 +160,8 @@ def base64_decode(data):
 
 def parse_capability(capabilities):
     result = collections.defaultdict(set)
+    if not capabilities:
+        return None, result
     capability_list = capabilities.split()
     version = capability_list[0].upper()
     for capability in capability_list:
