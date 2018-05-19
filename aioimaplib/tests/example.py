@@ -12,7 +12,7 @@ def wait_for_new_message(host, user, password):
     yield from imap_client.login(user, password)
     yield from imap_client.select()
 
-    asyncio.async(imap_client.idle())
+    asyncio.ensure_future(imap_client.idle())
     while True:
         msg = yield from imap_client.wait_server_push()
         print('--> received from server: %s' % msg)

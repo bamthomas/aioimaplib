@@ -21,6 +21,7 @@ import ssl
 from copy import copy
 from datetime import datetime, timezone, timedelta
 import time
+import collections
 from enum import Enum
 
 import re
@@ -157,6 +158,16 @@ def base64_decode(data):
     return binascii.a2b_base64(data)
 
 
+def parse_capability(capabilities):
+    result = collections.defaultdict(set)
+    capability_list = capabilities.split()
+    version = capability_list[0].upper()
+    for capability in capability_list:
+        key, _, value = capability.partition('=')
+        result[key].add(value)
+    return version, result
+
+
 class Command(object):
     def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=asyncio.get_event_loop(), timeout=None):
         self.name = name
@@ -287,17 +298,6 @@ class IdleCommand(Command):
             self.buffer.clear()
 
 
-class AuthenticateCommand(Command):
-    def __init__(self, tag, *args, prefix=None, untagged_resp_name=None,
-                 loop=asyncio.get_event_loop(), timeout=None):
-        super().__init__(
-            'AUTHENTICATE', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name, loop=loop, timeout=timeout
-        )
-
-    def flush(self):
-        pass
-
-
 class AioImapException(Exception):
     def __init__(self, reason):
         super().__init__(reason)
@@ -350,7 +350,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.transport = None
         self.state = STARTED
         self.state_condition = asyncio.Condition()
-        self.capabilities = set()
+        self.capabilities = collections.defaultdict(list)
         self.pending_async_commands = dict()
         self.pending_sync_command = None
         self.idle_queue = asyncio.Queue()
@@ -418,7 +418,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             return
 
         if self.state == CONNECTED:
-            asyncio.async(self.welcome(line))
+            asyncio.ensure_future(self.welcome(line))
         elif tagged_status_response_re.match(line):
             self._response_done(line)
         elif current_cmd is not None:
@@ -486,25 +486,27 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.state = AUTH
             for line in response.lines:
                 if 'CAPABILITY' in line:
-                    self.capabilities = self.capabilities.union(set(line.replace('CAPABILITY', '').strip().split()))
+                    version, capability = parse_capability(line.replace('CAPABILITY', '').strip())
+                    self.capabilities.update(capability)
         return response
 
     @change_state
     @asyncio.coroutine
     def authenticate(self, mechanism, user, password, login_func):
+        if 'AUTH' not in self.capabilities and mechanism not in self.capabilities['AUTH']:
+            raise Abort('server has not AUTH capability')
         data = login_func(mechanism, user, password)
         if data is None:
-            data = '*'
+            self.literal_data = '*'
         else:
-            data = base64_encode(data)
-        response = yield from self.execute(
-            AuthenticateCommand(self.new_tag(), mechanism, loop=self.loop)
-        )
+            self.literal_data = base64_encode(data)
+        response = yield from self.execute(Command('AUTHENTICATE', self.new_tag(), mechanism, loop=self.loop))
         if response.result == 'OK':
             self.state = AUTH
             for line in response.lines:
                 if 'CAPABILITY' in line:
-                    self.capabilities = self.capabilities.union(set(line.replace('CAPABILITY', '').strip().split()))
+                    capability = parse_capability(line.replace('CAPABILITY', '').strip())
+                    self.capabilities.update(capability)
         return response
 
     @change_state
@@ -518,8 +520,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def select(self, mailbox='INBOX'):
-        response = yield from self.execute(
-            Command('SELECT', self.new_tag(), mailbox, loop=self.loop))
+        response = yield from self.execute(Command('SELECT', self.new_tag(), mailbox, loop=self.loop))
 
         if 'OK' == response.result:
             self.state = SELECTED
@@ -607,9 +608,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def capability(self):
         response = yield from self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
-        capability_list = response.lines[0].split()
-        self.capabilities = set(capability_list)
-        version = capability_list[0].upper()
+        version, self.capabilities = parse_capability(response.lines[0])
         if version not in AllowedVersions:
             raise Error('server not IMAP4 compliant')
         else:
@@ -651,7 +650,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def wait_async_pending_commands(self):
-        yield from asyncio.wait([asyncio.async(cmd.wait()) for cmd in self.pending_async_commands.values()])
+        yield from asyncio.wait([asyncio.ensure_future(cmd.wait()) for cmd in self.pending_async_commands.values()])
 
     @asyncio.coroutine
     def wait(self, state_regexp):
@@ -705,7 +704,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         command.close(response_text, result=response_result)
 
     def _continuation(self, line):
-        if self.pending_sync_command is not None and self.pending_sync_command.name == 'APPEND':
+        if self.pending_sync_command is not None and self.pending_sync_command.name in {'APPEND', 'AUTHENTICATE'}:
             if self.literal_data is None:
                 Abort('asked for literal data but have no literal data to send')
             self.transport.write(self.literal_data)
@@ -821,8 +820,11 @@ class IMAP4(object):
     def idle_start(self, timeout=TWENTY_NINE_MINUTES):
         if self._idle_waiter is not None:
             self._idle_waiter.cancel()
-        idle = asyncio.async(self.idle())
-        self._idle_waiter = self.protocol.loop.call_later(timeout, lambda: asyncio.async(self.stop_wait_server_push()))
+        idle = asyncio.ensure_future(self.idle())
+        self._idle_waiter = self.protocol.loop.call_later(
+            timeout,
+            lambda: asyncio.ensure_future(self.stop_wait_server_push())
+        )
         yield from self.wait_server_push(self.timeout) # idling continuation
         return idle
 
@@ -973,30 +975,3 @@ def time2internaldate(date_time):
         raise ValueError("date_time not of a known type")
     fmt = '"%d-{}-%Y %H:%M:%S %z"'.format(Months[dt.month])
     return dt.strftime(fmt)
-
-
-# imap = None
-#
-# def auth(m, l, p):
-#     return '\x00{}\x00{}'.format(l, p)
-#
-#
-# def login(a):
-#     loop = asyncio.get_event_loop()
-#     loop.create_task(imap.authenticate('PLAIN', 'py.krivosheev@gmail.com', '2912093wolko_dav', auth))
-#
-#
-# def main():
-#     loop = asyncio.get_event_loop()
-#     global imap
-#     imap = IMAP4_SSL(host='imap.gmail.com', timeout=30)
-#     task = loop.create_task(imap.wait_hello_from_server())
-#     task.add_done_callback(login)
-#     loop.run_forever()
-#     #
-#     import imaplib
-#     # imap = imaplib.IMAP4_SSL(host='imap.gmail.com')
-#     # imap.authenticate('PLAIN', auth)
-#
-#
-# main()
