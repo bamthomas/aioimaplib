@@ -356,6 +356,8 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         capabilities = collections.defaultdict(set)
         capabilities['IMAP4rev1'].add('')
         capabilities['YESAUTH'].add('')
+        capabilities['AUTH'].add('PLAIN')
+
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
@@ -794,10 +796,26 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         response = yield from imap_client.id()
         self.assertEqual(('OK', ['ID command completed']), response)
 
+    @asyncio.coroutine
+    def test_rfc3501_authenticate(self):
+        assert_response = (
+            'OK',
+            ['CAPABILITY IMAP4rev1 IDLE UIDPLUS MOVE ENABLE NAMESPACE', 'PLAIN authentication successful']
+        )
+
+        def simple_login(c, l, p):
+            return '{} {}'.format(l, p)
+
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
+        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+
+        response = yield from imap_client.authenticate('PLAIN', 'user', 'pass', simple_login)
+        self.assertEqual(assert_response, response)
+
 
 class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
-        self._init_server(self.loop, capabilities='')
+        self._init_server(self.loop, welcom_capabilities='IMAP4rev1 YESAUTH', capabilities='')
 
     @asyncio.coroutine
     def tearDown(self):
@@ -838,6 +856,17 @@ class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
         imap_client = yield from self.login_user('user', 'pass')
         with self.assertRaises(Abort):
             yield from imap_client.namespace()
+
+    @asyncio.coroutine
+    def test_rfc3501_authenticate_abort_command(self):
+        def simple_login(c, l, p):
+            return '{} {}'.format(l, p)
+
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
+        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+
+        with self.assertRaises(Abort):
+            yield from imap_client.authenticate('PLAIN', 'user', 'pass', simple_login)
 
 
 class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
@@ -900,6 +929,10 @@ class TestAioimaplibCallback(AioWithImapServer, asynctest.TestCase):
         self._init_server(self.loop)
 
     @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+
+    @asyncio.coroutine
     def test_callback_is_called_when_connection_is_lost(self):
         queue = asyncio.Queue()
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3, conn_lost_cb=(
@@ -910,6 +943,26 @@ class TestAioimaplibCallback(AioWithImapServer, asynctest.TestCase):
         yield from self._shutdown_server()
 
         self.assertEqual('called with None', (yield from asyncio.wait_for(queue.get(), timeout=2)))
+
+
+class TestAioimaplibAuthenticate(AioWithImapServer, asynctest.TestCase):
+    def setUp(self):
+        self._init_server(self.loop, welcom_capabilities='IMAP4rev1 YESAUTH AUTH=TEST')
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+
+    @asyncio.coroutine
+    def test_rfc3501_authenticate_wront_mechanism(self):
+        def simple_login(c, l, p):
+            return '{} {}'.format(l, p)
+
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
+        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+
+        with self.assertRaises(Abort):
+            yield from imap_client.authenticate('PLAIN', 'user', 'pass', simple_login)
 
 
 class TestAioimaplibSSL(WithImapServer, asynctest.TestCase):
@@ -938,6 +991,8 @@ class TestAioimaplibSSL(WithImapServer, asynctest.TestCase):
         capabilities = collections.defaultdict(set)
         capabilities['IMAP4rev1'].add('')
         capabilities['YESAUTH'].add('')
+        capabilities['AUTH'].add('PLAIN')
+
         ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=self._cert_file)
         imap_client = aioimaplib.IMAP4_SSL(port=12345, loop=self.loop, ssl_context=ssl_context)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)

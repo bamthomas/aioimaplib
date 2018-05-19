@@ -43,6 +43,7 @@ log.addHandler(sh)
 NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
 UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
 CAPABILITIES = 'IDLE UIDPLUS MOVE ENABLE NAMESPACE'
+WELCOM_CAPABILITIES = 'IMAP4rev1 YESAUTH AUTH=PLAIN'
 CRLF = b'\r\n'
 
 
@@ -192,10 +193,17 @@ FETCH_HEADERS_RE = re.compile(r'.*BODY.PEEK\[HEADER.FIELDS \((?P<headers>.+)\)\]
 class ImapProtocol(asyncio.Protocol):
     IDLE_STILL_HERE_PERIOD_SECONDS = 10
 
-    def __init__(self, server_state, fetch_chunk_size=0, capabilities=CAPABILITIES,
-                 loop=asyncio.get_event_loop()):
+    def __init__(
+            self,
+            server_state,
+            fetch_chunk_size=0,
+            welcom_capabilities=WELCOM_CAPABILITIES,
+            capabilities=CAPABILITIES,
+            loop=asyncio.get_event_loop()
+    ):
         self.uidvalidity = int(datetime.now().timestamp())
         self.capabilities = capabilities
+        self.welcom_capabilities = welcom_capabilities
         self.state_to_send = list()
         self.delay_seconds = 0
         self.loop = loop
@@ -209,6 +217,7 @@ class ImapProtocol(asyncio.Protocol):
         self.state = NONAUTH
         self.state_condition = asyncio.Condition()
         self.append_literal_command = None
+        self.authenticate_literal_command = None
 
     def connection_made(self, transport):
         self.transport = transport
@@ -217,6 +226,9 @@ class ImapProtocol(asyncio.Protocol):
     def data_received(self, data):
         if self.append_literal_command is not None:
             self.append_literal(data)
+            return
+        if self.authenticate_literal_command is not None:
+            self.authenticate_literal(data)
             return
         for cmd_line in data.splitlines():
             if command_re.match(cmd_line) is None:
@@ -460,6 +472,23 @@ class ImapProtocol(asyncio.Protocol):
         response += b')'
         return response
 
+    def authenticate(self, tag, *args):
+        mechanism = args[0]
+        if mechanism != 'PLAIN':
+            self.send_tagged_line(tag, 'NO [AUTHENTICATE] mechanism not support')
+            return
+        self.authenticate_literal_command = (tag, mechanism)
+        self.send_untagged_line('', continuation=True)
+
+    @critical_section(next_state=AUTH)
+    def authenticate_literal(self, data):
+        tag, mechanism = self.authenticate_literal_command
+        if CRLF not in data:
+            return
+        self.server_state.login(self.user_login, self)
+        self.send_untagged_line('CAPABILITY IMAP4rev1 %s' % self.capabilities)
+        self.send_tagged_line(tag, 'OK PLAIN authentication successful')
+
     def append(self, tag, *args):
         mailbox_name = args[0]
         size = args[-1].strip('{}')
@@ -502,7 +531,7 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK %sEXPUNGE completed.' % uid_response)
 
     def capability(self, tag, *args):
-        self.send_untagged_line('CAPABILITY IMAP4rev1 YESAUTH')
+        self.send_untagged_line('CAPABILITY {}'.format(self.welcom_capabilities))
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
 
     def namespace(self, tag):
@@ -632,10 +661,11 @@ class ImapProtocol(asyncio.Protocol):
 
 
 class MockImapServer(object):
-    def __init__(self, capabilities=CAPABILITIES, loop=None) -> None:
+    def __init__(self, welcom_capabilities=WELCOM_CAPABILITIES, capabilities=CAPABILITIES, loop=None) -> None:
         self._server_state = ServerState()
         self._connections = list()
         self.capabilities = capabilities
+        self.welcom_capabilities = welcom_capabilities
         if loop is None:
             self.loop = asyncio.get_event_loop()
         else:
@@ -672,7 +702,13 @@ class MockImapServer(object):
 
     def run_server(self, host='127.0.0.1', port=1143, fetch_chunk_size=0, ssl_context=None):
         def create_protocol():
-            protocol = ImapProtocol(self._server_state, fetch_chunk_size, self.capabilities, self.loop)
+            protocol = ImapProtocol(
+                self._server_state,
+                fetch_chunk_size,
+                self.welcom_capabilities,
+                self.capabilities,
+                self.loop
+            )
             self._connections.append(protocol)
             return protocol
 

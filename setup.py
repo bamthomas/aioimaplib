@@ -33,8 +33,9 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
         "Topic :: Communications :: Email :: Post-Office :: IMAP",
-        "Topic :: Internet" 
+        "Topic :: Internet"
     ],
     author='Bruno Thomas',
     author_email='bruno@barreverte.fr',
@@ -44,7 +45,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
-    test_suite="nose.collector",  
+    test_suite="nose.collector",
     install_requires=[],
     tests_require=tests_require,
 )

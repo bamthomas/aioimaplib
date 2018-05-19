@@ -1,4 +1,4 @@
-#    aioimaplib : an IMAPrev4 lib using python asyncio 
+#    aioimaplib : an IMAPrev4 lib using python asyncio
 #    Copyright (C) 2016  Bruno Thomas
 #
 #    This program is free software: you can redistribute it and/or modify
@@ -145,12 +145,9 @@ class TestServerState(unittest.TestCase):
 
 
 class WithImapServer(object):
-    def _init_server(self, loop, capabilities=None, ssl_context=None):
+    def _init_server(self, loop, ssl_context=None, **kwargs):
         self.loop = loop
-        if capabilities is not None:
-            self.imapserver = MockImapServer(loop=loop, capabilities=capabilities)
-        else:
-            self.imapserver = MockImapServer(loop=loop)
+        self.imapserver = MockImapServer(loop=loop, **kwargs)
         self.server = self.imapserver.run_server(
             host='127.0.0.1', port=12345, fetch_chunk_size=64, ssl_context=ssl_context
         )
@@ -159,7 +156,7 @@ class WithImapServer(object):
     def _shutdown_server(self):
         self.imapserver.reset()
         self.server.close()
-        yield from asyncio.wait_for(self.server.wait_closed(), 1)
+        yield from asyncio.wait_for(self.server.wait_closed(), 2)
 
     @asyncio.coroutine
     def login_user(self, login, password, select=False, lib=imaplib.IMAP4):

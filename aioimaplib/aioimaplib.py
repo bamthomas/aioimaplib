@@ -495,8 +495,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     @asyncio.coroutine
     def authenticate(self, mechanism, user, password, login_func):
-        if 'AUTH' not in self.capabilities and mechanism not in self.capabilities['AUTH']:
+        if 'AUTH' not in self.capabilities:
             raise Abort('server has not AUTH capability')
+        if mechanism not in self.capabilities['AUTH']:
+            raise Abort('server has not support AUTH mechanism: {}'.format(mechanism))
         data = login_func(mechanism, user, password)
         if data is None:
             self.literal_data = '*'
@@ -507,7 +509,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.state = AUTH
             for line in response.lines:
                 if 'CAPABILITY' in line:
-                    capability = parse_capability(line.replace('CAPABILITY', '').strip())
+                    version, capability = parse_capability(line.replace('CAPABILITY', '').strip())
                     self.capabilities.update(capability)
         return response
 
@@ -971,7 +973,7 @@ def time2internaldate(date_time):
         if date_time.tzinfo is None:
             raise ValueError("date_time must be aware")
         dt = date_time
-    elif isinstance(date_time, str) and (date_time[0],date_time[-1]) == ('"','"'):
+    elif isinstance(date_time, str) and (date_time[0], date_time[-1]) == ('"', '"'):
         return date_time        # Assume in correct format
     else:
         raise ValueError("date_time not of a known type")

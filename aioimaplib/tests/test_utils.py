@@ -16,7 +16,15 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from unittest import TestCase
 import collections
-from aioimaplib import quoted, arguments_rfs2971, ID_MAX_FIELD_LEN, ID_MAX_VALUE_LEN, parse_capability
+from aioimaplib import (
+    quoted,
+    arguments_rfs2971,
+    ID_MAX_FIELD_LEN,
+    ID_MAX_VALUE_LEN,
+    parse_capability,
+    base64_encode,
+    base64_decode
+)
 
 
 class TestQuote(TestCase):
@@ -70,3 +78,28 @@ class TestParseCapability(TestCase):
         result['TEST1'].add('2')
 
         self.assertEqual(('TEST', result), parse_capability('TEST TEST1=1 TEST1=2'))
+
+
+class TestBase64(TestCase):
+    def test_base64_decode_empty(self):
+        self.assertEqual('', base64_decode(None))
+        self.assertEqual('', base64_decode(''))
+
+    def test_base64_decode_str(self):
+        self.assertEqual(b'1234', base64_decode('MTIzNA=='))
+
+    def test_base64_encode_empty(self):
+        self.assertEqual('', base64_decode(None))
+        self.assertEqual('', base64_decode(''))
+
+    def test_base64_encode_str(self):
+        self.assertEqual(b'MTIzNA==', base64_encode('1234'))
+
+    def test_base64_encode_bytes(self):
+        self.assertEqual(b'MTIzNA==', base64_encode(b'1234'))
+
+    def test_base64_encode_long_str(self):
+        self.assertEqual(
+            b'MTIzNDU2Nzg5MTAxMTEyMTMxNDE1MTYxMTIzNDU2Nzg5MTAxMTEyMTMxNDE1MTYxMg==',
+            base64_encode('1234567891011121314151611234567891011121314151612')
+        )
