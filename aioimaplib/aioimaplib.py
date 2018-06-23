@@ -14,27 +14,24 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import asyncio
-import binascii
-import logging
-import ssl
-from copy import copy
-from datetime import datetime, timezone, timedelta
-import time
-import collections
-from enum import Enum
 
 import re
-
-import functools
-
+import ssl
+import copy
+import time
+import base64
 import random
-from collections import namedtuple
+import asyncio
+import logging
+import functools
+import collections
+from enum import Enum
+from datetime import datetime, timezone, timedelta
 
 # to avoid imap servers to kill the connection after 30mn idling
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
 
-TWENTY_NINE_MINUTES = 1740
+DEFAULT_TIMEOUT = 29 * 60
 STOP_WAIT_SERVER_PUSH = 'stop_wait_server_push'
 
 log = logging.getLogger(__name__)
@@ -50,7 +47,7 @@ ID_MAX_VALUE_LEN = 1024
 
 AllowedVersions = ('IMAP4REV1', 'IMAP4')
 Exec = Enum('Exec', 'sync async')
-Cmd = namedtuple('Cmd', 'name           valid_states                exec')
+Cmd = collections.namedtuple('Cmd', 'name           valid_states                exec')
 Commands = {
     'APPEND':       Cmd('APPEND',       (AUTH, SELECTED),           Exec.sync),
     'AUTHENTICATE': Cmd('AUTHENTICATE', (NONAUTH,),                 Exec.sync),
@@ -96,7 +93,7 @@ Commands = {
     'DELAY':        Cmd('DELAY',        (AUTH, SELECTED),           Exec.sync),
 }
 
-Response = namedtuple('Response', 'result lines')
+Response = collections.namedtuple('Response', 'result lines')
 
 
 def quoted(arg):
@@ -135,29 +132,6 @@ def arguments_rfs2971(**kwargs):
     return args
 
 
-def base64_encode(data):
-    oup = b''
-    if isinstance(data, str):
-        data = data.encode('utf-8')
-    while data:
-        if len(data) > 48:
-            t = data[:48]
-            data = data[48:]
-        else:
-            t = data
-            data = ''
-        e = binascii.b2a_base64(t)
-        if e:
-            oup = oup + e[:-1]
-    return oup
-
-
-def base64_decode(data):
-    if not data:
-        return ''
-    return binascii.a2b_base64(data)
-
-
 def parse_capability(capabilities):
     result = collections.defaultdict(set)
     if not capabilities:
@@ -168,6 +142,15 @@ def parse_capability(capabilities):
         key, _, value = capability.partition('=')
         result[key].add(value)
     return version, result
+
+
+def _authenticator(mech):
+    def process(data):
+        result = mech(base64.b64decode(data))
+        if result is None:
+            return b'*'     # Abort conversation
+        return base64.b64encode(result)
+    return process
 
 
 class Command(object):
@@ -296,7 +279,7 @@ class IdleCommand(Command):
 
     def flush(self):
         if self.buffer:
-            self.queue.put_nowait(copy(self.buffer))
+            self.queue.put_nowait(copy.copy(self.buffer))
             self.buffer.clear()
 
 
@@ -357,6 +340,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.pending_sync_command = None
         self.idle_queue = asyncio.Queue()
         self.imap_version = None
+        self.literator = None
         self.literal_data = None
         self.incomplete_line = b''
         self.current_command = None
@@ -494,16 +478,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @change_state
     @asyncio.coroutine
-    def authenticate(self, mechanism, user, password, login_func):
+    def authenticate(self, mechanism, authobject):
         if 'AUTH' not in self.capabilities:
             raise Abort('server has not AUTH capability')
         if mechanism not in self.capabilities['AUTH']:
             raise Abort('server has not support AUTH mechanism: {}'.format(mechanism))
-        data = login_func(mechanism, user, password)
-        if data is None:
-            self.literal_data = '*'
-        else:
-            self.literal_data = base64_encode(data)
+        self.literator = _authenticator(authobject)
+        mechanism = mechanism.upper()
         response = yield from self.execute(Command('AUTHENTICATE', self.new_tag(), mechanism, loop=self.loop))
         if response.result == 'OK':
             self.state = AUTH
@@ -709,11 +690,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     def _continuation(self, line):
         if self.pending_sync_command is not None and self.pending_sync_command.name in {'APPEND', 'AUTHENTICATE'}:
-            if self.literal_data is None:
+            if self.literal_data is None or self.literator is None:
                 Abort('asked for literal data but have no literal data to send')
-            self.transport.write(self.literal_data)
+            data = self.literal_data or self.literator(line)
+            self.transport.write(data)
             self.transport.write(CRLF)
             self.literal_data = None
+            self.literator = None
         elif self.pending_sync_command is not None:
             log.debug('continuation line appended to pending sync command %s : %s' % (self.pending_sync_command, line))
             self.pending_sync_command.append_to_resp(line)
@@ -757,11 +740,8 @@ class IMAP4(object):
         return (yield from asyncio.wait_for(self.protocol.login(user, password), self.timeout))
 
     @asyncio.coroutine
-    def authenticate(self, mechanism, user, password, login_func):
-        return (yield from asyncio.wait_for(
-            self.protocol.authenticate(mechanism, user, password, login_func),
-            self.timeout
-        ))
+    def authenticate(self, mechanism, authobject):
+        return (yield from asyncio.wait_for(self.protocol.authenticate(mechanism, authobject), self.timeout))
 
     @asyncio.coroutine
     def logout(self):
@@ -817,11 +797,11 @@ class IMAP4(object):
         return False
 
     @asyncio.coroutine
-    def wait_server_push(self, timeout=TWENTY_NINE_MINUTES):
+    def wait_server_push(self, timeout=DEFAULT_TIMEOUT):
         return (yield from asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout))
 
     @asyncio.coroutine
-    def idle_start(self, timeout=TWENTY_NINE_MINUTES):
+    def idle_start(self, timeout=DEFAULT_TIMEOUT):
         if self._idle_waiter is not None:
             self._idle_waiter.cancel()
         idle = asyncio.ensure_future(self.idle())

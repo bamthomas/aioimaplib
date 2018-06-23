@@ -14,6 +14,7 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import asyncio
 import logging
 import os
@@ -26,9 +27,19 @@ import asynctest
 from mock import call, MagicMock
 from pytz import utc
 
-from aioimaplib import aioimaplib, CommandTimeout, extract_exists, \
-    TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH, FetchCommand, IdleCommand
-from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response, Abort, AioImapException
+from aioimaplib import (
+    aioimaplib, CommandTimeout, extract_exists,
+    DEFAULT_TIMEOUT,
+    STOP_WAIT_SERVER_PUSH,
+    FetchCommand,
+    IdleCommand,
+    Commands,
+    IMAP4ClientProtocol,
+    Command,
+    Response,
+    Abort,
+    AioImapException
+)
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
@@ -803,13 +814,13 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
             ['CAPABILITY IMAP4rev1 IDLE UIDPLUS MOVE ENABLE NAMESPACE', 'PLAIN authentication successful']
         )
 
-        def simple_login(c, l, p):
-            return '{} {}'.format(l, p)
+        def simple_login(c):
+            return '{} {}'.format('user', 'pass')
 
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
-        response = yield from imap_client.authenticate('PLAIN', 'user', 'pass', simple_login)
+        response = yield from imap_client.authenticate('PLAIN', simple_login)
         self.assertEqual(assert_response, response)
 
 
@@ -859,14 +870,14 @@ class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
 
     @asyncio.coroutine
     def test_rfc3501_authenticate_abort_command(self):
-        def simple_login(c, l, p):
-            return '{} {}'.format(l, p)
+        def simple_login(c):
+            return '{} {}'.format('user', 'pass')
 
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         with self.assertRaises(Abort):
-            yield from imap_client.authenticate('PLAIN', 'user', 'pass', simple_login)
+            yield from imap_client.authenticate('PLAIN', simple_login)
 
 
 class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
@@ -917,8 +928,8 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         yield from imap_client.idle_start()
 
-        push_task = asyncio.ensure_future(imap_client.wait_server_push(TWENTY_NINE_MINUTES + 2))
-        yield from self.advance(TWENTY_NINE_MINUTES + 1)
+        push_task = asyncio.ensure_future(imap_client.wait_server_push(DEFAULT_TIMEOUT + 2))
+        yield from self.advance(DEFAULT_TIMEOUT + 1)
 
         r = yield from asyncio.wait_for(push_task, 0)
         self.assertEqual(STOP_WAIT_SERVER_PUSH, r)
@@ -955,14 +966,14 @@ class TestAioimaplibAuthenticate(AioWithImapServer, asynctest.TestCase):
 
     @asyncio.coroutine
     def test_rfc3501_authenticate_wront_mechanism(self):
-        def simple_login(c, l, p):
-            return '{} {}'.format(l, p)
+        def simple_login(c):
+            return '{} {}'.format('user', 'pass')
 
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         with self.assertRaises(Abort):
-            yield from imap_client.authenticate('PLAIN', 'user', 'pass', simple_login)
+            yield from imap_client.authenticate('PLAIN', simple_login)
 
 
 class TestAioimaplibSSL(WithImapServer, asynctest.TestCase):
