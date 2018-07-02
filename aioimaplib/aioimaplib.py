@@ -47,51 +47,51 @@ ID_MAX_FIELD_LEN = 30
 ID_MAX_VALUE_LEN = 1024
 
 AllowedVersions = ('IMAP4REV1', 'IMAP4')
-Exec = Enum('Exec', 'sync async')
+Exec = Enum('Exec', 'is_sync is_async')
 Cmd = namedtuple('Cmd', 'name           valid_states                exec')
 Commands = {
-    'APPEND':       Cmd('APPEND',       (AUTH, SELECTED),           Exec.sync),
-    'AUTHENTICATE': Cmd('AUTHENTICATE', (NONAUTH,),                 Exec.sync),
-    'CAPABILITY':   Cmd('CAPABILITY',   (NONAUTH, AUTH, SELECTED),  Exec.async),
-    'CHECK':        Cmd('CHECK',        (SELECTED,),                Exec.async),
-    'CLOSE':        Cmd('CLOSE',        (SELECTED,),                Exec.sync),
-    'COMPRESS':     Cmd('COMPRESS',     (AUTH,),                    Exec.sync),
-    'COPY':         Cmd('COPY',         (SELECTED,),                Exec.async),
-    'CREATE':       Cmd('CREATE',       (AUTH, SELECTED),           Exec.async),
-    'DELETE':       Cmd('DELETE',       (AUTH, SELECTED),           Exec.async),
-    'DELETEACL':    Cmd('DELETEACL',    (AUTH, SELECTED),           Exec.async),
-    'ENABLE':       Cmd('ENABLE',       (AUTH,),                    Exec.sync),
-    'EXAMINE':      Cmd('EXAMINE',      (AUTH, SELECTED),           Exec.sync),
-    'EXPUNGE':      Cmd('EXPUNGE',      (SELECTED,),                Exec.async),
-    'FETCH':        Cmd('FETCH',        (SELECTED,),                Exec.async),
-    'GETACL':       Cmd('GETACL',       (AUTH, SELECTED),           Exec.async),
-    'GETQUOTA':     Cmd('GETQUOTA',     (AUTH, SELECTED),           Exec.async),
-    'GETQUOTAROOT': Cmd('GETQUOTAROOT', (AUTH, SELECTED),           Exec.async),
-    'ID':           Cmd('ID',           (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.async),
-    'IDLE':         Cmd('IDLE',         (SELECTED,),                Exec.sync),
-    'LIST':         Cmd('LIST',         (AUTH, SELECTED),           Exec.async),
-    'LOGIN':        Cmd('LOGIN',        (NONAUTH,),                 Exec.sync),
-    'LOGOUT':       Cmd('LOGOUT',       (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.sync),
-    'LSUB':         Cmd('LSUB',         (AUTH, SELECTED),           Exec.async),
-    'MYRIGHTS':     Cmd('MYRIGHTS',     (AUTH, SELECTED),           Exec.async),
-    'MOVE':         Cmd('MOVE',         (SELECTED,),                Exec.sync),
-    'NAMESPACE':    Cmd('NAMESPACE',    (AUTH, SELECTED),           Exec.async),
-    'NOOP':         Cmd('NOOP',         (NONAUTH, AUTH, SELECTED),  Exec.async),
-    'RENAME':       Cmd('RENAME',       (AUTH, SELECTED),           Exec.async),
-    'SEARCH':       Cmd('SEARCH',       (SELECTED,),                Exec.async),
-    'SELECT':       Cmd('SELECT',       (AUTH, SELECTED),           Exec.sync),
-    'SETACL':       Cmd('SETACL',       (AUTH, SELECTED),           Exec.sync),
-    'SETQUOTA':     Cmd('SETQUOTA',     (AUTH, SELECTED),           Exec.sync),
-    'SORT':         Cmd('SORT',         (SELECTED,),                Exec.async),
-    'STARTTLS':     Cmd('STARTTLS',     (NONAUTH,),                 Exec.sync),
-    'STATUS':       Cmd('STATUS',       (AUTH, SELECTED),           Exec.async),
-    'STORE':        Cmd('STORE',        (SELECTED,),                Exec.async),
-    'SUBSCRIBE':    Cmd('SUBSCRIBE',    (AUTH, SELECTED),           Exec.sync),
-    'THREAD':       Cmd('THREAD',       (SELECTED,),                Exec.async),
-    'UID':          Cmd('UID',          (SELECTED,),                Exec.async),
-    'UNSUBSCRIBE':  Cmd('UNSUBSCRIBE',  (AUTH, SELECTED),           Exec.sync),
+    'APPEND':       Cmd('APPEND',       (AUTH, SELECTED),           Exec.is_sync),
+    'AUTHENTICATE': Cmd('AUTHENTICATE', (NONAUTH,),                 Exec.is_sync),
+    'CAPABILITY':   Cmd('CAPABILITY',   (NONAUTH, AUTH, SELECTED),  Exec.is_async),
+    'CHECK':        Cmd('CHECK',        (SELECTED,),                Exec.is_async),
+    'CLOSE':        Cmd('CLOSE',        (SELECTED,),                Exec.is_sync),
+    'COMPRESS':     Cmd('COMPRESS',     (AUTH,),                    Exec.is_sync),
+    'COPY':         Cmd('COPY',         (SELECTED,),                Exec.is_async),
+    'CREATE':       Cmd('CREATE',       (AUTH, SELECTED),           Exec.is_async),
+    'DELETE':       Cmd('DELETE',       (AUTH, SELECTED),           Exec.is_async),
+    'DELETEACL':    Cmd('DELETEACL',    (AUTH, SELECTED),           Exec.is_async),
+    'ENABLE':       Cmd('ENABLE',       (AUTH,),                    Exec.is_sync),
+    'EXAMINE':      Cmd('EXAMINE',      (AUTH, SELECTED),           Exec.is_sync),
+    'EXPUNGE':      Cmd('EXPUNGE',      (SELECTED,),                Exec.is_async),
+    'FETCH':        Cmd('FETCH',        (SELECTED,),                Exec.is_async),
+    'GETACL':       Cmd('GETACL',       (AUTH, SELECTED),           Exec.is_async),
+    'GETQUOTA':     Cmd('GETQUOTA',     (AUTH, SELECTED),           Exec.is_async),
+    'GETQUOTAROOT': Cmd('GETQUOTAROOT', (AUTH, SELECTED),           Exec.is_async),
+    'ID':           Cmd('ID',           (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.is_async),
+    'IDLE':         Cmd('IDLE',         (SELECTED,),                Exec.is_sync),
+    'LIST':         Cmd('LIST',         (AUTH, SELECTED),           Exec.is_async),
+    'LOGIN':        Cmd('LOGIN',        (NONAUTH,),                 Exec.is_sync),
+    'LOGOUT':       Cmd('LOGOUT',       (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.is_sync),
+    'LSUB':         Cmd('LSUB',         (AUTH, SELECTED),           Exec.is_async),
+    'MYRIGHTS':     Cmd('MYRIGHTS',     (AUTH, SELECTED),           Exec.is_async),
+    'MOVE':         Cmd('MOVE',         (SELECTED,),                Exec.is_sync),
+    'NAMESPACE':    Cmd('NAMESPACE',    (AUTH, SELECTED),           Exec.is_async),
+    'NOOP':         Cmd('NOOP',         (NONAUTH, AUTH, SELECTED),  Exec.is_async),
+    'RENAME':       Cmd('RENAME',       (AUTH, SELECTED),           Exec.is_async),
+    'SEARCH':       Cmd('SEARCH',       (SELECTED,),                Exec.is_async),
+    'SELECT':       Cmd('SELECT',       (AUTH, SELECTED),           Exec.is_sync),
+    'SETACL':       Cmd('SETACL',       (AUTH, SELECTED),           Exec.is_sync),
+    'SETQUOTA':     Cmd('SETQUOTA',     (AUTH, SELECTED),           Exec.is_sync),
+    'SORT':         Cmd('SORT',         (SELECTED,),                Exec.is_async),
+    'STARTTLS':     Cmd('STARTTLS',     (NONAUTH,),                 Exec.is_sync),
+    'STATUS':       Cmd('STATUS',       (AUTH, SELECTED),           Exec.is_async),
+    'STORE':        Cmd('STORE',        (SELECTED,),                Exec.is_async),
+    'SUBSCRIBE':    Cmd('SUBSCRIBE',    (AUTH, SELECTED),           Exec.is_sync),
+    'THREAD':       Cmd('THREAD',       (SELECTED,),                Exec.is_async),
+    'UID':          Cmd('UID',          (SELECTED,),                Exec.is_async),
+    'UNSUBSCRIBE':  Cmd('UNSUBSCRIBE',  (AUTH, SELECTED),           Exec.is_sync),
     # for testing
-    'DELAY':        Cmd('DELAY',        (AUTH, SELECTED),           Exec.sync),
+    'DELAY':        Cmd('DELAY',        (AUTH, SELECTED),           Exec.is_sync),
 }
 
 Response = namedtuple('Response', 'result lines')
@@ -408,7 +408,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.pending_sync_command is not None:
             yield from self.pending_sync_command.wait()
 
-        if Commands.get(command.name).exec == Exec.sync:
+        if Commands.get(command.name).exec == Exec.is_sync:
             if self.pending_async_commands:
                 yield from self.wait_async_pending_commands()
             self.pending_sync_command = command
@@ -421,7 +421,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         try:
             yield from command.wait()
         except CommandTimeout:
-            if Commands.get(command.name).exec == Exec.sync:
+            if Commands.get(command.name).exec == Exec.is_sync:
                 self.pending_sync_command = None
             else:
                 self.pending_async_commands.pop(command.untagged_resp_name, None)
