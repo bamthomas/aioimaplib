@@ -382,7 +382,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             return
 
         if self.state == CONNECTED:
-            asyncio.async(self.welcome(line))
+            asyncio.ensure_future(self.welcome(line))
         elif tagged_status_response_re.match(line):
             self._response_done(line)
         elif current_cmd is not None:
@@ -597,7 +597,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def wait_async_pending_commands(self):
-        yield from asyncio.wait([asyncio.async(cmd.wait()) for cmd in self.pending_async_commands.values()])
+        yield from asyncio.wait([asyncio.ensure_future(cmd.wait()) for cmd in self.pending_async_commands.values()])
 
     @asyncio.coroutine
     def wait(self, state_regexp):
@@ -760,8 +760,8 @@ class IMAP4(object):
     def idle_start(self, timeout=TWENTY_NINE_MINUTES):
         if self._idle_waiter is not None:
             self._idle_waiter.cancel()
-        idle = asyncio.async(self.idle())
-        self._idle_waiter = self.protocol.loop.call_later(timeout, lambda: asyncio.async(self.stop_wait_server_push()))
+        idle = asyncio.ensure_future(self.idle())
+        self._idle_waiter = self.protocol.loop.call_later(timeout, lambda: asyncio.ensure_future(self.stop_wait_server_push()))
         yield from self.wait_server_push(self.timeout) # idling continuation
         return idle
 
