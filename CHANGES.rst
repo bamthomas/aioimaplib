@@ -1,6 +1,12 @@
 Changes
 =======
 
+V0.7.15
+-------
+[aiolib] replace 'async' by is_async for python 3.7 cf #42
+[aiolib] Add ID command
+[aiolib] Add NAMESPACE command
+
 V0.7.14
 -------
 [fix] when there is ::1 as localhost in /etc/hosts in a docker container

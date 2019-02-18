@@ -26,13 +26,14 @@ tests_require = [
 ]
 setup(
     name=NAME,
-    version='0.7.14',
+    version='0.7.15',
     description='Python asyncio IMAP4rev1 client library',
     long_description=README + '\n\n' + CHANGES,
     classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
         "Topic :: Communications :: Email :: Post-Office :: IMAP",
         "Topic :: Internet" 
     ],
