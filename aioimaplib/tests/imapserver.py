@@ -178,7 +178,7 @@ def critical_section(next_state):
 
     def decorator(func):
         def wrapper(self, *args, **kwargs):
-            asyncio.async(execute_section(self, next_state, func, *args, **kwargs))
+            asyncio.ensure_future(execute_section(self, next_state, func, *args, **kwargs))
 
         return update_wrapper(wrapper, func)
 

@@ -594,8 +594,8 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def test_concurrency_1_executing_sync_commands_sequentially(self):
         imap_client = yield from self.login_user('user', 'pass')
 
-        f1 = asyncio.async(imap_client.examine('INBOX'))
-        f2 = asyncio.async(imap_client.examine('MAILBOX'))
+        f1 = asyncio.ensure_future(imap_client.examine('INBOX'))
+        f2 = asyncio.ensure_future(imap_client.examine('MAILBOX'))
 
         yield from asyncio.wait([f1, f2])
         self.assertIsNone(f1.exception())
@@ -606,8 +606,8 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        f1 = asyncio.async(imap_client.fetch('1', '(RFC822)'))
-        f2 = asyncio.async(imap_client.fetch('1', '(RFC822)'))
+        f1 = asyncio.ensure_future(imap_client.fetch('1', '(RFC822)'))
+        f2 = asyncio.ensure_future(imap_client.fetch('1', '(RFC822)'))
 
         yield from asyncio.wait([f1, f2])
         self.assertIsNone(f1.exception())
@@ -619,9 +619,9 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        store = asyncio.async(imap_client.store('1', '+FLAGS (FOO)'))
-        copy = asyncio.async(imap_client.copy('1', 'MBOX'))
-        expunge = asyncio.async(imap_client.expunge())
+        store = asyncio.ensure_future(imap_client.store('1', '+FLAGS (FOO)'))
+        copy = asyncio.ensure_future(imap_client.copy('1', 'MBOX'))
+        expunge = asyncio.ensure_future(imap_client.expunge())
 
         yield from asyncio.wait([store, copy, expunge])
         self.assertEquals(0, extract_exists((yield from imap_client.select())))
@@ -633,9 +633,9 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.imapserver.receive(Mail.create(['user']))
         imap_client = yield from self.login_user('user', 'pass', select=True)
 
-        asyncio.async(imap_client.copy('1', 'MBOX'))
-        asyncio.async(imap_client.expunge())
-        examine = asyncio.async(imap_client.examine('MBOX'))
+        asyncio.ensure_future(imap_client.copy('1', 'MBOX'))
+        asyncio.ensure_future(imap_client.expunge())
+        examine = asyncio.ensure_future(imap_client.examine('MBOX'))
 
         self.assertEquals(1, extract_exists((yield from asyncio.wait_for(examine, 1))))
 
@@ -851,7 +851,7 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
         yield from (imap_client.protocol.execute(Command(
             'DELAY', imap_client.protocol.new_tag(), '3', loop=self.loop)))
 
-        noop_task = asyncio.async(imap_client.protocol.execute(
+        noop_task = asyncio.ensure_future(imap_client.protocol.execute(
             Command('NOOP', imap_client.protocol.new_tag(), '', loop=self.loop, timeout=2)))
         yield from self.advance(1)
         self.assertEqual(1, len(imap_client.protocol.pending_async_commands))
@@ -868,7 +868,7 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
         yield from (imap_client.protocol.execute(Command(
             'DELAY', imap_client.protocol.new_tag(), '3', loop=self.loop)))
 
-        delay_task = asyncio.async(imap_client.protocol.execute(
+        delay_task = asyncio.ensure_future(imap_client.protocol.execute(
             Command('DELAY', imap_client.protocol.new_tag(), '0', loop=self.loop, timeout=2)))
         yield from self.advance(1)
         self.assertIsNotNone(imap_client.protocol.pending_sync_command)
@@ -884,7 +884,7 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
         imap_client = yield from self.login_user('user', 'pass', select=True)
         yield from imap_client.idle_start()
 
-        push_task = asyncio.async(imap_client.wait_server_push(TWENTY_NINE_MINUTES + 2))
+        push_task = asyncio.ensure_future(imap_client.wait_server_push(TWENTY_NINE_MINUTES + 2))
         yield from self.advance(TWENTY_NINE_MINUTES + 1)
 
         r = yield from asyncio.wait_for(push_task, 0)
