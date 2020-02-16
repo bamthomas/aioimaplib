@@ -15,7 +15,7 @@ def create_temp_self_signed_cert():
     """
     # create a key pair
     key = crypto.PKey()
-    key.generate_key(crypto.TYPE_RSA, 1024)
+    key.generate_key(crypto.TYPE_RSA, 2048)
 
     # create a self-signed cert
     cert = crypto.X509()
@@ -25,6 +25,8 @@ def create_temp_self_signed_cert():
     cert.get_subject().O = "aioimaplib"
     cert.get_subject().OU = "aioimaplib"
     cert.get_subject().CN = '127.0.0.1'
+    ext = crypto.X509Extension(b'subjectAltName', False, b'IP:127.0.0.1')
+    cert.add_extensions([ext])
     cert.set_serial_number(1000)
     cert.gmtime_adj_notBefore(0)
     cert.gmtime_adj_notAfter(10 * 365 * 24 * 60 * 60)
