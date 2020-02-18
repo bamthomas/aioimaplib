@@ -882,10 +882,12 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
     @asyncio.coroutine
     def test_idle_start__exits_queueget_without_timeout_error(self):
         imap_client = yield from self.login_user('user', 'pass', select=True)
-        yield from imap_client.idle_start()
 
-        push_task = asyncio.ensure_future(imap_client.wait_server_push(TWENTY_NINE_MINUTES + 2))
-        yield from self.advance(TWENTY_NINE_MINUTES + 1)
+        idle_timeout = 5
+        yield from imap_client.idle_start(idle_timeout)
+
+        push_task = asyncio.ensure_future(imap_client.wait_server_push(idle_timeout + 2))
+        yield from self.advance(idle_timeout + 1)
 
         r = yield from asyncio.wait_for(push_task, 0)
         self.assertEqual(STOP_WAIT_SERVER_PUSH, r)
