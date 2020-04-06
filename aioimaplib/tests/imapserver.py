@@ -178,7 +178,7 @@ def critical_section(next_state):
 
     def decorator(func):
         def wrapper(self, *args, **kwargs):
-            asyncio.async(execute_section(self, next_state, func, *args, **kwargs))
+            asyncio.ensure_future(execute_section(self, next_state, func, *args, **kwargs))
 
         return update_wrapper(wrapper, func)
 
@@ -477,13 +477,20 @@ class ImapProtocol(asyncio.Protocol):
             self.append_literal_command = None
             return
 
-        if len(data) != size:
+        literal_data, rest = data[:size], data[size:]
+        if len(literal_data) < size:
             self.send_tagged_line(self.append_literal_command[0],
-                                  'BAD literal length : expected %s but was %s' % (size, len(data)))
+                                  'BAD literal length : expected %s but was %s' % (size, len(literal_data)))
             self.append_literal_command = None
+        elif rest and rest != CRLF:
+            self.send_tagged_line(self.append_literal_command[0],
+                                  'BAD literal trailing data : expected CRLF but got %s' % (rest))
         else:
             m = email.message_from_bytes(data)
             self.server_state.add_mail(self.user_login, Mail(m), mailbox_name)
+
+            if rest:
+                self.append_literal(rest)
 
     def expunge(self, tag, *args):
         expunge_range = range(0, sys.maxsize)
