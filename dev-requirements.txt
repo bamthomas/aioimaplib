@@ -6,3 +6,4 @@ tzlocal
 imaplib2
 docutils
 pyopenssl
+twine
