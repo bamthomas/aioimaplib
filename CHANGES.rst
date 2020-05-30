@@ -1,6 +1,15 @@
 Changes
 =======
 
+V0.7.16
+-------
+merge from darkrain42
+[aiolib] fix interaction between idle loop and server keepalive
+[aiolib] fix cert verification on debian buster
+[test] fix imapserver literal handling on Python 3.6.5+
+[test] tests: Replace calls to asyncio.async with asyncio.ensure_future
+
+
 V0.7.15
 -------
 [aiolib] replace 'async' by is_async for python 3.7 cf #42
