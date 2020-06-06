@@ -44,6 +44,7 @@ class TestAioimaplibUtils(unittest.TestCase):
     def setUp(self):
         self.imap_protocol = IMAP4ClientProtocol(None)
         self.imap_protocol._handle_line = MagicMock(return_value=None)
+        aioimaplib.get_running_loop = asyncio.new_event_loop # monkey patch to avoid Exception "No running loop"
 
     def test_split_responses_no_data(self):
         self.imap_protocol.data_received(b'')

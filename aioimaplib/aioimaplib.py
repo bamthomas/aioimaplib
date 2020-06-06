@@ -17,6 +17,7 @@
 import asyncio
 import logging
 import ssl
+import sys
 from copy import copy
 from datetime import datetime, timezone, timedelta
 import time
@@ -34,6 +35,7 @@ from collections import namedtuple
 
 TWENTY_NINE_MINUTES = 1740
 STOP_WAIT_SERVER_PUSH = 'stop_wait_server_push'
+PY37_OR_LATER = sys.version_info[:2] >= (3, 7)
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +99,17 @@ Commands = {
 Response = namedtuple('Response', 'result lines')
 
 
+def get_running_loop() -> asyncio.AbstractEventLoop:
+    if PY37_OR_LATER:
+        return asyncio.get_running_loop()
+
+    loop = asyncio.get_event_loop()
+    if not loop.is_running():
+        raise RuntimeError("no running event loop")
+
+    return loop
+
+
 def quoted(arg):
     """ Given a string, return a quoted string as per RFC 3501, section 9.
 
@@ -134,7 +147,7 @@ def arguments_rfs2971(**kwargs):
 
 
 class Command(object):
-    def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=asyncio.get_event_loop(), timeout=None):
+    def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=None, timeout=None):
         self.name = name
         self.tag = tag
         self.args = args
@@ -143,10 +156,10 @@ class Command(object):
 
         self.response = None
         self._exception = None
-        self._event = asyncio.Event(loop=loop)
-        self._loop = loop
+        self._loop = loop if loop is not None else get_running_loop()
+        self._event = asyncio.Event(loop=self._loop)
         self._timeout = timeout
-        self._timer = asyncio.Handle(lambda: None, None, loop)  # fake timer
+        self._timer = asyncio.Handle(lambda: None, None, self._loop)  # fake timer
         self._set_timer()
         self._literal_data = None
         self._expected_size = 0
@@ -223,7 +236,7 @@ class FetchCommand(Command):
     FETCH_MESSAGE_DATA_RE = re.compile(r'[0-9]+ FETCH \(')
 
     def __init__(self, tag, *args, prefix=None, untagged_resp_name=None,
-                 loop=asyncio.get_event_loop(), timeout=None):
+                 loop=None, timeout=None):
         super().__init__('FETCH', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name,
                          loop=loop, timeout=timeout)
 
@@ -244,7 +257,7 @@ def matched_parenthesis(string):
 
 class IdleCommand(Command):
     def __init__(self, tag, queue, *args, prefix=None, untagged_resp_name=None,
-                 loop=asyncio.get_event_loop(), timeout=None):
+                 loop=None, timeout=None):
         super().__init__('IDLE', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name,
                          loop=loop, timeout=timeout)
         self.queue = queue
@@ -676,7 +689,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 class IMAP4(object):
     TIMEOUT_SECONDS = 10
 
-    def __init__(self, host='127.0.0.1', port=IMAP4_PORT, loop=asyncio.get_event_loop(), timeout=TIMEOUT_SECONDS, conn_lost_cb=None, ssl_context=None):
+    def __init__(self, host='127.0.0.1', port=IMAP4_PORT, loop=None, timeout=TIMEOUT_SECONDS, conn_lost_cb=None, ssl_context=None):
         self.timeout = timeout
         self.port = port
         self.host = host
@@ -685,8 +698,9 @@ class IMAP4(object):
         self.create_client(host, port, loop, conn_lost_cb, ssl_context)
 
     def create_client(self, host, port, loop, conn_lost_cb=None, ssl_context=None):
+        local_loop = loop if loop is not None else get_running_loop()
         self.protocol = IMAP4ClientProtocol(loop, conn_lost_cb)
-        loop.create_task(loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
+        local_loop.create_task(loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 
     def get_state(self):
         return self.protocol.state
@@ -850,7 +864,7 @@ def extract_exists(response):
 
 
 class IMAP4_SSL(IMAP4):
-    def __init__(self, host='127.0.0.1', port=IMAP4_SSL_PORT, loop=asyncio.get_event_loop(),
+    def __init__(self, host='127.0.0.1', port=IMAP4_SSL_PORT, loop=None ,
                  timeout=IMAP4.TIMEOUT_SECONDS, ssl_context=None):
         super().__init__(host, port, loop, timeout, None, ssl_context)
 
