@@ -1,6 +1,11 @@
 Changes
 =======
 
+V0.7.17
+-------
+[aiolib] fix loading issue when importing aioimaplib with python 3.7
+
+
 V0.7.16
 -------
 merge from darkrain42
