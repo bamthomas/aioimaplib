@@ -699,8 +699,8 @@ class IMAP4(object):
 
     def create_client(self, host, port, loop, conn_lost_cb=None, ssl_context=None):
         local_loop = loop if loop is not None else get_running_loop()
-        self.protocol = IMAP4ClientProtocol(loop, conn_lost_cb)
-        local_loop.create_task(loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
+        self.protocol = IMAP4ClientProtocol(local_loop, conn_lost_cb)
+        local_loop.create_task(local_loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 
     def get_state(self):
         return self.protocol.state
