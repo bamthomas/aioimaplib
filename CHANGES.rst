@@ -1,6 +1,11 @@
 Changes
 =======
 
+V0.7.18
+-------
+[aiolib] fix the fix python 3.7 don't use the 7.17
+
+
 V0.7.17
 -------
 [aiolib] fix loading issue when importing aioimaplib with python 3.7
