@@ -31,30 +31,27 @@ class TestImapServerIdle(WithImapServer, TestCase):
     def setUp(self):
         self._init_server(self.loop)
 
-    @asyncio.coroutine
-    def tearDown(self):
-        yield from self._shutdown_server()
+    async def tearDown(self):
+        await self._shutdown_server()
 
-    @asyncio.coroutine
-    def test_idle(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True, lib=imaplib2.IMAP4)
+    async def test_idle(self):
+        imap_client = await self.login_user('user', 'pass', select=True, lib=imaplib2.IMAP4)
         idle_callback = Mock()
         self.loop.run_in_executor(None, functools.partial(imap_client.idle, callback=idle_callback))
-        yield from asyncio.wait_for(self.imapserver.get_connection('user').wait(imapserver.IDLE), 1)
+        await asyncio.wait_for(self.imapserver.get_connection('user').wait(imapserver.IDLE), 1)
 
         self.loop.run_in_executor(None, functools.partial(self.imapserver.receive,
                                                           Mail.create(to=['user'], mail_from='me', subject='hello')))
 
-        yield from asyncio.wait_for(self.imapserver.get_connection('user').wait(imapserver.SELECTED), 1)
+        await asyncio.wait_for(self.imapserver.get_connection('user').wait(imapserver.SELECTED), 1)
         time.sleep(0.1) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
         idle_callback.assert_called_once()
 
-    @asyncio.coroutine
-    def test_login_twice(self):
+    async def test_login_twice(self):
         with self.assertRaises(imaplib2.IMAP4.error) as expected:
-            imap_client = yield from self.login_user('user', 'pass', lib=imaplib2.IMAP4)
+            imap_client = await self.login_user('user', 'pass', lib=imaplib2.IMAP4)
 
-            yield from asyncio.wait_for(
+            await asyncio.wait_for(
                 self.loop.run_in_executor(None, functools.partial(imap_client.login, 'user', 'pass')), 1)
 
         self.assertEqual(expected.exception.args, ('command LOGIN illegal in state AUTH',))

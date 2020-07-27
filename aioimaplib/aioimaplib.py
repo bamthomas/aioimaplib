@@ -163,7 +163,7 @@ class Command(object):
         self._loop = loop if loop is not None else get_running_loop()
         self._event = asyncio.Event()
         self._timeout = timeout
-        self._timer = asyncio.Handle(lambda: None, (), self._loop)  # fake timer
+        self._timer = asyncio.Handle(lambda: None, None, self._loop)  # fake timer
         self._set_timer()
         self._literal_data = None
         self._expected_size = 0
@@ -247,7 +247,6 @@ class FetchCommand(Command):
         if modifiers:
             args = (message_set, parts, modifiers)
             if 'VANISHED' in modifiers.upper():
-                # QRESYNC capability needs to be support by server and enabled by client
                 untagged_name = ('FETCH', 'VANISHED')
         else:
             args = (message_set, parts)
@@ -547,6 +546,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     async def sort(self, sort, search='ALL', charset='UTF-8', by_uid=False, ret=None, timeout=None):
         # TODO: don't wait for concurrent esort commands
         #       because esort untagged response contains tag
+
         args = ['(%s)' % sort, charset, search]
         if ret:
             if 'ESORT' not in self.capabilities:
@@ -586,7 +586,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if 'UIDPLUS' not in self.capabilities:
                 raise Abort('EXPUNGE with uids is only valid with UIDPLUS capability. UIDPLUS not in (%s)' % self.capabilities)
         elif command not in {'fetch', 'store', 'copy', 'move', 'search', 'sort'}:
-            raise Abort(f'command UID only possible with COPY, FETCH, COPY, MOVE, SEARCH, SORT, EXPUNGE (w/UIDPLUS) or STORE (was {command.upper()})')
+            raise Abort('command UID only possible with COPY, FETCH, STORE'
+                        ' MOVE, SEARCH, SORT, EXPUNGE (w/UIDPLUS)'
+                        ' (was %s)' % (command.upper(),))
         return await getattr(self, command)(*criteria, by_uid=True, timeout=timeout)
 
     async def copy(self, *args, by_uid=False, timeout=None):
@@ -607,7 +609,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.update_capabilities(response.lines[0])
 
     def update_capabilities(self, string):
-        self.capabilities.update(string.strip().upper().split())
+        self.capabilities = set(string.strip().upper().split())
         for version in AllowedVersions:
             if version in self.capabilities:
                 self.imap_version = version
@@ -738,12 +740,15 @@ class IMAP4(object):
     TIMEOUT_SECONDS = 10
 
     def __init__(self, host='127.0.0.1', port=143, loop=None, timeout=TIMEOUT_SECONDS, conn_lost_cb=None, ssl_context=None):
-        self.timeout = timeout
-        self.port = port
         self.host = host
+        self.port = port
+        self.loop = asyncio.get_running_loop() if loop is None else loop
+        self.timeout = timeout
+        self.conn_lost_cb = conn_lost_cb
+        self.ssl_context = ssl_context
         self.protocol = None
         self._idle_waiter = None
-        self.create_client(host, port, loop, conn_lost_cb, ssl_context)
+        self.create_client(host, port, self.loop, conn_lost_cb, ssl_context)
 
     def create_client(self, host, port, loop, conn_lost_cb=None, ssl_context=None):
         local_loop = loop if loop is not None else get_running_loop()
@@ -751,7 +756,7 @@ class IMAP4(object):
         local_loop.create_task(local_loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 
     def get_state(self):
-        return self.protocol.state
+        return self.protocol and self.protocol.state
 
     async def wait_hello_from_server(self):
         await asyncio.wait_for(self.protocol.wait({AUTH, NONAUTH}), self.timeout)
@@ -842,6 +847,9 @@ class IMAP4(object):
         return self.protocol.has_pending_idle_command()
 
     async def id(self, **kwargs):
+        if self.protocol is None:
+            await self.create_client()
+            await self.wait_hello_from_server()
         return await asyncio.wait_for(self.protocol.id(**kwargs), self.timeout)
 
     async def namespace(self):

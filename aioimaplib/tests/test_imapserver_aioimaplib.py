@@ -14,8 +14,6 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import asyncio
-
 import asynctest
 
 from aioimaplib import extract_exists
@@ -27,35 +25,32 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
         self._init_server(self.loop)
 
-    @asyncio.coroutine
-    def tearDown(self):
-        yield from self._shutdown_server()
+    async def tearDown(self):
+        await self._shutdown_server()
 
-    @asyncio.coroutine
-    def test_append_too_long(self):
-        imap_client = yield from self.login_user('user@mail', 'pass')
-        self.assertEquals(0, extract_exists((yield from imap_client.examine('INBOX'))))
+    async def test_append_too_long(self):
+        imap_client = await self.login_user('user@mail', 'pass')
+        self.assertEquals(0, extract_exists((await imap_client.examine('INBOX'))))
 
         message_bytes = b'do you see me ?'
         imap_client.protocol.literal_data = message_bytes * 2
 
         args = ['INBOX', '{%s}' % len(message_bytes)]
-        response = yield from imap_client.protocol.execute(
+        response = await imap_client.protocol.execute(
             Command('APPEND', imap_client.protocol.new_tag(), *args, loop=self.loop)
         )
         self.assertEquals('BAD', response.result)
         self.assertTrue('expected CRLF but got' in response.lines[0])
 
-    @asyncio.coroutine
-    def test_append_too_short(self):
-        imap_client = yield from self.login_user('user@mail', 'pass')
-        self.assertEquals(0, extract_exists((yield from imap_client.examine('INBOX'))))
+    async def test_append_too_short(self):
+        imap_client = await self.login_user('user@mail', 'pass')
+        self.assertEquals(0, extract_exists((await imap_client.examine('INBOX'))))
 
         message_bytes = b'do you see me ?' * 2
         imap_client.protocol.literal_data = message_bytes[:5]
 
         args = ['INBOX', '{%s}' % len(message_bytes)]
-        response = yield from imap_client.protocol.execute(
+        response = await imap_client.protocol.execute(
             Command('APPEND', imap_client.protocol.new_tag(), *args, loop=self.loop)
         )
         self.assertEquals('BAD', response.result)
