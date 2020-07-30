@@ -256,7 +256,8 @@ class FetchCommand(Command):
         if self.response is None:
             return False
         last_line = self.response.lines[-1]
-        return not isinstance(last_line, str) or last_line[-1] != ')'
+        return not isinstance(last_line, str) or \
+               not (last_line.endswith(')') or last_line.startswith('(EARLIER)'))
         # parens counting fails when quoted string contains unmatched parens
         # opened_parens = 0
         # for line in reversed(self.response.lines):
@@ -586,8 +587,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if 'UIDPLUS' not in self.capabilities:
                 raise Abort('EXPUNGE with uids is only valid with UIDPLUS capability. UIDPLUS not in (%s)' % self.capabilities)
         elif command not in {'fetch', 'store', 'copy', 'move', 'search', 'sort'}:
-            raise Abort('command UID only possible with COPY, FETCH, STORE'
-                        ' MOVE, SEARCH, SORT, EXPUNGE (w/UIDPLUS)'
+            raise Abort('command UID only possible with COPY, FETCH, COPY,'
+                        ' MOVE, SEARCH, SORT, EXPUNGE (w/UIDPLUS) or STORE'
                         ' (was %s)' % (command.upper(),))
         return await getattr(self, command)(*criteria, by_uid=True, timeout=timeout)
 
@@ -979,23 +980,20 @@ def iter_messageset(s):
     yields integers in given order without sorting
     does not remove duplicates
     example: "1,3:5,1:2" -> 1,3,4,5,1,2
+    raises ValueError if invalid input
     """
     for pair in s.split(','):
         start, _, end = pair.partition(':')
-        for i in range(int(start), int(end or start)+1):
+        for i in range(int(start or 1), int(end or start or 0)+1):
             yield i
 
 
+thread_atom_re = re.compile(r'([()]|[0-9]+)')
 def parse_thread(lines):
-    """Iterates over thread lines
-    yields recursive lists
-    Need only lines without last line 'Thread completed...'
-    """
-    parser = ResponseParser()
+    """returns list of ints|lists from first thread line"""
     for line in lines:
-        if parser.feed(line):
-            yield parser.values()[1:]
-            parser = ResponseParser()
+        atoms = thread_atom_re.findall(line)
+        return nest_atoms(atoms)[0]
 
 
 def parse_fetch(lines):
@@ -1014,16 +1012,17 @@ def parse_fetch(lines):
             parser = ResponseParser()
 
 
-response_atoms_re = re.compile(r'''
-    ( # brackets
-    [()]
-    | # quoted
-    \".*?[^\\](?:(?:\\\\)+)?\"
-    | # other value without space
-    [^()\s]+
-    )''', re.VERBOSE)
 class ResponseParser:
     __slots__ = 'atoms', 'expecting_raw'
+
+    atom_re = re.compile(r'''
+        ( # brackets
+        [()]
+        | # quoted
+        \"(?:|.*?[^\\](?:(?:\\\\)+)?)\"
+        | # other value without space
+        [^()\s]+
+        )''', re.VERBOSE)
 
     def __init__(self):
         self.atoms = []
@@ -1034,28 +1033,28 @@ class ResponseParser:
             self.atoms[-1] = line
             self.expecting_raw = False
             return False
-        atoms = response_atoms_re.findall(line)
+        atoms = self.atom_re.findall(line)
         self.atoms.extend(atoms)
         if atoms[-1][-1] == '}':
             self.expecting_raw = True
             return False
         return True
 
-    def list_from(self, i):
-        values = []
-        while i < len(self.atoms):
-            value = self.atoms[i]
-            if value == '(':
-                value, i = self.list_from(i+1)
-            elif value == ')':
-                return values, i
-            values.append(value)
-            i += 1
-        return values, i
-
     def values(self):
-        values, i = self.list_from(0)
+        values, i = nest_atoms(self.atoms)
         return values
+
+def nest_atoms(atoms, i=0):
+    values = []
+    while i < len(atoms):
+        value = atoms[i]
+        if value == '(':
+            value, i = nest_atoms(atoms, i+1)
+        elif value == ')':
+            return values, i
+        values.append(value)
+        i += 1
+    return values, i
 
 
 list_re = re.compile(r'\(([^)]*)\) ([^ ]+) (.+)')
@@ -1071,7 +1070,7 @@ def parse_list(lines):
             yield set(flags.split()), unquoted(sep), name
 
 
-status_re = re.compile(r'(.+) \(([^)]*)\)')
+status_re = re.compile(r'(\S+|\".*?[^\\](?:(?:\\\\)+)?\")\s+\((.*)\)')
 def parse_status(lines):
     """
     Iterate over status lines
@@ -1109,7 +1108,7 @@ def parse_list_status(lines):
     return mailboxes.values()
 
 
-esearch_re = re.compile(r'\(TAG "([^"]+)"\)(?:\s+UID)?\s+(.+)\s*')
+esearch_re = re.compile(r'\(TAG "([^"]+)"\)(?: UID)?\s*(.*)')
 def parse_esearch(lines):
     """
     Parses first esearch line
