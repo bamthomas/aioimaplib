@@ -75,6 +75,7 @@ COMMANDS = {
     'EXPUNGE':      Cmd('EXPUNGE',      (SELECTED,),                Exec.is_async),
     'FETCH':        Cmd('FETCH',        (SELECTED,),                Exec.is_async),
     'GETACL':       Cmd('GETACL',       (AUTH, SELECTED),           Exec.is_async),
+    'GETMETADATA':  Cmd('GETMETADATA',  (AUTH, SELECTED),           Exec.is_async),
     'GETQUOTA':     Cmd('GETQUOTA',     (AUTH, SELECTED),           Exec.is_async),
     'GETQUOTAROOT': Cmd('GETQUOTAROOT', (AUTH, SELECTED),           Exec.is_async),
     'ID':           Cmd('ID',           (NONAUTH, AUTH, LOGOUT, SELECTED), Exec.is_async),
@@ -91,6 +92,7 @@ COMMANDS = {
     'SEARCH':       Cmd('SEARCH',       (SELECTED,),                Exec.is_async),
     'SELECT':       Cmd('SELECT',       (AUTH, SELECTED),           Exec.is_sync),
     'SETACL':       Cmd('SETACL',       (AUTH, SELECTED),           Exec.is_sync),
+    'SETMETADATA':  Cmd('SETMETADATA',  (AUTH, SELECTED),           Exec.is_async),
     'SETQUOTA':     Cmd('SETQUOTA',     (AUTH, SELECTED),           Exec.is_sync),
     'SORT':         Cmd('SORT',         (SELECTED,),                Exec.is_async),
     'STARTTLS':     Cmd('STARTTLS',     (NONAUTH,),                 Exec.is_sync),
@@ -631,6 +633,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.literal_data = message_bytes
         return await self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop, timeout=timeout))
 
+    async def getmetadata(self, mailbox, metadata, options=None, timeout=None):
+        args = () if options is None else (options)
+        return await self.execute(Command('GETMETADATA', self.new_tag(), mailbox, metadata, *args,
+                                          untagged_name='METADATA', loop=self.loop, timeout=timeout))
+
+    async def setmetadata(self, mailbox, metadata, timeout=None):
+        return await self.execute(Command('SETMETADATA', self.new_tag(), mailbox, metadata, loop=self.loop, timeout=None))
+
     async def id(self, **kwargs):
         args = arguments_rfs2971(**kwargs)
         return await self.execute(Command('ID', self.new_tag(), *args, loop=self.loop))
@@ -895,14 +905,22 @@ class IMAP4(object):
     async def close(self):
         return await asyncio.wait_for(self.protocol.close(), self.timeout)
 
-    async def move(self, uid_set, mailbox):
-        return await asyncio.wait_for(self.protocol.move(uid_set, mailbox), self.timeout)
+    async def move(self, seq_set, mailbox):
+        return await asyncio.wait_for(self.protocol.move(seq_set, mailbox), self.timeout)
+
+    async def uid_move(self, uid_set, mailbox):
+        return await asyncio.wait_for(self.protocol.move(uid_set, mailbox, by_uid=True), self.timeout)
 
     async def enable(self, capability):
         if 'ENABLE' not in self.protocol.capabilities:
             raise Abort('server has not ENABLE capability')
-
         return await asyncio.wait_for(self.protocol.simple_command('ENABLE', capability), self.timeout)
+
+    async def getmetadata(self, mailbox, metadata, options=None):
+        return await self.protocol.getmetadata(mailbox, metadata, options, timeout=self.timeout)
+
+    async def setmetadata(self, mailbox, metadata, value):
+        return await self.protocol.setmetadata(mailbox, metadata, timeout=self.timeout)
 
     def has_capability(self, capability):
         return capability in self.protocol.capabilities
@@ -980,7 +998,7 @@ def iter_messageset(s):
     yields integers in given order without sorting
     does not remove duplicates
     example: "1,3:5,1:2" -> 1,3,4,5,1,2
-    raises ValueError if invalid input
+    raises ValueError if
     """
     for pair in s.split(','):
         start, _, end = pair.partition(':')
@@ -998,7 +1016,7 @@ def parse_thread(lines):
 
 def parse_fetch(lines):
     """Iterates over fetch lines
-    yields dicts
+    yields (str, dict)
     Need only lines without last line 'Fetch completed...'
     """
     parser = ResponseParser()
@@ -1012,9 +1030,27 @@ def parse_fetch(lines):
             parser = ResponseParser()
 
 
-class ResponseParser:
-    __slots__ = 'atoms', 'expecting_raw'
+def parse_metadata(lines):
+    """Iterates over metadata lines
+    yields (str, dict)
+    Need only lines without last line 'Fetch completed...'
+    """
+    parser = ResponseParser()
+    for line in lines:
+        if parser.feed(line):
+            try:
+                name, vv = parser.values()
+            except ValueError:
+                print(parser.values())
+            yield name, {vv[i]: vv[i+1] for i in range(0, len(vv), 2)}
+            parser = ResponseParser()
 
+
+class ResponseParser:
+    __slots__ = 'atoms', 'literal_next'
+
+    # doesn't work for BODY.PEEK[HEADER.FIELDS (SUBJECT)]
+    # and similar with brackets inside field name
     atom_re = re.compile(r'''
         ( # brackets
         [()]
@@ -1026,17 +1062,17 @@ class ResponseParser:
 
     def __init__(self):
         self.atoms = []
-        self.expecting_raw = False
+        self.literal_next = False
 
     def feed(self, line):
-        if self.expecting_raw:
+        if self.literal_next:
             self.atoms[-1] = line
-            self.expecting_raw = False
+            self.literal_next = False
             return False
         atoms = self.atom_re.findall(line)
         self.atoms.extend(atoms)
         if atoms[-1][-1] == '}':
-            self.expecting_raw = True
+            self.literal_next = True
             return False
         return True
 
