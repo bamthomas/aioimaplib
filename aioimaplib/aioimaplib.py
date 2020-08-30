@@ -27,6 +27,7 @@ import re
 
 import functools
 
+import binascii
 import random
 from collections import namedtuple
 
