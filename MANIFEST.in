@@ -1,4 +1,0 @@
-include *.txt *.rst
-include images/*.png
-exclude aioimaplib/tests/test_*.py
-exclude aioimaplib/tests/example.py
