@@ -570,7 +570,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.capabilities = set(capability_list)
         try:
             self.imap_version = list(
-                filter(lambda x: x.upper() in AllowedVersions, capability_list)).pop()
+                filter(lambda x: x.upper() in AllowedVersions, capability_list)).pop().upper()
         except IndexError:
             raise Error('server not IMAP4 compliant')
 
