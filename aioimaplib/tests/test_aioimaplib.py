@@ -345,6 +345,7 @@ class AioWithImapServer(WithImapServer):
 
 class AllowedVersionsImapProtocol(ImapProtocol):
     def capability(self, tag, *args):
+        """No sent IMAP4rev1"""
         self.send_untagged_line('CAPABILITY YESAUTH')
         self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
 
