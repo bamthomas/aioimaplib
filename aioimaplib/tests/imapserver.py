@@ -169,7 +169,7 @@ class ServerState(object):
 
 def critical_section(next_state):
     async def execute_section(self, state, critical_func, *args, **kwargs):
-        with (await self.state_condition):
+        async with self.state_condition:
             critical_func(self, *args, **kwargs)
             self.state = state
             log.debug('state -> %s' % state)
