@@ -29,19 +29,17 @@ class TestAioimaplibAcceptance(AioWithImapServer, TestCase):
     def setUp(self):
         self._init_server(self.loop)
 
-    @asyncio.coroutine
-    def tearDown(self):
-        yield from self._shutdown_server()
+    async def tearDown(self):
+        await self._shutdown_server()
 
-    @asyncio.coroutine
-    def test_file_with_attachement(self):
+    async def test_file_with_attachement(self):
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data/test_attachment.eml'), mode='br') as msg:
-            imap_client = yield from self.login_user('user@mail', 'pass', select=True)
+            imap_client = await self.login_user('user@mail', 'pass', select=True)
             mail = Mail(email.message_from_binary_file(msg))
 
             self.imapserver.receive(mail, imap_user='user@mail')
 
-            result, data = yield from imap_client.fetch('1', '(RFC822)')
+            result, data = await imap_client.fetch('1', '(RFC822)')
 
             self.assertEqual('OK', result)
             self.assertEqual(['1 FETCH (RFC822 {418898}', mail.as_bytes(), ')', 'FETCH completed.'], data)

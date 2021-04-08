@@ -15,7 +15,7 @@ This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Se
 
 The aim is to port the imaplib with asyncio_, to benefit from the sleep or treat model.
 
-It runs with python 3.4 and 3.5.
+It runs with python 3.4, 3.5 and 3.8.
 
 Example
 -------
@@ -26,17 +26,17 @@ Example
     from aioimaplib import aioimaplib
 
 
-    @asyncio.coroutine
-    def check_mailbox(host, user, password):
+
+    async def check_mailbox(host, user, password):
         imap_client = aioimaplib.IMAP4_SSL(host=host)
-        yield from imap_client.wait_hello_from_server()
+        await imap_client.wait_hello_from_server()
 
-        yield from imap_client.login(user, password)
+        await imap_client.login(user, password)
 
-        res, data = yield from imap_client.select()
+        res, data = await imap_client.select()
         print('there is %s messages INBOX' % data[0])
 
-        yield from imap_client.logout()
+        await imap_client.logout()
 
 
     if __name__ == '__main__':
@@ -54,23 +54,22 @@ The RFC2177_ is implemented, to be able to wait for new mail messages without us
 
 ::
 
-    @asyncio.coroutine
-    def wait_for_new_message(host, user, password):
+    async def wait_for_new_message(host, user, password):
         imap_client = aioimaplib.IMAP4_SSL(host=host)
-        yield from imap_client.wait_hello_from_server()
+        await imap_client.wait_hello_from_server()
 
-        yield from imap_client.login(user, password)
-        yield from imap_client.select()
+        await imap_client.login(user, password)
+        await imap_client.select()
 
-        idle = yield from imap_client.idle_start(timeout=10)
+        idle = await imap_client.idle_start(timeout=10)
         while imap_client.has_pending_idle():
-            msg = yield from imap_client.wait_server_push()
+            msg = await imap_client.wait_server_push()
             print(msg)
             if msg == STOP_WAIT_SERVER_PUSH:
                 imap_client.idle_done()
-                yield from asyncio.wait_for(idle, 1)
+                await asyncio.wait_for(idle, 1)
 
-        yield from imap_client.logout()
+        await imap_client.logout()
 
     if __name__ == '__main__':
             loop = asyncio.get_event_loop()
@@ -80,22 +79,21 @@ Or in a more event based style (the IDLE command is closed at each message from 
 
 ::
 
-   @asyncio.coroutine
-   def idle_loop(host, user, password):
+   async def idle_loop(host, user, password):
       imap_client = aioimaplib.IMAP4_SSL(host=host, timeout=30)
-      yield from imap_client.wait_hello_from_server()
+      await imap_client.wait_hello_from_server()
 
-      yield from imap_client.login(user, password)
-      yield from imap_client.select()
+      await imap_client.login(user, password)
+      await imap_client.select()
 
       while True:
-         print((yield from imap_client.uid('fetch', '1:*', 'FLAGS')))
+         print((await imap_client.uid('fetch', '1:*', 'FLAGS')))
 
-         idle = yield from imap_client.idle_start(timeout=60)
-         print((yield from imap_client.wait_server_push()))
+         idle = await imap_client.idle_start(timeout=60)
+         print((await imap_client.wait_server_push()))
 
          imap_client.idle_done()
-         yield from asyncio.wait_for(idle, 30)
+         await asyncio.wait_for(idle, 30)
 
 Threading
 ---------
@@ -184,6 +182,7 @@ To add an imaplib or imaplib2 command you can :
 Not unit tested
 ---------------
 - PREAUTH
+- 'SORT' and 'THREAD' from the rfc5256_
 
 TODO
 ----
@@ -200,10 +199,10 @@ TODO
 - 'COMPRESS' from rfc4978_
 - 'SETACL' 'DELETEACL' 'GETACL' 'MYRIGHTS' 'LISTRIGHTS' from ACL rfc4314_
 - 'GETQUOTA': 'GETQUOTAROOT': 'SETQUOTA' from quota rfc2087_
-- 'SORT' and 'THREAD' from the rfc5256_
 - 'ID' from the rfc2971_
 - 'NAMESPACE' from rfc2342_
 - 'CATENATE' from rfc4469_
+- make esearch and esort command concurrent, because their response contains tag
 - tests with other servers
 
 If it goes wrong

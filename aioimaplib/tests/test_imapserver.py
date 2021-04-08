@@ -155,22 +155,20 @@ class WithImapServer(object):
             host='127.0.0.1', port=12345, fetch_chunk_size=64, ssl_context=ssl_context
         )
 
-    @asyncio.coroutine
-    def _shutdown_server(self):
+    async def _shutdown_server(self):
         self.imapserver.reset()
         self.server.close()
-        yield from asyncio.wait_for(self.server.wait_closed(), 1)
+        await asyncio.wait_for(self.server.wait_closed(), 1)
 
-    @asyncio.coroutine
-    def login_user(self, login, password, select=False, lib=imaplib.IMAP4):
-        imap_client = yield from asyncio.wait_for(
+    async def login_user(self, login, password, select=False, lib=imaplib.IMAP4):
+        imap_client = await asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(lib, host='127.0.0.1', port=12345)), 1)
 
-        yield from asyncio.wait_for(
+        await asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.login, login, password)), 1)
 
         if select:
-            yield from asyncio.wait_for(
+            await asyncio.wait_for(
                 self.loop.run_in_executor(None, functools.partial(imap_client.select)), 1)
 
         return imap_client
