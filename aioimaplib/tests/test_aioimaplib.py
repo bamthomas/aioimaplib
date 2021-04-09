@@ -420,13 +420,13 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     async def test_uid_with_illegal_command(self):
         imap_client = await self.login_user('user', 'pass', select=True)
 
-        for command in {'COPY', 'FETCH', 'STORE', 'EXPUNGE', 'MOVE', 'SEARCH', 'SORT'}.symmetric_difference(COMMANDS.keys()):
+        for command in {'COPY', 'FETCH', 'STORE', 'EXPUNGE', 'MOVE', 'SEARCH', 'SORT', 'EXPUNGE'}.symmetric_difference(COMMANDS.keys()):
             with self.assertRaises(aioimaplib.Abort) as expected:
                 await imap_client.uid(command)
 
             self.assertEqual(expected.exception.args,
-                             ('command UID only possible with COPY, FETCH, STORE,'
-                              ' MOVE, SEARCH, SORT, EXPUNGE (w/UIDPLUS)'
+                             ('command UID only possible with COPY, FETCH, MOVE,'
+                              ' SEARCH, SORT, EXPUNGE (w/UIDPLUS) or STORE'
                               ' (was %s)' % command,))
 
     async def test_search_three_messages_by_uid(self):

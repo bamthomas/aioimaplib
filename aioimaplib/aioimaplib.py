@@ -128,7 +128,7 @@ def unquoted(s):
     return s
 
 
-def arguments_rfs2971(**kwargs):
+def arguments_rfc2971(**kwargs):
     if kwargs:
         if len(kwargs) > ID_MAX_PAIRS_COUNT:
             raise ValueError('Must not send more than 30 field-value pairs')
@@ -260,14 +260,6 @@ class FetchCommand(Command):
         last_line = self.response.lines[-1]
         return not isinstance(last_line, str) or \
                not (last_line.endswith(')') or last_line.startswith('(EARLIER)'))
-        # parens counting fails when quoted string contains unmatched parens
-        # opened_parens = 0
-        # for line in reversed(self.response.lines):
-        #     if isinstance(line, str):
-        #         opened_parens += line.count('(') - line.count(')')
-        #         if self.FETCH_MESSAGE_DATA_RE.match(line):
-        #             break
-        # return opened_parens > 0
 
 
 class IdleCommand(Command):
@@ -589,8 +581,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if 'UIDPLUS' not in self.capabilities:
                 raise Abort('EXPUNGE with uids is only valid with UIDPLUS capability. UIDPLUS not in (%s)' % self.capabilities)
         elif command not in {'fetch', 'store', 'copy', 'move', 'search', 'sort'}:
-            raise Abort('command UID only possible with COPY, FETCH, COPY,'
-                        ' MOVE, SEARCH, SORT, EXPUNGE (w/UIDPLUS) or STORE'
+            raise Abort('command UID only possible with COPY, FETCH, MOVE,'
+                        ' SEARCH, SORT, EXPUNGE (w/UIDPLUS) or STORE'
                         ' (was %s)' % (command.upper(),))
         return await getattr(self, command)(*criteria, by_uid=True, timeout=timeout)
 
@@ -612,7 +604,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.update_capabilities(response.lines[0])
 
     def update_capabilities(self, string):
-        self.capabilities = set(string.strip().upper().split())
+        self.capabilities = set(string.strip().split())
         for version in AllowedVersions:
             if version in self.capabilities:
                 self.imap_version = version
@@ -642,7 +634,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return await self.execute(Command('SETMETADATA', self.new_tag(), mailbox, metadata, loop=self.loop, timeout=None))
 
     async def id(self, **kwargs):
-        args = arguments_rfs2971(**kwargs)
+        args = arguments_rfc2971(**kwargs)
         return await self.execute(Command('ID', self.new_tag(), *args, loop=self.loop))
 
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
