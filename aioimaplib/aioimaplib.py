@@ -568,11 +568,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
         capability_list = response.lines[0].split()
         self.capabilities = set(capability_list)
-        version = capability_list[0].upper()
-        if version not in AllowedVersions:
+        try:
+            self.imap_version = list(
+                filter(lambda x: x.upper() in AllowedVersions, capability_list)).pop().upper()
+        except IndexError:
             raise Error('server not IMAP4 compliant')
-        else:
-            self.imap_version = version
 
     @asyncio.coroutine
     def append(self, message_bytes, mailbox='INBOX', flags=None, date=None, timeout=None):

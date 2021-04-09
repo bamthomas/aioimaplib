@@ -29,7 +29,7 @@ from aioimaplib import aioimaplib, CommandTimeout, extract_exists, \
     TWENTY_NINE_MINUTES, STOP_WAIT_SERVER_PUSH, FetchCommand, IdleCommand
 from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Response, Abort, AioImapException
 from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import Mail
+from aioimaplib.tests.imapserver import Mail, MockImapServer, ImapProtocol
 from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
 from aioimaplib.tests.test_imapserver import WithImapServer
 
@@ -341,6 +341,56 @@ class AioWithImapServer(WithImapServer):
         if select:
             yield from imap_client.select()
         return imap_client
+
+
+class AllowedVersionsImapProtocol(ImapProtocol):
+    def capability(self, tag, *args):
+        """No sent IMAP4rev1"""
+        self.send_untagged_line('CAPABILITY YESAUTH')
+        self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
+
+
+class AllowedVersionsMockImapServer(MockImapServer):
+    def run_server(self, host='127.0.0.1', port=1143, fetch_chunk_size=0, ssl_context=None):
+        def create_protocol():
+            protocol = AllowedVersionsImapProtocol(self._server_state, fetch_chunk_size, self.capabilities, self.loop)
+            self._connections.append(protocol)
+            return protocol
+
+        server = self.loop.create_server(create_protocol, host, port, ssl=ssl_context)
+        return self.loop.run_until_complete(server)
+
+
+
+class AllowedVersionsAioWithImapServer(AioWithImapServer):
+    def _init_server(self, loop, capabilities=None, ssl_context=None):
+        self.loop = loop
+        if capabilities is not None:
+            self.imapserver = AllowedVersionsMockImapServer(loop=loop, capabilities=capabilities)
+        else:
+            self.imapserver = AllowedVersionsMockImapServer(loop=loop)
+        self.server = self.imapserver.run_server(
+            host='127.0.0.1', port=12345, fetch_chunk_size=64, ssl_context=ssl_context
+        )
+
+
+
+class TestAioimaplibAllowedVersions(AllowedVersionsAioWithImapServer, asynctest.TestCase):
+    def setUp(self):
+        self._init_server(self.loop)
+
+    @asyncio.coroutine
+    def tearDown(self):
+        yield from self._shutdown_server()
+
+    @asyncio.coroutine
+    def test_capabilities_allowed_versions(self):
+        with self.assertRaises(asyncio.TimeoutError):
+            with self.assertRaises(aioimaplib.Error) as expected:
+                yield from self.login_user('user', 'pass')
+
+            self.assertEqual(expected.exception.args, ('server not IMAP4 compliant',))
+
 
 
 class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
