@@ -27,6 +27,7 @@ import re
 
 import functools
 
+import binascii
 import random
 from collections import namedtuple
 
@@ -145,6 +146,51 @@ def arguments_rfs2971(**kwargs):
         args = ['NIL']
     return args
 
+
+class Authenticator:
+
+    """Private class to provide en/decoding
+            for base64-based authentication conversation.
+    """
+
+    def __init__(self, mechinst):
+        self.mech = mechinst    # Callable object to provide/process data
+
+    def process(self, data):
+        ret = self.mech(data)
+        if ret is None:
+            return b'*'     # Abort conversation
+        return self.encode(ret)
+
+    def encode(self, inp):
+        #
+        #  Invoke binascii.b2a_base64 iteratively with
+        #  short even length buffers, strip the trailing
+        #  line feed from the result and append.  "Even"
+        #  means a number that factors to both 6 and 8,
+        #  so when it gets to the end of the 8-bit input
+        #  there's no partial 6-bit output.
+        #
+        oup = b''
+        if isinstance(inp, str):
+            inp = inp.encode('utf-8')
+        while inp:
+            if len(inp) > 48:
+                t = inp[:48]
+                inp = inp[48:]
+            else:
+                t = inp
+                inp = b''
+            e = binascii.b2a_base64(t)
+            if e:
+                oup = oup + e[:-1]
+        return oup
+
+    def decode(self, inp):
+        if not inp:
+            return b''
+        return binascii.a2b_base64(inp)
+  
 
 class Command(object):
     def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=None, timeout=None):
@@ -465,6 +511,25 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 if 'CAPABILITY' in line:
                     self.capabilities = self.capabilities.union(set(line.replace('CAPABILITY', '').strip().split()))
         return response
+    
+    @change_state
+    @asyncio.coroutine 
+    def authenticate(self, mechanism, authobject):
+        """Authenticates to IMAP with the given authobject.
+        Args:
+            mechanism: Authentification mechanism like XOAUTH2 
+            authobject: Callable that returns the SASL string for the OAuth2 mechanism.
+                Must not be base64-encoded, since imaplib does its own base64-encoding.
+        """
+        mech = mechanism.upper()
+        self.literal_data = Authenticator(authobject).process
+        response = yield from self.execute(Command('AUTHENTICATE', self.new_tag(), mech, loop=self.loop))
+        if 'OK' == response.result:
+            self.state = AUTH
+            for line in response.lines:
+                if 'CAPABILITY' in line:
+                    self.capabilities = self.capabilities.union(set(line.replace('CAPABILITY', '').strip().split()))
+        return response
 
     @change_state
     @asyncio.coroutine
@@ -664,10 +729,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         command.close(response_text, result=response_result)
 
     def _continuation(self, line):
-        if self.pending_sync_command is not None and self.pending_sync_command.name == 'APPEND':
-            if self.literal_data is None:
-                Abort('asked for literal data but have no literal data to send')
-            self.transport.write(self.literal_data)
+        if self.pending_sync_command is not None and self.pending_sync_command.name in ['APPEND', 'AUTHENTICATE']:
+            if type(self.literal_data) is type(self._continuation):
+                self.transport.write(self.literal_data(line))
+            elif self.literal_data:
+                self.transport.write(self.literal_data)
             self.transport.write(CRLF)
             self.literal_data = None
         elif self.pending_sync_command is not None:
@@ -872,6 +938,20 @@ class IMAP4_SSL(IMAP4):
         if ssl_context is None:
             ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         super().create_client(host, port, loop, conn_lost_cb, ssl_context)
+   
+    @asyncio.coroutine
+    def xoauth2(self, username, access_token):
+        """IMAP OAuth2 authentication.
+        Adapted from https://github.com/google/gmail-oauth2-tools/blob/master/python/oauth2.py
+        See https://developers.google.com/google-apps/gmail/oauth2_overview
+        Args:
+            username: the username (email address) of the account to authenticate
+            access_token: An OAuth2 access token.
+        Returns:
+            The SASL argument for the OAuth2 mechanism.
+        """
+        auth_string = "user=%s\1auth=Bearer %s\1\1" % (username, access_token)
+        return (yield from asyncio.wait_for(self.protocol.authenticate('XOAUTH2', lambda x: auth_string), self.timeout))
 
 
 # functions from imaplib
