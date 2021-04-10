@@ -11,6 +11,8 @@ About
 .. image:: https://coveralls.io/repos/github/bamthomas/aioimaplib/badge.svg
    :target: https://coveralls.io/github/bamthomas/aioimaplib
 
+**Sorry for the build, there is an issue with the Travis account, I'm waiting for their inputs**
+
 This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth. Some utilities functions are taken from imaplib/imaplib2 thanks to them.
 
 The aim is to port the imaplib with asyncio_, to benefit from the sleep or treat model.
