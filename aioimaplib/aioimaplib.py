@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 #    aioimaplib : an IMAPrev4 lib using python asyncio
 #    Copyright (C) 2016  Bruno Thomas
-#    Copyright (C) 2020  Filip Hanes
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -59,7 +58,7 @@ ID_MAX_VALUE_LEN = 1024
 AllowedVersions = ('IMAP4REV1', 'IMAP4')
 Exec = Enum('Exec', 'is_sync is_async')
 Cmd = namedtuple('Cmd', 'name           valid_states                exec')
-COMMANDS = {
+Commands = {
     'APPEND':       Cmd('APPEND',       (AUTH, SELECTED),           Exec.is_sync),
     'AUTHENTICATE': Cmd('AUTHENTICATE', (NONAUTH,),                 Exec.is_sync),
     'CAPABILITY':   Cmd('CAPABILITY',   (NONAUTH, AUTH, SELECTED),  Exec.is_async),
@@ -325,8 +324,8 @@ capability_re = re.compile(r'\[CAPABILITY ([^\]]+)\]')
 
 class IMAP4ClientProtocol(asyncio.Protocol):
     def __init__(self, loop, conn_lost_cb=None):
-        self.loop = loop
-        set_event_loop(loop)
+        self.loop = loop if loop is not None else get_running_loop()
+        set_event_loop(self.loop)
         self.transport = None
         self.state = STARTED
         self.state_condition = asyncio.Condition()
@@ -350,7 +349,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def data_received(self, d):
         log.debug('Received : %s' % d)
         try:
-            self._handle_responses(self.incomplete_line + d, self._handle_line, self.current_command)
+            self._handle_responses(self.incomplete_line + d, self.current_command)
             self.incomplete_line = b''
             self.current_command = None
         except IncompleteRead as incomplete_read:
@@ -362,7 +361,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.conn_lost_cb is not None:
             self.conn_lost_cb(exc)
 
-    def _handle_responses(self, data, line_handler, current_cmd=None):
+    def _handle_responses(self, data, current_cmd=None):
         if not data:
             if self.pending_sync_command is not None:
                 self.pending_sync_command.flush()
@@ -379,7 +378,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if not separator:
             raise IncompleteRead(current_cmd, data)
 
-        cmd = line_handler(line.decode(), current_cmd)
+        cmd = self._handle_line(line.decode(), current_cmd)
 
         begin_literal = literal_data_re.match(line)
         if begin_literal:
@@ -387,11 +386,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if cmd is None:
                 cmd = Command('NIL', 'unused')
             cmd.begin_literal_data(size)
-            self._handle_responses(tail, line_handler, current_cmd=cmd)
+            self._handle_responses(tail, current_cmd=cmd)
         elif cmd is not None and cmd.wait_data():
-            self._handle_responses(tail, line_handler, current_cmd=cmd)
+            self._handle_responses(tail, current_cmd=cmd)
         else:
-            self._handle_responses(tail, line_handler)
+            self._handle_responses(tail)
 
     def _handle_line(self, line, current_cmd):
         if not line:
@@ -419,7 +418,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.pending_sync_command is not None:
             await self.pending_sync_command.wait()
 
-        if COMMANDS[command.name].exec == Exec.is_sync:
+        if Commands[command.name].exec == Exec.is_sync:
             if self.pending_async_commands:
                 await self.wait_async_pending_commands()
             self.pending_sync_command = command
@@ -434,7 +433,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         try:
             await command.wait()
         except CommandTimeout:
-            if COMMANDS[command.name].exec == Exec.is_sync:
+            if Commands[command.name].exec == Exec.is_sync:
                 self.pending_sync_command = None
             else:
                 for untagged_name in command.untagged_names:
@@ -460,6 +459,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     @change_state
     async def login(self, user, password):
+        if self.state not in Commands['LOGIN'].valid_states:
+            raise Error('command LOGIN illegal in state %s' % (self.state,))
+
         response = await self.execute(
             Command('LOGIN', self.new_tag(), user, '%s' % quoted(password), loop=self.loop))
 
@@ -573,7 +575,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                     loop=self.loop, timeout=timeout))
 
     async def uid(self, command, *criteria, timeout=None):
-        if self.state not in COMMANDS['UID'].valid_states:
+        if self.state not in Commands['UID'].valid_states:
             raise Abort('command UID illegal in state %s' % self.state)
 
         command = command.lower()
@@ -604,7 +606,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.update_capabilities(response.lines[0])
 
     def update_capabilities(self, string):
-        self.capabilities = set(string.strip().split())
+        self.capabilities = set(string.upper().strip().split())
         for version in AllowedVersions:
             if version in self.capabilities:
                 self.imap_version = version
