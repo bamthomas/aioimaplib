@@ -5,5 +5,5 @@ Here is a checklist to answer before pushing a new PR:
 - Are the [automated tests](README.rst) passing ?
 - Is the new feature/bugfix you're adding unit tested ?
 - Are the commits fine grain splitted with one intent for each commit ?
-  - Are my refactorings (rename, dead code, extract method, extract class...) kept separated ?
-
+  - Are my refactorings (rename, dead code, extract method, extract class...) kept separated ? (*to favor distinct discussions on opiniated changes*)
+  - Is my PR containing a single feature or refactoring ? (*to allow cherry-pick or revert*)
