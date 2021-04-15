@@ -4,79 +4,79 @@ Changes
 
 V0.8.0
 -------
-[aiolib] adds type hints
-[aiolib] use async/await syntax (remove support for python 3.4)
-[aiolib] fixes issue #30 on idle race condition
-[aiolib] fixes the allowed version
+- [aiolib] adds type hints
+- [aiolib] use async/await syntax (remove support for python 3.4)
+- [aiolib] fixes issue #30 on idle race condition
+- [aiolib] fixes the allowed version
 
 V0.7.18
 -------
-[aiolib] fix the fix python 3.7 don't use the 7.17
+- [aiolib] fix the fix python 3.7 don't use the 7.17
 
 
 V0.7.17
 -------
-[aiolib] fix loading issue when importing aioimaplib with python 3.7
+- [aiolib] fix loading issue when importing aioimaplib with python 3.7
 
 
 V0.7.16
 -------
 merge from darkrain42
-[aiolib] fix interaction between idle loop and server keepalive
-[aiolib] fix cert verification on debian buster
-[test] fix imapserver literal handling on Python 3.6.5+
-[test] tests: Replace calls to asyncio.async with asyncio.ensure_future
+- [aiolib] fix interaction between idle loop and server keepalive
+- [aiolib] fix cert verification on debian buster
+- [test] fix imapserver literal handling on Python 3.6.5+
+- [test] tests: Replace calls to asyncio.async with asyncio.ensure_future
 
 
 V0.7.15
 -------
-[aiolib] replace 'async' by is_async for python 3.7 cf #42
-[aiolib] Add ID command
-[aiolib] Add NAMESPACE command
+- [aiolib] replace 'async' by is_async for python 3.7 cf #42
+- [aiolib] Add ID command
+- [aiolib] Add NAMESPACE command
 
 V0.7.14
 -------
-[fix] when there is ::1 as localhost in /etc/hosts in a docker container
-[test] tests with SSL
-[aiolib] quote password properly in IMAP dialog
+- [fix] when there is ::1 as localhost in /etc/hosts in a docker container
+- [test] tests with SSL
+- [aiolib] quote password properly in IMAP dialog
 
 V0.7.13
 -------
-[aiolib] adds a connection lost callback
-[test] imapserver : added APPENDUID response for APPEND cmd
-[test][fix] imapserver append should add to the connected user mb
-[test] imapserver : more accurate building of message headers (using python email module)
+- [aiolib] adds a connection lost callback
+- [test] imapserver : added APPENDUID response for APPEND cmd
+- [test][fix] imapserver append should add to the connected user mb
+- [test] imapserver : more accurate building of message headers (using python email module)
 
 V0.7.12
 -------
-[aiolib] fix issue #24
-[aiolib] fix issue #27
+- [aiolib] fix issue #24
+- [aiolib] fix issue #27
 
 V0.7.11
 -------
-[aiolib] adds rfc6851 move
+- [aiolib] adds rfc6851 move
 
 V0.7.10
 -------
-[aiolib] adds IMAP4.has_capability function
+- [aiolib] adds IMAP4.has_capability function
 
 V0.7.9
 ------
-[aiolib] adds uncomplete fetch command with uncomplete line
-[aiolib] adds uncomplete fetch command BODY without literal
-[aiolib] adds rfc4315 uidplus : expunge with uids
-[test] handles uidset better in imap server
-[test] refactor testing IMAP4ClientProtocol.data_received instead of _handle_responses
+- [aiolib] adds uncomplete fetch command with uncomplete line
+- [aiolib] adds uncomplete fetch command BODY without literal
+- [aiolib] adds rfc4315 uidplus : expunge with uids
+- [test] handles uidset better in imap server
+- [test] refactor testing IMAP4ClientProtocol.data_received instead of _handle_responses
 
 V0.7.8
 ------
-[aiolib] idle : added an idle_waiter for an event based idle loop
+- [aiolib] idle : added an idle_waiter for an event based idle loop
 
 V0.7.7
 ------
-[aiolib] do not filter exists line for examine command
-[aiolib] idle : wait for the end of data frame before pushing into the queue
-[test] imapserver enhancements : accepts sequence sets/returns UID when fetch by uid
+- [aiolib] do not filter exists line for examine command
+- [aiolib] idle : wait for the end of data frame before pushing into the queue
+- [test] imapserver enhancements : accepts sequence sets/returns UID when fetch by uid
 
 V0.7.6
 ------
