@@ -7,4 +7,5 @@ Here is a checklist to answer before pushing a new PR:
 - Are the commits fine grain splitted with one intent for each commit ?
   - Are my refactorings (rename, dead code, extract method, extract class...) kept separated ? (*to favor distinct discussions on opiniated changes*)
   - Is my PR containing a single feature or refactoring ? (*to allow cherry-pick or revert*)
-- Is each of my tests in the same commit of the code it is related ? (*to make a revert easier and make relationship between a test and its specific code easier to spot*)
+- Is each of my tests in the same commit of the code it is related to ? (*to make a revert easier and make relationship between a test and its specific code easier to spot*)
+- Are the functions in production code (aioimaplib.py) having typehints ? (*to help developpers to write code*)
