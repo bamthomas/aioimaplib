@@ -43,7 +43,7 @@ class TestImapServerIdle(WithImapServer, TestCase):
         self.loop.run_in_executor(None, functools.partial(self.imapserver.receive,
                                                           Mail.create(to=['user'], mail_from='me', subject='hello')))
 
-        await asyncio.wait_for(self.imapserver.get_connection('user').wait(imapserver.SELECTED), 1)
+        await asyncio.wait_for(self.imapserver.get_connection('user').wait(imapserver.SELECTED), 5)
         time.sleep(0.1) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
         idle_callback.assert_called_once()
 
