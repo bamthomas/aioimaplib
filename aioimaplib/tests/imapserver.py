@@ -168,9 +168,8 @@ class ServerState(object):
 
 
 def critical_section(next_state):
-    @asyncio.coroutine
-    def execute_section(self, state, critical_func, *args, **kwargs):
-        with (yield from self.state_condition):
+    async def execute_section(self, state, critical_func, *args, **kwargs):
+        with await self.state_condition:
             critical_func(self, *args, **kwargs)
             self.state = state
             log.debug('state -> %s' % state)
@@ -310,10 +309,9 @@ class ImapProtocol(asyncio.Protocol):
         self.user_mailbox = None
         self.send_tagged_line(tag, 'OK CLOSE completed.')
 
-    @asyncio.coroutine
-    def wait(self, state):
-        with (yield from self.state_condition):
-            yield from self.state_condition.wait_for(lambda: self.state == state)
+    async def wait(self, state):
+        with await self.state_condition:
+            await self.state_condition.wait_for(lambda: self.state == state)
 
     def examine(self, tag, *args):
         mailbox_name = args[0]
@@ -663,8 +661,7 @@ class MockImapServer(object):
                 uids.append(self._server_state.imap_receive(to, mail, mailbox))
             return uids
 
-    @asyncio.coroutine
-    def wait_state(self, state, user):
+    async def wait_state(self, state, user):
         user_connections = [connection for connection in self._connections if connection.user_login == user]
         if len(user_connections) == 0:
             other_users = list(map(lambda c: c.user_login, self._connections))
@@ -672,7 +669,7 @@ class MockImapServer(object):
         if len(user_connections) > 1:
             raise ValueError("wait_state can't handle %d connections for user %s" % (len(user_connections), user))
 
-        yield from user_connections[0].wait(state)
+        await user_connections[0].wait(state)
 
     def get_connection(self, user):
         return self._server_state.get_connection(user)
@@ -759,6 +756,7 @@ class Mail(object):
             ' '.join(['<%s>' % ref for ref in references])
 
         return Mail(msg, date=date)
+
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()

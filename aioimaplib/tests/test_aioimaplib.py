@@ -248,98 +248,90 @@ class TestFetchWaitsForAllMessageAttributes(unittest.TestCase):
 
 
 class TestAioimaplibCommand(asynctest.ClockedTestCase):
-    @asyncio.coroutine
-    def test_command_timeout(self):
+    async def test_command_timeout(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=1)
-        yield from self.advance(2)
+        await self.advance(2)
         with self.assertRaises(AioImapException):
-            yield from cmd.wait()
+            await cmd.wait()
 
-    @asyncio.coroutine
-    def test_command_close_cancels_timer(self):
+    async def test_command_close_cancels_timer(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=1)
         cmd.close('line', 'OK')
-        yield from self.advance(3)
+        await self.advance(3)
 
-        yield from cmd.wait()
+        await cmd.wait()
         self.assertEqual(Response('OK', ['line']), cmd.response)
 
-    @asyncio.coroutine
-    def test_command_begin_literal_data_resets_timer(self):
+    async def test_command_begin_literal_data_resets_timer(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
 
-        yield from self.advance(1)
+        await self.advance(1)
         cmd.begin_literal_data(7, b'literal')
 
-        yield from self.advance(1.9)
+        await self.advance(1.9)
         cmd.close('line', 'OK')
 
-        yield from cmd.wait()
+        await cmd.wait()
         self.assertEqual(Response('OK', [b'literal', 'line']), cmd.response)
 
-    @asyncio.coroutine
-    def test_command_append_data_resets_timer(self):
+    async def test_command_append_data_resets_timer(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
         cmd.begin_literal_data(4, b'da')
 
-        yield from self.advance(1.9)
+        await self.advance(1.9)
         cmd.append_literal_data(b'ta')
 
-        yield from self.advance(1.9)
+        await self.advance(1.9)
         cmd.close('line', 'OK')
 
-        yield from cmd.wait()
+        await cmd.wait()
         self.assertEqual(Response('OK', [b'data', 'line']), cmd.response)
 
-    @asyncio.coroutine
-    def test_command_append_literal_data_resets_timer(self):
+    async def test_command_append_literal_data_resets_timer(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
         cmd.begin_literal_data(12, b'literal')
 
-        yield from self.advance(1.9)
+        await self.advance(1.9)
         cmd.append_literal_data(b' data')
 
-        yield from self.advance(1.9)
+        await self.advance(1.9)
         cmd.close('line', 'OK')
 
-        yield from cmd.wait()
+        await cmd.wait()
         self.assertEqual(Response('OK', [b'literal data', 'line']), cmd.response)
 
-    @asyncio.coroutine
-    def test_command_append_to_resp_resets_timer(self):
+    async def test_command_append_to_resp_resets_timer(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
 
-        yield from self.advance(1.9)
+        await self.advance(1.9)
         cmd.append_to_resp('line 1')
 
-        yield from self.advance(1.9)
+        await self.advance(1.9)
         cmd.close('line 2', 'OK')
 
-        yield from cmd.wait()
+        await cmd.wait()
         self.assertEqual(Response('OK', ['line 1', 'line 2']), cmd.response)
 
-    @asyncio.coroutine
-    def test_command_timeout_while_receiving_data(self):
+    async def test_command_timeout_while_receiving_data(self):
         cmd = Command('CMD', 'tag', loop=self.loop, timeout=2)
 
-        yield from self.advance(1)
+        await self.advance(1)
         cmd.begin_literal_data(12, b'literal')
 
-        yield from self.advance(3)
+        await self.advance(3)
         with self.assertRaises(AioImapException):
-            yield from cmd.wait()
+            await cmd.wait()
 
 
 class AioWithImapServer(WithImapServer):
-    @asyncio.coroutine
-    def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
+    async def login_user(self, login, password, select=False, lib=aioimaplib.IMAP4):
         imap_client = lib(port=12345, loop=self.loop, timeout=3)
-        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+        await asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
-        yield from imap_client.login(login, password)
+        await imap_client.login(login, password)
 
         if select:
-            yield from imap_client.select()
+            await imap_client.select()
         return imap_client
 
 
@@ -361,7 +353,6 @@ class AllowedVersionsMockImapServer(MockImapServer):
         return self.loop.run_until_complete(server)
 
 
-
 class AllowedVersionsAioWithImapServer(AioWithImapServer):
     def _init_server(self, loop, capabilities=None, ssl_context=None):
         self.loop = loop
@@ -374,48 +365,41 @@ class AllowedVersionsAioWithImapServer(AioWithImapServer):
         )
 
 
-
 class TestAioimaplibAllowedVersions(AllowedVersionsAioWithImapServer, asynctest.TestCase):
     def setUp(self):
         self._init_server(self.loop)
 
-    @asyncio.coroutine
-    def tearDown(self):
-        yield from self._shutdown_server()
+    async def tearDown(self):
+        await self._shutdown_server()
 
-    @asyncio.coroutine
-    def test_capabilities_allowed_versions(self):
+    async def test_capabilities_allowed_versions(self):
         with self.assertRaises(asyncio.TimeoutError):
             with self.assertRaises(aioimaplib.Error) as expected:
-                yield from self.login_user('user', 'pass')
+                await self.login_user('user', 'pass')
 
             self.assertEqual(expected.exception.args, ('server not IMAP4 compliant',))
-
 
 
 class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
         self._init_server(self.loop)
 
-    @asyncio.coroutine
-    def tearDown(self):
-        yield from self._shutdown_server()
+    async def tearDown(self):
+        await self._shutdown_server()
 
-    @asyncio.coroutine
-    def test_capabilities(self):
+    async def test_capabilities(self):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop)
-        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+        await asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
         self.assertEquals({'IMAP4rev1', 'YESAUTH'}, imap_client.protocol.capabilities)
         self.assertTrue(imap_client.has_capability('YESAUTH'))
 
-    @asyncio.coroutine
-    def test_login(self):
+    async def test_login(self):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
-        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+        await asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
-        result, data = yield from imap_client.login('user', 'password')
+        result, data = await imap_client.login('user', 'password')
 
         self.assertEquals(aioimaplib.AUTH, imap_client.protocol.state)
         self.assertEqual('OK', result)
@@ -423,12 +407,11 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertTrue(imap_client.has_capability('IDLE'))
         self.assertTrue(imap_client.has_capability('UIDPLUS'))
 
-    @asyncio.coroutine
-    def test_login_with_special_characters(self):
+    async def test_login_with_special_characters(self):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
-        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+        await asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
-        result, data = yield from imap_client.login('user', 'pass"word')
+        result, data = await imap_client.login('user', 'pass"word')
 
         self.assertEquals(aioimaplib.AUTH, imap_client.protocol.state)
         self.assertEqual('OK', result)
@@ -436,87 +419,79 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         self.assertTrue(imap_client.has_capability('IDLE'))
         self.assertTrue(imap_client.has_capability('UIDPLUS'))
 
-    @asyncio.coroutine
-    def test_login_twice(self):
+    async def test_login_twice(self):
         with self.assertRaises(aioimaplib.Error) as expected:
-            imap_client = yield from self.login_user('user', 'pass')
+            imap_client = await self.login_user('user', 'pass')
 
-            yield from imap_client.login('user', 'password')
+            await imap_client.login('user', 'password')
 
         self.assertEqual(expected.exception.args, ('command LOGIN illegal in state AUTH',))
 
-    @asyncio.coroutine
-    def test_logout(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_logout(self):
+        imap_client = await self.login_user('user', 'pass')
 
-        result, data = yield from imap_client.logout()
+        result, data = await imap_client.logout()
 
         self.assertEqual('OK', result)
         self.assertEqual(['BYE Logging out', 'LOGOUT completed'], data)
         self.assertEquals(aioimaplib.LOGOUT, imap_client.protocol.state)
 
-    @asyncio.coroutine
-    def test_select_no_messages(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_select_no_messages(self):
+        imap_client = await self.login_user('user', 'pass')
 
-        resp = yield from imap_client.select()
+        resp = await imap_client.select()
 
         self.assertEqual('OK', resp[0])
         self.assertEqual(0, extract_exists(resp))
         self.assertEquals(aioimaplib.SELECTED, imap_client.protocol.state)
 
-    @asyncio.coroutine
-    def test_examine_no_messages(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_examine_no_messages(self):
+        imap_client = await self.login_user('user', 'pass')
 
-        self.assertEquals(0, extract_exists((yield from imap_client.examine())))
+        self.assertEquals(0, extract_exists((await imap_client.examine())))
 
         self.assertEquals(aioimaplib.AUTH, imap_client.protocol.state)
 
-    @asyncio.coroutine
-    def test_search_two_messages(self):
+    async def test_search_two_messages(self):
         self.imapserver.receive(Mail.create(['user']))
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        result, data = yield from imap_client.search('ALL')
+        result, data = await imap_client.search('ALL')
 
         self.assertEqual('OK', result)
         self.assertEqual('1 2', data[0])
 
-    @asyncio.coroutine
-    def test_uid_with_illegal_command(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_uid_with_illegal_command(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
 
         for command in {'COPY', 'FETCH', 'STORE', 'EXPUNGE', 'MOVE'}.symmetric_difference(Commands.keys()):
             with self.assertRaises(aioimaplib.Abort) as expected:
-                yield from imap_client.uid(command)
+                await imap_client.uid(command)
 
             self.assertEqual(expected.exception.args,
                              ('command UID only possible with COPY, FETCH, EXPUNGE (w/UIDPLUS) or STORE (was %s)' % command,))
 
-    @asyncio.coroutine
-    def test_search_three_messages_by_uid(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_search_three_messages_by_uid(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
         self.imapserver.receive(Mail.create(['user']))  # id=1 uid=1
         self.imapserver.receive(Mail.create(['user']), mailbox='OTHER_MAILBOX')  # id=1 uid=1
         self.imapserver.receive(Mail.create(['user']))  # id=2 uid=2
 
-        self.assertEqual('1 2', (yield from imap_client.search('ALL')).lines[0])
-        self.assertEqual('1 2', (yield from imap_client.uid_search('ALL')).lines[0])
+        self.assertEqual('1 2', (await imap_client.search('ALL')).lines[0])
+        self.assertEqual('1 2', (await imap_client.uid_search('ALL')).lines[0])
 
-        yield from imap_client.select('OTHER_MAILBOX')
-        self.assertEqual('1', (yield from imap_client.uid_search('ALL')).lines[0])
+        await imap_client.select('OTHER_MAILBOX')
+        self.assertEqual('1', (await imap_client.uid_search('ALL')).lines[0])
 
-    @asyncio.coroutine
-    def test_fetch(self):
+    async def test_fetch(self):
         print('test loop %r' % self.loop)
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
         mail = Mail.create(['user'], mail_from='me', subject='hello',
                            content='pleased to meet you, wont you guess my name ?')
         self.imapserver.receive(mail)
 
-        result, data = yield from imap_client.fetch('1', '(RFC822)')
+        result, data = await imap_client.fetch('1', '(RFC822)')
         content = mail.as_bytes()
 
         self.assertEqual('OK', result)
@@ -525,82 +500,75 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
             'FETCH completed.'
         ], data)
 
-    @asyncio.coroutine
-    def test_fetch_by_uid_without_body(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_fetch_by_uid_without_body(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
         mail = Mail.create(['user'], mail_from='me', subject='hello',
                            content='pleased to meet you, wont you guess my name ?')
         self.imapserver.receive(mail)
 
-        response = (yield from imap_client.uid('fetch', '1', '(UID FLAGS)'))
+        response = (await imap_client.uid('fetch', '1', '(UID FLAGS)'))
 
         self.assertEqual('OK', response.result)
         self.assertEquals('1 FETCH (UID 1 FLAGS ())', response.lines[0])
 
-    @asyncio.coroutine
-    def test_fetch_by_uid(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_fetch_by_uid(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
         mail = Mail.create(['user'], mail_from='me', subject='hello',
                            content='pleased to meet you, wont you guess my name ?')
         self.imapserver.receive(mail)
 
-        response = (yield from imap_client.uid('fetch', '1', '(RFC822)'))
+        response = (await imap_client.uid('fetch', '1', '(RFC822)'))
         self.assertEqual('OK', response.result)
         self.assertEquals(mail.as_bytes(), response.lines[1])
 
-    @asyncio.coroutine
-    def test_idle(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_idle(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        idle = yield from imap_client.idle_start(timeout=0.3)
+        idle = await imap_client.idle_start(timeout=0.3)
         self.imapserver.receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
 
-        self.assertEquals(['1 EXISTS', '1 RECENT'], (yield from imap_client.wait_server_push()))
+        self.assertEquals(['1 EXISTS', '1 RECENT'], (await imap_client.wait_server_push()))
 
         imap_client.idle_done()
-        self.assertEquals(('OK', ['IDLE terminated']), (yield from asyncio.wait_for(idle, 1)))
+        self.assertEquals(('OK', ['IDLE terminated']), (await asyncio.wait_for(idle, 1)))
 
         self.assertTrue(imap_client._idle_waiter._cancelled)
         with self.assertRaises(asyncio.TimeoutError):
-            yield from imap_client.wait_server_push(timeout=0.1)
+            await imap_client.wait_server_push(timeout=0.1)
 
-    @asyncio.coroutine
-    def test_idle_loop(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_idle_loop(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        idle = yield from imap_client.idle_start(timeout=0.3)
+        idle = await imap_client.idle_start(timeout=0.3)
         self.imapserver.receive(Mail.create(to=['user'], mail_from='me', subject='hello'))
 
         data = list()
         while imap_client.has_pending_idle():
-            data.append((yield from imap_client.wait_server_push()))
+            data.append((await imap_client.wait_server_push()))
             if data[-1] == STOP_WAIT_SERVER_PUSH:
                 imap_client.idle_done()
-                yield from asyncio.wait_for(idle, 1)
+                await asyncio.wait_for(idle, 1)
 
         self.assertEqual([['1 EXISTS', '1 RECENT'], STOP_WAIT_SERVER_PUSH], data)
 
-    @asyncio.coroutine
-    def test_idle_stop(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
-        idle = yield from imap_client.idle_start()
+    async def test_idle_stop(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
+        idle = await imap_client.idle_start()
 
-        self.assertTrue((yield from imap_client.stop_wait_server_push()))
+        self.assertTrue((await imap_client.stop_wait_server_push()))
 
-        self.assertEquals(STOP_WAIT_SERVER_PUSH, (yield from imap_client.wait_server_push()))
+        self.assertEquals(STOP_WAIT_SERVER_PUSH, (await imap_client.wait_server_push()))
 
         imap_client.idle_done()
-        yield from asyncio.wait_for(idle, 1)
+        await asyncio.wait_for(idle, 1)
 
-    @asyncio.coroutine
-    def test_idle_stop_does_nothing_if_no_pending_idle(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_idle_stop_does_nothing_if_no_pending_idle(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        self.assertFalse((yield from imap_client.stop_wait_server_push()))
+        self.assertFalse((await imap_client.stop_wait_server_push()))
 
-    @asyncio.coroutine
-    def test_idle_error_response(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_idle_error_response(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
 
         conn = self.imapserver.get_connection('user')
         def idle_error(tag, *args):
@@ -608,265 +576,239 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         conn.idle = idle_error
 
         with self.assertRaises(Abort):
-            yield from imap_client.idle_start()
+            await imap_client.idle_start()
 
-    @asyncio.coroutine
-    def test_store_and_search_by_keyword(self):
+    async def test_store_and_search_by_keyword(self):
         self.imapserver.receive(Mail.create(['user']))
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
-        self.assertEqual('', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
+        imap_client = await self.login_user('user', 'pass', select=True)
+        self.assertEqual('', (await imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
 
-        self.assertEquals('OK', (yield from imap_client.uid('store', '1', '+FLAGS (FOO)')).result)
+        self.assertEquals('OK', (await imap_client.uid('store', '1', '+FLAGS (FOO)')).result)
 
-        self.assertEqual('1', (yield from imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
-        self.assertEqual('2', (yield from imap_client.uid_search('UNKEYWORD FOO', charset=None)).lines[0])
+        self.assertEqual('1', (await imap_client.uid_search('KEYWORD FOO', charset=None)).lines[0])
+        self.assertEqual('2', (await imap_client.uid_search('UNKEYWORD FOO', charset=None)).lines[0])
 
-    @asyncio.coroutine
-    def test_expunge_messages(self):
+    async def test_expunge_messages(self):
         self.imapserver.receive(Mail.create(['user']))
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        self.assertEquals(('OK', ['1 EXPUNGE', '2 EXPUNGE', 'EXPUNGE completed.']), (yield from imap_client.expunge()))
+        self.assertEquals(('OK', ['1 EXPUNGE', '2 EXPUNGE', 'EXPUNGE completed.']), (await imap_client.expunge()))
 
-        self.assertEquals(0, extract_exists((yield from imap_client.select())))
+        self.assertEquals(0, extract_exists((await imap_client.select())))
 
-    @asyncio.coroutine
-    def test_copy_messages(self):
+    async def test_copy_messages(self):
         self.imapserver.receive(Mail.create(['user']))
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        result, _ = yield from imap_client.copy('1', '2', 'MAILBOX')
+        result, _ = await imap_client.copy('1', '2', 'MAILBOX')
         self.assertEqual('OK', result)
 
-        self.assertEquals(2, extract_exists((yield from imap_client.select('MAILBOX'))))
+        self.assertEquals(2, extract_exists((await imap_client.select('MAILBOX'))))
 
-    @asyncio.coroutine
-    def test_copy_messages_by_uid(self):
+    async def test_copy_messages_by_uid(self):
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        result, _ = yield from imap_client.uid('copy', '1', 'MAILBOX')
+        result, _ = await imap_client.uid('copy', '1', 'MAILBOX')
         self.assertEqual('OK', result)
 
-        self.assertEquals(1, extract_exists((yield from imap_client.select('MAILBOX'))))
+        self.assertEquals(1, extract_exists((await imap_client.select('MAILBOX'))))
 
-    @asyncio.coroutine
-    def test_concurrency_1_executing_sync_commands_sequentially(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_concurrency_1_executing_sync_commands_sequentially(self):
+        imap_client = await self.login_user('user', 'pass')
 
         f1 = asyncio.ensure_future(imap_client.examine('INBOX'))
         f2 = asyncio.ensure_future(imap_client.examine('MAILBOX'))
 
-        yield from asyncio.wait([f1, f2])
+        await asyncio.wait([f1, f2])
         self.assertIsNone(f1.exception())
         self.assertIsNone(f2.exception())
 
-    @asyncio.coroutine
-    def test_concurrency_2_executing_same_async_commands_sequentially(self):
+    async def test_concurrency_2_executing_same_async_commands_sequentially(self):
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
         f1 = asyncio.ensure_future(imap_client.fetch('1', '(RFC822)'))
         f2 = asyncio.ensure_future(imap_client.fetch('1', '(RFC822)'))
 
-        yield from asyncio.wait([f1, f2])
+        await asyncio.wait([f1, f2])
         self.assertIsNone(f1.exception())
         self.assertIsNone(f2.exception())
 
-    @asyncio.coroutine
-    def test_concurrency_3_executing_async_commands_in_parallel(self):
+    async def test_concurrency_3_executing_async_commands_in_parallel(self):
         # cf valid example in https://tools.ietf.org/html/rfc3501#section-5.5
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
         store = asyncio.ensure_future(imap_client.store('1', '+FLAGS (FOO)'))
         copy = asyncio.ensure_future(imap_client.copy('1', 'MBOX'))
         expunge = asyncio.ensure_future(imap_client.expunge())
 
-        yield from asyncio.wait([store, copy, expunge])
-        self.assertEquals(0, extract_exists((yield from imap_client.select())))
-        self.assertEquals(1, extract_exists((yield from imap_client.select('MBOX'))))
-        self.assertEqual('1', (yield from imap_client.search('KEYWORD FOO', charset=None)).lines[0])
+        await asyncio.wait([store, copy, expunge])
+        self.assertEquals(0, extract_exists((await imap_client.select())))
+        self.assertEquals(1, extract_exists((await imap_client.select('MBOX'))))
+        self.assertEqual('1', (await imap_client.search('KEYWORD FOO', charset=None)).lines[0])
 
-    @asyncio.coroutine
-    def test_concurrency_4_sync_command_waits_for_async_commands_to_finish(self):
+    async def test_concurrency_4_sync_command_waits_for_async_commands_to_finish(self):
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
         asyncio.ensure_future(imap_client.copy('1', 'MBOX'))
         asyncio.ensure_future(imap_client.expunge())
         examine = asyncio.ensure_future(imap_client.examine('MBOX'))
 
-        self.assertEquals(1, extract_exists((yield from asyncio.wait_for(examine, 1))))
+        self.assertEquals(1, extract_exists((await asyncio.wait_for(examine, 1))))
 
-    @asyncio.coroutine
-    def test_noop(self):
-        imap_client = yield from self.login_user('user', 'pass')
-        self.assertEquals(('OK', ['NOOP completed.']), (yield from imap_client.noop()))
+    async def test_noop(self):
+        imap_client = await self.login_user('user', 'pass')
+        self.assertEquals(('OK', ['NOOP completed.']), (await imap_client.noop()))
 
-    @asyncio.coroutine
-    def test_noop_with_untagged_data(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_noop_with_untagged_data(self):
+        imap_client = await self.login_user('user', 'pass')
         self.imapserver.receive(Mail.create(['user']))
 
-        self.assertEquals(('OK', ['1 EXISTS', '1 RECENT', 'NOOP completed.']), (yield from imap_client.noop()))
+        self.assertEquals(('OK', ['1 EXISTS', '1 RECENT', 'NOOP completed.']), (await imap_client.noop()))
 
-    @asyncio.coroutine
-    def test_check(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
-        self.assertEquals(('OK', ['CHECK completed.']), (yield from imap_client.check()))
+    async def test_check(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
+        self.assertEquals(('OK', ['CHECK completed.']), (await imap_client.check()))
 
-    @asyncio.coroutine
-    def test_close(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_close(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
         self.assertEquals(imapserver.SELECTED, self.imapserver.get_connection('user').state)
 
-        self.assertEquals(('OK', ['CLOSE completed.']), (yield from imap_client.close()))
+        self.assertEquals(('OK', ['CLOSE completed.']), (await imap_client.close()))
 
         self.assertEquals(imapserver.AUTH, self.imapserver.get_connection('user').state)
 
-    @asyncio.coroutine
-    def test_status(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_status(self):
+        imap_client = await self.login_user('user', 'pass')
 
         self.assertEquals('INBOX (MESSAGES 0 UIDNEXT 1)',
-                          (yield from imap_client.status('INBOX', '(MESSAGES UIDNEXT)')).lines[0])
+                          (await imap_client.status('INBOX', '(MESSAGES UIDNEXT)')).lines[0])
 
-    @asyncio.coroutine
-    def test_subscribe_unsubscribe_lsub(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_subscribe_unsubscribe_lsub(self):
+        imap_client = await self.login_user('user', 'pass')
 
-        self.assertEquals(('OK', ['SUBSCRIBE completed.']), (yield from imap_client.subscribe('#fr.soc.feminisme')))
+        self.assertEquals(('OK', ['SUBSCRIBE completed.']), (await imap_client.subscribe('#fr.soc.feminisme')))
         self.assertEquals(('OK', ['() "." #fr.soc.feminisme', 'LSUB completed.']),
-                          (yield from imap_client.lsub('#fr.', 'soc.*')))
-        self.assertEquals(('OK', ['UNSUBSCRIBE completed.']), (yield from imap_client.unsubscribe('#fr.soc.feminisme')))
-        self.assertEquals(('OK', ['LSUB completed.']), (yield from imap_client.lsub('#fr', '.*')))
+                          (await imap_client.lsub('#fr.', 'soc.*')))
+        self.assertEquals(('OK', ['UNSUBSCRIBE completed.']), (await imap_client.unsubscribe('#fr.soc.feminisme')))
+        self.assertEquals(('OK', ['LSUB completed.']), (await imap_client.lsub('#fr', '.*')))
 
-    @asyncio.coroutine
-    def test_create_delete_mailbox(self):
-        imap_client = yield from self.login_user('user', 'pass')
-        self.assertEquals('NO', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+    async def test_create_delete_mailbox(self):
+        imap_client = await self.login_user('user', 'pass')
+        self.assertEquals('NO', (await imap_client.status('MBOX', '(MESSAGES)')).result)
 
-        self.assertEquals(('OK', ['CREATE completed.']), (yield from imap_client.create('MBOX')))
-        self.assertEquals('OK', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+        self.assertEquals(('OK', ['CREATE completed.']), (await imap_client.create('MBOX')))
+        self.assertEquals('OK', (await imap_client.status('MBOX', '(MESSAGES)')).result)
 
-        self.assertEquals(('OK', ['DELETE completed.']), (yield from imap_client.delete('MBOX')))
-        self.assertEquals('NO', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+        self.assertEquals(('OK', ['DELETE completed.']), (await imap_client.delete('MBOX')))
+        self.assertEquals('NO', (await imap_client.status('MBOX', '(MESSAGES)')).result)
 
-    @asyncio.coroutine
-    def test_rename_mailbox(self):
-        imap_client = yield from self.login_user('user', 'pass')
-        self.assertEquals('NO', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+    async def test_rename_mailbox(self):
+        imap_client = await self.login_user('user', 'pass')
+        self.assertEquals('NO', (await imap_client.status('MBOX', '(MESSAGES)')).result)
 
-        self.assertEquals(('OK', ['RENAME completed.']), (yield from imap_client.rename('INBOX', 'MBOX')))
+        self.assertEquals(('OK', ['RENAME completed.']), (await imap_client.rename('INBOX', 'MBOX')))
 
-        self.assertEquals('OK', (yield from imap_client.status('MBOX', '(MESSAGES)')).result)
+        self.assertEquals('OK', (await imap_client.status('MBOX', '(MESSAGES)')).result)
 
-    @asyncio.coroutine
-    def test_list(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_list(self):
+        imap_client = await self.login_user('user', 'pass')
         self.assertEquals(('OK', ['() "/" Drafts', '() "/" INBOX', '() "/" Sent', '() "/" Trash',
-                                  'LIST completed.']), (yield from imap_client.list('""', '.*')))
+                                  'LIST completed.']), (await imap_client.list('""', '.*')))
 
-        yield from imap_client.create('MYBOX')
+        await imap_client.create('MYBOX')
         self.assertEquals(('OK', ['() "/" Drafts', '() "/" INBOX', '() "/" MYBOX', '() "/" Sent', '() "/" Trash',
                                   'LIST completed.']),
-                          (yield from imap_client.list('""', '.*')))
+                          (await imap_client.list('""', '.*')))
 
-    @asyncio.coroutine
-    def test_append(self):
-        imap_client = yield from self.login_user('user@mail', 'pass')
-        self.assertEquals(0, extract_exists((yield from imap_client.examine('INBOX'))))
+    async def test_append(self):
+        imap_client = await self.login_user('user@mail', 'pass')
+        self.assertEquals(0, extract_exists((await imap_client.examine('INBOX'))))
 
         msg = Mail.create(['user@mail'], subject='append msg', content='do you see me ?')
-        response = yield from imap_client.append(msg.as_bytes(), mailbox='INBOX', flags='FOO BAR',
+        response = await imap_client.append(msg.as_bytes(), mailbox='INBOX', flags='FOO BAR',
                                                  date=datetime.now(tz=utc), )
         self.assertEquals('OK', response.result)
         self.assertTrue('1] APPEND completed' in response.lines[0])
 
-        self.assertEquals(1, extract_exists((yield from imap_client.examine('INBOX'))))
+        self.assertEquals(1, extract_exists((await imap_client.examine('INBOX'))))
 
-    @asyncio.coroutine
-    def test_rfc5032_within(self):
+    async def test_rfc5032_within(self):
         self.imapserver.receive(Mail.create(['user'], date=datetime.now(tz=utc) - timedelta(seconds=84600 * 3)))  # 1
         self.imapserver.receive(Mail.create(['user'], date=datetime.now(tz=utc) - timedelta(seconds=84600)))  # 2
         self.imapserver.receive(Mail.create(['user']))  # 3
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        self.assertEquals('1', (yield from imap_client.search('OLDER', '84700')).lines[0])
-        self.assertEquals('2 3', (yield from imap_client.search('YOUNGER', '84700')).lines[0])
+        self.assertEquals('1', (await imap_client.search('OLDER', '84700')).lines[0])
+        self.assertEquals('2 3', (await imap_client.search('YOUNGER', '84700')).lines[0])
 
-    @asyncio.coroutine
-    def test_rfc4315_uidplus_expunge(self):
+    async def test_rfc4315_uidplus_expunge(self):
         self.imapserver.receive(Mail.create(['user']))
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        self.assertEquals(('OK', ['1 EXPUNGE', 'UID EXPUNGE completed.']), (yield from imap_client.uid('expunge', '1:1')))
+        self.assertEquals(('OK', ['1 EXPUNGE', 'UID EXPUNGE completed.']), (await imap_client.uid('expunge', '1:1')))
 
-        self.assertEquals(1, extract_exists((yield from imap_client.select())))
+        self.assertEquals(1, extract_exists((await imap_client.select())))
 
-    @asyncio.coroutine
-    def test_rfc6851_move(self):
+    async def test_rfc6851_move(self):
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
         uidvalidity = self.imapserver.get_connection('user').uidvalidity
 
         self.assertEqual(('OK', ['OK [COPYUID %d 1:1 1:1]' % uidvalidity, '1 EXPUNGE', 'Done']),
-                         (yield from imap_client.move('1:1', 'Trash')))
+                         (await imap_client.move('1:1', 'Trash')))
 
-        self.assertEquals(0, extract_exists((yield from imap_client.select())))
-        self.assertEquals(1, extract_exists((yield from imap_client.select('Trash'))))
+        self.assertEquals(0, extract_exists((await imap_client.select())))
+        self.assertEquals(1, extract_exists((await imap_client.select('Trash'))))
 
-    @asyncio.coroutine
-    def test_rfc6851_uidmove(self):
+    async def test_rfc6851_uidmove(self):
         self.imapserver.receive(Mail.create(['user']))
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+        imap_client = await self.login_user('user', 'pass', select=True)
         uidvalidity = self.imapserver.get_connection('user').uidvalidity
 
         self.assertEqual(('OK', ['OK [COPYUID %d 1:1 1:1]' % uidvalidity, '1 EXPUNGE', 'Done']),
-                         (yield from imap_client.uid('move', '1:1', 'Trash')))
+                         (await imap_client.uid('move', '1:1', 'Trash')))
 
-        self.assertEquals(0, extract_exists((yield from imap_client.select())))
-        self.assertEquals(1, extract_exists((yield from imap_client.select('Trash'))))
+        self.assertEquals(0, extract_exists((await imap_client.select())))
+        self.assertEquals(1, extract_exists((await imap_client.select('Trash'))))
 
-    @asyncio.coroutine
-    def test_rfc5161_enable(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_rfc5161_enable(self):
+        imap_client = await self.login_user('user', 'pass')
 
         self.assertEqual(('OK', ['X-GOOD-IDEA CONDSTORE enabled']),
-                         (yield from imap_client.enable('X-GOOD-IDEA CONDSTORE')))
+                         (await imap_client.enable('X-GOOD-IDEA CONDSTORE')))
 
-    @asyncio.coroutine
-    def test_rfc2342_namespace(self):
-        imap_client = yield from self.login_user('user', 'pass')
-        response = yield from imap_client.namespace()
+    async def test_rfc2342_namespace(self):
+        imap_client = await self.login_user('user', 'pass')
+        response = await imap_client.namespace()
 
         self.assertEqual(('OK', ['(("" "/")) NIL NIL', 'NAMESPACE command completed']), response)
 
-    @asyncio.coroutine
-    def test_rfc2971_id(self):
-        imap_client = yield from self.login_user('user', 'pass')
-        response = yield from imap_client.id()
+    async def test_rfc2971_id(self):
+        imap_client = await self.login_user('user', 'pass')
+        response = await imap_client.id()
         self.assertEqual(('OK', ['ID command completed']), response)
 
-    @asyncio.coroutine
-    def test_race_idle_done_and_server_push(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_race_idle_done_and_server_push(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
 
-        idle = yield from imap_client.idle_start(2)
+        idle = await imap_client.idle_start(2)
         imap_client.idle_done()
         self.imapserver.receive(Mail.create(['user']))
-        yield from asyncio.wait_for(idle, 1)
+        await asyncio.wait_for(idle, 1)
 
-        idle = yield from imap_client.idle_start(2)
+        idle = await imap_client.idle_start(2)
         imap_client.idle_done()
-        yield from asyncio.wait_for(idle, 1)
+        await asyncio.wait_for(idle, 1)
 
-        r = yield from imap_client.wait_server_push()
+        r = await imap_client.wait_server_push()
         self.assertEqual(['1 EXISTS', '1 RECENT'], r)
         self.assertTrue(imap_client.protocol.idle_queue.empty())
 
@@ -875,45 +817,38 @@ class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
         self._init_server(self.loop, capabilities='')
 
-    @asyncio.coroutine
-    def tearDown(self):
-        yield from self._shutdown_server()
+    async def tearDown(self):
+        await self._shutdown_server()
 
-    @asyncio.coroutine
-    def test_idle_messages_without_idle_capability_abort_command(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_idle_messages_without_idle_capability_abort_command(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
         with self.assertRaises(Abort):
-            yield from imap_client.idle()
+            await imap_client.idle()
 
-    @asyncio.coroutine
-    def test_expunge_messages_without_uidplus_capability_abort_command(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_expunge_messages_without_uidplus_capability_abort_command(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
         with self.assertRaises(Abort):
-            yield from imap_client.uid('expunge', '1:1')
+            await imap_client.uid('expunge', '1:1')
 
-    @asyncio.coroutine
-    def test_move_without_move_capability_abort_command(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_move_without_move_capability_abort_command(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
         with self.assertRaises(Abort):
-            yield from imap_client.move('1:1', 'Trash')
+            await imap_client.move('1:1', 'Trash')
 
-    @asyncio.coroutine
-    def test_uidmove_without_move_capability_abort_command(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_uidmove_without_move_capability_abort_command(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
         with self.assertRaises(Abort):
-            yield from imap_client.uid('move', '1:1', 'Trash')
+            await imap_client.uid('move', '1:1', 'Trash')
 
-    @asyncio.coroutine
-    def test_enable_without_enable_capability_abort_command(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_enable_without_enable_capability_abort_command(self):
+        imap_client = await self.login_user('user', 'pass')
         with self.assertRaises(Abort):
-            yield from imap_client.enable('CAPABILITY')
+            await imap_client.enable('CAPABILITY')
 
-    @asyncio.coroutine
-    def test_namespace_without_namespace_capability_abort_command(self):
-        imap_client = yield from self.login_user('user', 'pass')
+    async def test_namespace_without_namespace_capability_abort_command(self):
+        imap_client = await self.login_user('user', 'pass')
         with self.assertRaises(Abort):
-            yield from imap_client.namespace()
+            await imap_client.namespace()
 
 
 class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
@@ -921,55 +856,51 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
     def setUp(self):
         self._init_server(self.loop)
 
-    @asyncio.coroutine
-    def tearDown(self):
-        yield from self._shutdown_server()
+    async def tearDown(self):
+        await self._shutdown_server()
 
-    @asyncio.coroutine
-    def test_when_async_commands_timeout__they_should_be_removed_from_protocol_state(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
-        yield from (imap_client.protocol.execute(Command(
+    async def test_when_async_commands_timeout__they_should_be_removed_from_protocol_state(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
+        await (imap_client.protocol.execute(Command(
             'DELAY', imap_client.protocol.new_tag(), '3', loop=self.loop)))
 
         noop_task = asyncio.ensure_future(imap_client.protocol.execute(
             Command('NOOP', imap_client.protocol.new_tag(), '', loop=self.loop, timeout=2)))
-        yield from self.advance(1)
+        await self.advance(1)
         self.assertEqual(1, len(imap_client.protocol.pending_async_commands))
-        yield from self.advance(1.1)
+        await self.advance(1.1)
 
-        finished, pending = yield from asyncio.wait([noop_task], loop=self.loop)
+        finished, pending = await asyncio.wait([noop_task], loop=self.loop)
         self.assertTrue(noop_task in finished)
         self.assertTrue(isinstance(noop_task.exception(), CommandTimeout))
         self.assertEqual(0, len(imap_client.protocol.pending_async_commands))
 
-    @asyncio.coroutine
-    def test_when_sync_commands_timeout__they_should_be_removed_from_protocol_state(self):
-        imap_client = yield from self.login_user('user', 'pass')
-        yield from (imap_client.protocol.execute(Command(
+    async def test_when_sync_commands_timeout__they_should_be_removed_from_protocol_state(self):
+        imap_client = await self.login_user('user', 'pass')
+        await (imap_client.protocol.execute(Command(
             'DELAY', imap_client.protocol.new_tag(), '3', loop=self.loop)))
 
         delay_task = asyncio.ensure_future(imap_client.protocol.execute(
             Command('DELAY', imap_client.protocol.new_tag(), '0', loop=self.loop, timeout=2)))
-        yield from self.advance(1)
+        await self.advance(1)
         self.assertIsNotNone(imap_client.protocol.pending_sync_command)
-        yield from self.advance(1.1)
+        await self.advance(1.1)
 
-        finished, pending = yield from asyncio.wait([delay_task], loop=self.loop)
+        finished, pending = await asyncio.wait([delay_task], loop=self.loop)
         self.assertTrue(delay_task in finished)
         self.assertTrue(isinstance(delay_task.exception(), CommandTimeout))
         self.assertIsNone(imap_client.protocol.pending_sync_command)
 
-    @asyncio.coroutine
-    def test_idle_start__exits_queueget_without_timeout_error(self):
-        imap_client = yield from self.login_user('user', 'pass', select=True)
+    async def test_idle_start__exits_queueget_without_timeout_error(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
 
         idle_timeout = 5
-        yield from imap_client.idle_start(idle_timeout)
+        await imap_client.idle_start(idle_timeout)
 
         push_task = asyncio.ensure_future(imap_client.wait_server_push(idle_timeout + 2))
-        yield from self.advance(idle_timeout + 1)
+        await self.advance(idle_timeout + 1)
 
-        r = yield from asyncio.wait_for(push_task, 0)
+        r = await asyncio.wait_for(push_task, 0)
         self.assertEqual(STOP_WAIT_SERVER_PUSH, r)
 
     @asyncio.coroutine
@@ -1027,17 +958,16 @@ class TestAioimaplibCallback(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
         self._init_server(self.loop)
 
-    @asyncio.coroutine
-    def test_callback_is_called_when_connection_is_lost(self):
+    async def test_callback_is_called_when_connection_is_lost(self):
         queue = asyncio.Queue()
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3, conn_lost_cb=(
             lambda m: queue.put_nowait('called with %s' % m)))
-        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
-        yield from imap_client.login('login', 'password')
+        await asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+        await imap_client.login('login', 'password')
 
-        yield from self._shutdown_server()
+        await self._shutdown_server()
 
-        self.assertEqual('called with None', (yield from asyncio.wait_for(queue.get(), timeout=2)))
+        self.assertEqual('called with None', (await asyncio.wait_for(queue.get(), timeout=2)))
 
 
 class TestAioimaplibSSL(WithImapServer, asynctest.TestCase):
@@ -1055,17 +985,15 @@ class TestAioimaplibSSL(WithImapServer, asynctest.TestCase):
 
         self._init_server(self.loop, ssl_context=ssl_context)
 
-    @asyncio.coroutine
-    def tearDown(self):
-        yield from self._shutdown_server()
+    async def tearDown(self):
+        await self._shutdown_server()
         os.remove(self._cert_file)
         os.remove(self._cert_key)
 
-    @asyncio.coroutine
-    def test_client_can_connect_to_server_over_ssl(self):
+    async def test_client_can_connect_to_server_over_ssl(self):
         ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=self._cert_file)
         imap_client = aioimaplib.IMAP4_SSL(port=12345, loop=self.loop, ssl_context=ssl_context)
-        yield from asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+        await asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
 
         self.assertEquals('IMAP4REV1', imap_client.protocol.imap_version)
         self.assertEquals({'IMAP4rev1', 'YESAUTH'}, imap_client.protocol.capabilities)

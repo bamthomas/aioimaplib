@@ -206,9 +206,8 @@ class Command(object):
             self.response = Response(result, old.lines + [line])
         self._reset_timer()
 
-    @asyncio.coroutine
-    def wait(self):
-        yield from self._event.wait()
+    async def wait(self):
+        await self._event.wait()
         if self._exception is not None:
             raise self._exception
 
@@ -303,10 +302,9 @@ class IncompleteRead(AioImapException):
 
 def change_state(coro):
     @functools.wraps(coro)
-    @asyncio.coroutine
-    def wrapper(self, *args, **kargs):
-        with (yield from self.state_condition):
-            res = yield from coro(self, *args, **kargs)
+    async def wrapper(self, *args, **kargs):
+        with (await self.state_condition):
+            res = await coro(self, *args, **kargs)
             log.debug('state -> %s' % self.state)
             self.state_condition.notify_all()
             return res
@@ -414,26 +412,25 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         log.debug('Sending : %s' % data)
         self.transport.write(data)
 
-    @asyncio.coroutine
-    def execute(self, command):
+    async def execute(self, command):
         if self.state not in Commands.get(command.name).valid_states:
             raise Abort('command %s illegal in state %s' % (command.name, self.state))
 
         if self.pending_sync_command is not None:
-            yield from self.pending_sync_command.wait()
+            await self.pending_sync_command.wait()
 
         if Commands.get(command.name).exec == Exec.is_sync:
             if self.pending_async_commands:
-                yield from self.wait_async_pending_commands()
+                await self.wait_async_pending_commands()
             self.pending_sync_command = command
         else:
             if self.pending_async_commands.get(command.untagged_resp_name) is not None:
-                yield from self.pending_async_commands[command.untagged_resp_name].wait()
+                await self.pending_async_commands[command.untagged_resp_name].wait()
             self.pending_async_commands[command.untagged_resp_name] = command
 
         self.send(str(command))
         try:
-            yield from command.wait()
+            await command.wait()
         except CommandTimeout:
             if Commands.get(command.name).exec == Exec.is_sync:
                 self.pending_sync_command = None
@@ -447,20 +444,18 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return command.response
 
     @change_state
-    @asyncio.coroutine
-    def welcome(self, command):
+    async def welcome(self, command):
         if 'PREAUTH' in command:
             self.state = AUTH
         elif 'OK' in command:
             self.state = NONAUTH
         else:
             raise Error(command)
-        yield from self.capability()
+        await self.capability()
 
     @change_state
-    @asyncio.coroutine
-    def login(self, user, password):
-        response = yield from self.execute(
+    async def login(self, user, password):
+        response = await self.execute(
             Command('LOGIN', self.new_tag(), user, '%s' % quoted(password), loop=self.loop))
 
         if 'OK' == response.result:
@@ -471,17 +466,15 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return response
 
     @change_state
-    @asyncio.coroutine
-    def logout(self):
-        response = (yield from self.execute(Command('LOGOUT', self.new_tag(), loop=self.loop)))
+    async def logout(self):
+        response = (await self.execute(Command('LOGOUT', self.new_tag(), loop=self.loop)))
         if 'OK' == response.result:
             self.state = LOGOUT
         return response
 
     @change_state
-    @asyncio.coroutine
-    def select(self, mailbox='INBOX'):
-        response = yield from self.execute(
+    async def select(self, mailbox='INBOX'):
+        response = await self.execute(
             Command('SELECT', self.new_tag(), mailbox, loop=self.loop))
 
         if 'OK' == response.result:
@@ -489,19 +482,17 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return response
 
     @change_state
-    @asyncio.coroutine
-    def close(self):
-        response = yield from self.execute(Command('CLOSE', self.new_tag(), loop=self.loop))
+    async def close(self):
+        response = await self.execute(Command('CLOSE', self.new_tag(), loop=self.loop))
         if response.result == 'OK':
             self.state = AUTH
         return response
 
-    @asyncio.coroutine
-    def idle(self):
+    async def idle(self):
         if 'IDLE' not in self.capabilities:
             raise Abort('server has not IDLE capability')
         self._idle_event.clear()
-        return (yield from self.execute(IdleCommand(self.new_tag(), self.idle_queue, loop=self.loop)))
+        return await self.execute(IdleCommand(self.new_tag(), self.idle_queue, loop=self.loop))
 
     def has_pending_idle_command(self):
         return self.pending_sync_command is not None and self.pending_sync_command.name == 'IDLE'
@@ -509,67 +500,59 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def idle_done(self):
         self.send('DONE')
 
-    @asyncio.coroutine
-    def search(self, *criteria, charset='utf-8', by_uid=False):
+    async def search(self, *criteria, charset='utf-8', by_uid=False):
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
         prefix = 'UID' if by_uid else ''
 
-        return (yield from self.execute(
-            Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop)))
+        return await self.execute(
+            Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop))
 
-    @asyncio.coroutine
-    def fetch(self, message_set, message_parts, by_uid=False, timeout=None):
-        return (yield from self.execute(
+    async def fetch(self, message_set, message_parts, by_uid=False, timeout=None):
+        return await self.execute(
             FetchCommand(self.new_tag(), message_set, message_parts,
-                         prefix='UID' if by_uid else '', loop=self.loop, timeout=timeout)))
+                         prefix='UID' if by_uid else '', loop=self.loop, timeout=timeout))
 
-    @asyncio.coroutine
-    def store(self, *args, by_uid=False):
-        return (yield from self.execute(
+    async def store(self, *args, by_uid=False):
+        return await self.execute(
             Command('STORE', self.new_tag(), *args,
-                    prefix='UID' if by_uid else '', untagged_resp_name='FETCH', loop=self.loop)))
+                    prefix='UID' if by_uid else '', untagged_resp_name='FETCH', loop=self.loop))
 
-    @asyncio.coroutine
-    def expunge(self, *args, by_uid=False):
-        return (yield from self.execute(
+    async def expunge(self, *args, by_uid=False):
+        return await self.execute(
             Command('EXPUNGE', self.new_tag(), *args,
-                    prefix='UID' if by_uid else '', loop=self.loop)))
+                    prefix='UID' if by_uid else '', loop=self.loop))
 
-    @asyncio.coroutine
-    def uid(self, command, *criteria, timeout=None):
+    async def uid(self, command, *criteria, timeout=None):
         if self.state not in Commands.get('UID').valid_states:
             raise Abort('command UID illegal in state %s' % self.state)
 
         if command.upper() == 'FETCH':
-            return (yield from self.fetch(criteria[0], criteria[1], by_uid=True, timeout=timeout))
+            return await self.fetch(criteria[0], criteria[1], by_uid=True, timeout=timeout)
         if command.upper() == 'STORE':
-            return (yield from self.store(*criteria, by_uid=True))
+            return await self.store(*criteria, by_uid=True)
         if command.upper() == 'COPY':
-            return (yield from self.copy(*criteria, by_uid=True))
+            return await self.copy(*criteria, by_uid=True)
         if command.upper() == 'MOVE':
-            return (yield from self.move(*criteria, by_uid=True))
+            return await self.move(*criteria, by_uid=True)
         if command.upper() == 'EXPUNGE':
             if 'UIDPLUS' not in self.capabilities:
                 raise Abort('EXPUNGE with uids is only valid with UIDPLUS capability. UIDPLUS not in (%s)' % self.capabilities)
-            return (yield from self.expunge(*criteria, by_uid=True))
+            return await self.expunge(*criteria, by_uid=True)
         raise Abort('command UID only possible with COPY, FETCH, EXPUNGE (w/UIDPLUS) or STORE (was %s)' % command.upper())
 
-    @asyncio.coroutine
-    def copy(self, *args, by_uid=False):
-        return (yield from self.execute(
+    async def copy(self, *args, by_uid=False):
+        return (await self.execute(
             Command('COPY', self.new_tag(), *args, prefix='UID' if by_uid else '', loop=self.loop)))
 
-    @asyncio.coroutine
-    def move(self, uid_set, mailbox, by_uid=False):
+    async def move(self, uid_set, mailbox, by_uid=False):
         if 'MOVE' not in self.capabilities:
             raise Abort('server has not MOVE capability')
 
-        return (yield from self.execute(
+        return (await self.execute(
             Command('MOVE', self.new_tag(), uid_set, mailbox, prefix='UID' if by_uid else '', loop=self.loop)))
 
-    @asyncio.coroutine
-    def capability(self):
-        response = yield from self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
+    async def capability(self):
+        response = await self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
         capability_list = response.lines[0].split()
         self.capabilities = set(capability_list)
@@ -579,8 +562,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         except IndexError:
             raise Error('server not IMAP4 compliant')
 
-    @asyncio.coroutine
-    def append(self, message_bytes, mailbox='INBOX', flags=None, date=None, timeout=None):
+    async def append(self, message_bytes, mailbox='INBOX', flags=None, date=None, timeout=None):
         args = [mailbox]
         if flags is not None:
             if (flags[0], flags[-1]) != ('(', ')'):
@@ -591,37 +573,32 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             args.append(time2internaldate(date))
         args.append('{%s}' % len(message_bytes))
         self.literal_data = message_bytes
-        return (yield from self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop, timeout=timeout)))
+        return await self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop, timeout=timeout))
 
-    @asyncio.coroutine
-    def id(self, **kwargs):
+    async def id(self, **kwargs):
         args = arguments_rfs2971(**kwargs)
-        return (yield from self.execute(Command('ID', self.new_tag(), *args, loop=self.loop)))
+        return await self.execute(Command('ID', self.new_tag(), *args, loop=self.loop))
 
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
                        'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE', 'ENABLE'}
 
-    @asyncio.coroutine
-    def namespace(self):
+    async def namespace(self):
         if 'NAMESPACE' not in self.capabilities:
             raise Abort('server has not NAMESPACE capability')
-        return (yield from self.execute(Command('NAMESPACE', self.new_tag(), loop=self.loop)))
+        return await self.execute(Command('NAMESPACE', self.new_tag(), loop=self.loop))
 
-    @asyncio.coroutine
-    def simple_command(self, name, *args):
+    async def simple_command(self, name, *args):
         if name not in self.simple_commands:
             raise NotImplementedError('simple command only available for %s' % self.simple_commands)
-        return (yield from self.execute(Command(name, self.new_tag(), *args, loop=self.loop)))
+        return await self.execute(Command(name, self.new_tag(), *args, loop=self.loop))
 
-    @asyncio.coroutine
-    def wait_async_pending_commands(self):
-        yield from asyncio.wait([asyncio.ensure_future(cmd.wait()) for cmd in self.pending_async_commands.values()])
+    async def wait_async_pending_commands(self):
+        await asyncio.wait([asyncio.ensure_future(cmd.wait()) for cmd in self.pending_async_commands.values()])
 
-    @asyncio.coroutine
-    def wait(self, state_regexp):
+    async def wait(self, state_regexp):
         state_re = re.compile(state_regexp)
-        with (yield from self.state_condition):
-            yield from self.state_condition.wait_for(lambda: state_re.match(self.state))
+        with (await self.state_condition):
+            await self.state_condition.wait_for(lambda: state_re.match(self.state))
 
     @asyncio.coroutine
     def wait_for_idle_response(self):
@@ -717,78 +694,62 @@ class IMAP4(object):
     def get_state(self):
         return self.protocol.state
 
-    @asyncio.coroutine
-    def wait_hello_from_server(self):
-        yield from asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.timeout)
+    async def wait_hello_from_server(self):
+        await asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.timeout)
 
-    @asyncio.coroutine
-    def login(self, user, password):
-        return (yield from asyncio.wait_for(self.protocol.login(user, password), self.timeout))
+    async def login(self, user, password):
+        return await asyncio.wait_for(self.protocol.login(user, password), self.timeout)
 
-    @asyncio.coroutine
-    def logout(self):
-        return (yield from asyncio.wait_for(self.protocol.logout(), self.timeout))
+    async def logout(self):
+        return await asyncio.wait_for(self.protocol.logout(), self.timeout)
 
-    @asyncio.coroutine
-    def select(self, mailbox='INBOX'):
-        return (yield from asyncio.wait_for(self.protocol.select(mailbox), self.timeout))
+    async def select(self, mailbox='INBOX'):
+        return await asyncio.wait_for(self.protocol.select(mailbox), self.timeout)
 
-    @asyncio.coroutine
-    def search(self, *criteria, charset='utf-8'):
-        return (yield from asyncio.wait_for(self.protocol.search(*criteria, charset=charset), self.timeout))
+    async def search(self, *criteria, charset='utf-8'):
+        return await asyncio.wait_for(self.protocol.search(*criteria, charset=charset), self.timeout)
 
-    @asyncio.coroutine
-    def uid_search(self, *criteria, charset='utf-8'):
-        return (
-            yield from asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout))
+    async def uid_search(self, *criteria, charset='utf-8'):
+        return await asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout)
 
-    @asyncio.coroutine
-    def uid(self, command, *criteria):
-        return (yield from self.protocol.uid(command, *criteria, timeout=self.timeout))
+    async def uid(self, command, *criteria):
+        return await self.protocol.uid(command, *criteria, timeout=self.timeout)
 
-    @asyncio.coroutine
-    def store(self, *criteria):
-        return (yield from asyncio.wait_for(self.protocol.store(*criteria), self.timeout))
+    async def store(self, *criteria):
+        return await asyncio.wait_for(self.protocol.store(*criteria), self.timeout)
 
-    @asyncio.coroutine
-    def copy(self, *criteria):
-        return (yield from asyncio.wait_for(self.protocol.copy(*criteria), self.timeout))
+    async def copy(self, *criteria):
+        return await asyncio.wait_for(self.protocol.copy(*criteria), self.timeout)
 
-    @asyncio.coroutine
-    def expunge(self):
-        return (yield from asyncio.wait_for(self.protocol.expunge(), self.timeout))
+    async def expunge(self):
+        return await asyncio.wait_for(self.protocol.expunge(), self.timeout)
 
-    @asyncio.coroutine
-    def fetch(self, message_set, message_parts):
-        return (yield from self.protocol.fetch(message_set, message_parts, timeout=self.timeout))
+    async def fetch(self, message_set, message_parts):
+        return await self.protocol.fetch(message_set, message_parts, timeout=self.timeout)
 
-    @asyncio.coroutine
-    def idle(self):
-        return (yield from self.protocol.idle())
+    async def idle(self):
+        return await self.protocol.idle()
 
     def idle_done(self):
         if self._idle_waiter is not None:
             self._idle_waiter.cancel()
         self.protocol.idle_done()
 
-    @asyncio.coroutine
-    def stop_wait_server_push(self):
+    async def stop_wait_server_push(self):
         if self.protocol.has_pending_idle_command():
-            yield from self.protocol.idle_queue.put(STOP_WAIT_SERVER_PUSH)
+            await self.protocol.idle_queue.put(STOP_WAIT_SERVER_PUSH)
             return True
         return False
 
-    @asyncio.coroutine
-    def wait_server_push(self, timeout=TWENTY_NINE_MINUTES):
-        return (yield from asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout))
+    async def wait_server_push(self, timeout=TWENTY_NINE_MINUTES):
+        return await asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout)
 
-    @asyncio.coroutine
-    def idle_start(self, timeout=TWENTY_NINE_MINUTES):
+    async def idle_start(self, timeout=TWENTY_NINE_MINUTES):
         if self._idle_waiter is not None:
             self._idle_waiter.cancel()
         idle = asyncio.ensure_future(self.idle())
         wait_for_ack = asyncio.ensure_future(self.protocol.wait_for_idle_response())
-        yield from asyncio.wait({idle, wait_for_ack}, return_when=asyncio.FIRST_COMPLETED)
+        await asyncio.wait({idle, wait_for_ack}, return_when=asyncio.FIRST_COMPLETED)
         if not self.has_pending_idle():
             wait_for_ack.cancel()
             raise Abort('server returned error to IDLE command')
@@ -799,76 +760,59 @@ class IMAP4(object):
     def has_pending_idle(self):
         return self.protocol.has_pending_idle_command()
 
-    @asyncio.coroutine
-    def id(self, **kwargs):
-        return (yield from asyncio.wait_for(self.protocol.id(**kwargs), self.timeout))
+    async def id(self, **kwargs):
+        return await asyncio.wait_for(self.protocol.id(**kwargs), self.timeout)
 
-    @asyncio.coroutine
-    def namespace(self):
-        return (yield from asyncio.wait_for(self.protocol.namespace(), self.timeout))
+    async def namespace(self):
+        return await asyncio.wait_for(self.protocol.namespace(), self.timeout)
 
-    @asyncio.coroutine
-    def noop(self):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('NOOP'), self.timeout))
+    async def noop(self):
+        return await asyncio.wait_for(self.protocol.simple_command('NOOP'), self.timeout)
 
-    @asyncio.coroutine
-    def check(self):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('CHECK'), self.timeout))
+    async def check(self):
+        return await asyncio.wait_for(self.protocol.simple_command('CHECK'), self.timeout)
 
-    @asyncio.coroutine
-    def examine(self, mailbox='INBOX'):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('EXAMINE', mailbox), self.timeout))
+    async def examine(self, mailbox='INBOX'):
+        return await asyncio.wait_for(self.protocol.simple_command('EXAMINE', mailbox), self.timeout)
 
-    @asyncio.coroutine
-    def status(self, mailbox, names):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('STATUS', mailbox, names), self.timeout))
+    async def status(self, mailbox, names):
+        return await asyncio.wait_for(self.protocol.simple_command('STATUS', mailbox, names), self.timeout)
 
-    @asyncio.coroutine
-    def subscribe(self, mailbox):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('SUBSCRIBE', mailbox), self.timeout))
+    async def subscribe(self, mailbox):
+        return await asyncio.wait_for(self.protocol.simple_command('SUBSCRIBE', mailbox), self.timeout)
 
-    @asyncio.coroutine
-    def unsubscribe(self, mailbox):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('UNSUBSCRIBE', mailbox), self.timeout))
+    async def unsubscribe(self, mailbox):
+        return await asyncio.wait_for(self.protocol.simple_command('UNSUBSCRIBE', mailbox), self.timeout)
 
-    @asyncio.coroutine
-    def lsub(self, reference_name, mailbox_name):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('LSUB', reference_name, mailbox_name), self.timeout))
+    async def lsub(self, reference_name, mailbox_name):
+        return await asyncio.wait_for(self.protocol.simple_command('LSUB', reference_name, mailbox_name), self.timeout)
 
-    @asyncio.coroutine
-    def create(self, mailbox_name):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('CREATE', mailbox_name), self.timeout))
+    async def create(self, mailbox_name):
+        return await asyncio.wait_for(self.protocol.simple_command('CREATE', mailbox_name), self.timeout)
 
-    @asyncio.coroutine
-    def delete(self, mailbox_name):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('DELETE', mailbox_name), self.timeout))
+    async def delete(self, mailbox_name):
+        return await asyncio.wait_for(self.protocol.simple_command('DELETE', mailbox_name), self.timeout)
 
-    @asyncio.coroutine
-    def rename(self, old_mailbox_name, new_mailbox_name):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('RENAME', old_mailbox_name, new_mailbox_name), self.timeout))
+    async def rename(self, old_mailbox_name, new_mailbox_name):
+        return await asyncio.wait_for(self.protocol.simple_command('RENAME', old_mailbox_name, new_mailbox_name), self.timeout)
 
-    @asyncio.coroutine
-    def list(self, reference_name, mailbox_pattern):
-        return (yield from asyncio.wait_for(self.protocol.simple_command('LIST', reference_name, mailbox_pattern), self.timeout))
+    async def list(self, reference_name, mailbox_pattern):
+        return await asyncio.wait_for(self.protocol.simple_command('LIST', reference_name, mailbox_pattern), self.timeout)
 
-    @asyncio.coroutine
-    def append(self, message_bytes, mailbox='INBOX', flags=None, date=None):
-        return (yield from self.protocol.append(message_bytes, mailbox, flags, date, timeout=self.timeout))
+    async def append(self, message_bytes, mailbox='INBOX', flags=None, date=None):
+        return await self.protocol.append(message_bytes, mailbox, flags, date, timeout=self.timeout)
 
-    @asyncio.coroutine
-    def close(self):
-        return (yield from asyncio.wait_for(self.protocol.close(), self.timeout))
+    async def close(self):
+        return await asyncio.wait_for(self.protocol.close(), self.timeout)
 
-    @asyncio.coroutine
-    def move(self, uid_set, mailbox):
-        return (yield from asyncio.wait_for(self.protocol.move(uid_set, mailbox), self.timeout))
+    async def move(self, uid_set, mailbox):
+        return await asyncio.wait_for(self.protocol.move(uid_set, mailbox), self.timeout)
 
-    @asyncio.coroutine
-    def enable(self, capability):
+    async def enable(self, capability):
         if 'ENABLE' not in self.protocol.capabilities:
             raise Abort('server has not ENABLE capability')
 
-        return (yield from asyncio.wait_for(self.protocol.simple_command('ENABLE', capability), self.timeout))
+        return await asyncio.wait_for(self.protocol.simple_command('ENABLE', capability), self.timeout)
 
     def has_capability(self, capability):
         return capability in self.protocol.capabilities
@@ -902,8 +846,10 @@ def int2ap(num):
         val += ap[mod:mod + 1]
     return val
 
+
 Months = ' Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')
 Mon2num = {s.encode():n+1 for n, s in enumerate(Months[1:])}
+
 
 def time2internaldate(date_time):
     """Convert date_time to IMAP4 INTERNALDATE representation.
