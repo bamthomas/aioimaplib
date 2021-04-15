@@ -15,27 +15,24 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
+import functools
 import logging
+import random
+import re
 import ssl
 import sys
+import time
 from asyncio import BaseTransport, Future
+from collections import namedtuple
 from copy import copy
 from datetime import datetime, timezone, timedelta
-import time
 from enum import Enum
-
-import re
-
-import functools
-
-import random
-from collections import namedtuple
+from typing import Union, Any, Coroutine, Callable, Optional, Pattern
 
 # to avoid imap servers to kill the connection after 30mn idling
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
-from typing import Union, Collection, Awaitable, Any, Coroutine, Callable, Optional, Pattern
-
 TWENTY_NINE_MINUTES = 1740.0
+
 STOP_WAIT_SERVER_PUSH = ['stop_wait_server_push']
 PY37_OR_LATER = sys.version_info[:2] >= (3, 7)
 
