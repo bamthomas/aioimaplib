@@ -55,6 +55,8 @@ ID_MAX_PAIRS_COUNT = 30
 ID_MAX_FIELD_LEN = 30
 ID_MAX_VALUE_LEN = 1024
 
+CRLF = b'\r\n'
+
 AllowedVersions = ('IMAP4REV1', 'IMAP4')
 Exec = Enum('Exec', 'is_sync is_async')
 Cmd = namedtuple('Cmd', 'name           valid_states                exec')
@@ -108,12 +110,9 @@ Commands = {
 Response = namedtuple('Response', 'result lines')
 
 
-def quoted(s):
-    """ Given a string, return a quoted string as per RFC 3501, section 9."""
-    if isinstance(s, str):
-        return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
-    else:
-        return b'"' + s.replace(b'\\', b'\\\\').replace(b'"', b'\\"') + b'"'
+def quoted(s: str) -> str:
+    """Return quoted string as per RFC 3501, section 9."""
+    return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 def unquoted(s):
     """ Given a string, return an unquoted string as per RFC 3501, section 9."""
@@ -374,7 +373,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if current_cmd.wait_literal_data():
                 raise IncompleteRead(current_cmd)
 
-        line, separator, tail = data.partition(b'\r\n')
+        line, separator, tail = data.partition(CRLF)
         if not separator:
             raise IncompleteRead(current_cmd, data)
 
@@ -723,7 +722,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if self.literal_data is None:
                 Abort('asked for literal data but have no literal data to send')
             self.transport.write(self.literal_data)
-            self.transport.write(b'\r\n')
+            self.transport.write(CRLF)
             self.literal_data = None
         elif self.pending_sync_command is not None:
             log.debug('continuation line appended to pending sync command %s : %s' % (self.pending_sync_command, line))
