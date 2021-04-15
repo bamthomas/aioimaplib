@@ -1,6 +1,14 @@
 Changes
 =======
 
+
+V0.8.0
+-------
+[aiolib] adds type hints
+[aiolib] use async/await syntax (remove support for python 3.4)
+[aiolib] fixes issue #30 on idle race condition
+[aiolib] fixes the allowed version
+
 V0.7.18
 -------
 [aiolib] fix the fix python 3.7 don't use the 7.17
