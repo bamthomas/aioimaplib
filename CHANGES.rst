@@ -22,6 +22,7 @@ V0.7.17
 V0.7.16
 -------
 merge from darkrain42
+
 - [aiolib] fix interaction between idle loop and server keepalive
 - [aiolib] fix cert verification on debian buster
 - [test] fix imapserver literal handling on Python 3.6.5+
