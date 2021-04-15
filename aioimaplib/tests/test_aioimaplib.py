@@ -205,7 +205,7 @@ class TestDataReceived(unittest.TestCase):
         self.imap_protocol.pending_sync_command = cmd
         self.imap_protocol.data_received(b'+ idling\r\n* 1 EXISTS\r\n* 1 RECENT\r\n')
 
-        self.assertEqual(['+ idling'], queue.get_nowait())
+        self.assertTrue(self.imap_protocol._idle_event.is_set())
         self.assertEqual(['1 EXISTS', '1 RECENT'], queue.get_nowait())
 
 
@@ -567,6 +567,17 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
 
         self.assertFalse((await imap_client.stop_wait_server_push()))
 
+    async def test_idle_error_response(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
+
+        conn = self.imapserver.get_connection('user')
+        def idle_error(tag, *args):
+            conn.error(tag, "Error initiating IDLE")
+        conn.idle = idle_error
+
+        with self.assertRaises(Abort):
+            await imap_client.idle_start()
+
     async def test_store_and_search_by_keyword(self):
         self.imapserver.receive(Mail.create(['user']))
         self.imapserver.receive(Mail.create(['user']))
@@ -785,6 +796,22 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         response = await imap_client.id()
         self.assertEqual(('OK', ['ID command completed']), response)
 
+    async def test_race_idle_done_and_server_push(self):
+        imap_client = await self.login_user('user', 'pass', select=True)
+
+        idle = await imap_client.idle_start(2)
+        imap_client.idle_done()
+        self.imapserver.receive(Mail.create(['user']))
+        await asyncio.wait_for(idle, 1)
+
+        idle = await imap_client.idle_start(2)
+        imap_client.idle_done()
+        await asyncio.wait_for(idle, 1)
+
+        r = await imap_client.wait_server_push()
+        self.assertEqual(['1 EXISTS', '1 RECENT'], r)
+        self.assertTrue(imap_client.protocol.idle_queue.empty())
+
 
 class TestImapServerCapabilities(AioWithImapServer, asynctest.TestCase):
     def setUp(self):
@@ -875,6 +902,56 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
 
         r = await asyncio.wait_for(push_task, 0)
         self.assertEqual(STOP_WAIT_SERVER_PUSH, r)
+
+    @asyncio.coroutine
+    def test_idle_start__exits_queueget_with_keepalive_without_timeout_error(self):
+        imap_client = yield from self.login_user('user', 'pass', select=True)
+
+        # Idle long enough for the server to issue a keep-alive
+        server_idle_timeout = imapserver.ImapProtocol.IDLE_STILL_HERE_PERIOD_SECONDS
+        idle_timeout = server_idle_timeout + 1
+        idle = yield from imap_client.idle_start(idle_timeout)
+
+        push_task = asyncio.ensure_future(imap_client.wait_server_push(server_idle_timeout - 1))
+
+        # Advance time until we've received a keep-alive from server
+        yield from self.advance(server_idle_timeout)
+
+        # The original push task timed out
+        with self.assertRaises(asyncio.TimeoutError):
+            yield from asyncio.wait_for(push_task, 0.1)
+
+        # Read the keepalive from the server
+        r = yield from imap_client.wait_server_push(0.1)
+        self.assertEqual(["OK Still here"], r)
+
+        # Advance the clock to the client timeout (idle waiter triggers)
+        yield from self.advance(1)
+        imap_client.idle_done()
+
+        r = yield from asyncio.wait_for(idle, 1)
+        self.assertEqual("OK", r.result)
+
+        self.assertFalse(imap_client.protocol._idle_event.is_set())
+
+        # Start another idle period
+        idle = yield from imap_client.idle_start(idle_timeout)
+        yield from self.advance(1)
+
+        # Read 'stop_wait_server_push'
+        push_task = asyncio.ensure_future(imap_client.wait_server_push(0.1))
+        yield from self.advance(1)
+        r = yield from asyncio.wait_for(push_task, None)
+        self.assertEqual(STOP_WAIT_SERVER_PUSH, r)
+
+        # There shouldn't be anything left in the queue (no '+ idling')
+        with self.assertRaises(asyncio.TimeoutError):
+            push_task = asyncio.ensure_future(imap_client.wait_server_push(0.1))
+            yield from self.advance(1)
+            yield from asyncio.wait_for(push_task, 0.1)
+
+        imap_client.idle_done()
+        yield from asyncio.wait_for(idle, 1)
 
 
 class TestAioimaplibCallback(AioWithImapServer, asynctest.TestCase):
