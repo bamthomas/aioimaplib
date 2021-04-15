@@ -6,7 +6,7 @@ About
 
 .. image:: https://travis-ci.org/bamthomas/aioimaplib.png?branch=master
    :alt: Build status
-   :target: https://travis-ci.org/bamthomas/aioimaplib
+   :target: https://travis-ci.com/bamthomas/aioimaplib
 
 .. image:: https://coveralls.io/repos/github/bamthomas/aioimaplib/badge.svg
    :target: https://coveralls.io/github/bamthomas/aioimaplib
