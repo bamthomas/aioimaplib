@@ -42,4 +42,4 @@ class TestAioimaplibAcceptance(AioWithImapServer, TestCase):
             result, data = await imap_client.fetch('1', '(RFC822)')
 
             self.assertEqual('OK', result)
-            self.assertEqual(['1 FETCH (RFC822 {418898}', mail.as_bytes(), ')', 'FETCH completed.'], data)
+            self.assertEqual([b'1 FETCH (RFC822 {418898}', mail.as_bytes(), b')', b'FETCH completed.'], data)
