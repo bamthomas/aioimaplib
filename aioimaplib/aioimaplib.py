@@ -591,7 +591,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
     async def wait(self, state_regexp: Pattern) -> None:
         state_re = re.compile(state_regexp)
-        with await self.state_condition:
+        async with self.state_condition:
             await self.state_condition.wait_for(lambda: state_re.match(self.state))
 
     async def wait_for_idle_response(self):
