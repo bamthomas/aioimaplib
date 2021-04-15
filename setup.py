@@ -5,8 +5,8 @@ from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
 py_version = sys.version_info[:2]
-if py_version < (3, 4):
-    raise Exception("aioimaplib requires Python >= 3.4.")
+if py_version < (3, 5):
+    raise Exception("aioimaplib requires Python >= 3.5.")
 
 with open(os.path.join(here, 'README.rst')) as readme:
     README = readme.read()
