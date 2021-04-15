@@ -18,6 +18,7 @@ import asyncio
 import logging
 import ssl
 import sys
+from asyncio import BaseTransport, Future
 from copy import copy
 from datetime import datetime, timezone, timedelta
 import time
@@ -32,8 +33,9 @@ from collections import namedtuple
 
 # to avoid imap servers to kill the connection after 30mn idling
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
+from typing import Union, Collection, Awaitable, Any, Coroutine, Callable, Optional, Pattern
 
-TWENTY_NINE_MINUTES = 1740
+TWENTY_NINE_MINUTES = 1740.0
 STOP_WAIT_SERVER_PUSH = ['stop_wait_server_push']
 PY37_OR_LATER = sys.version_info[:2] >= (3, 7)
 
@@ -110,24 +112,18 @@ def get_running_loop() -> asyncio.AbstractEventLoop:
     return loop
 
 
-def quoted(arg):
+def quoted(arg: str) -> str:
     """ Given a string, return a quoted string as per RFC 3501, section 9.
 
         Implementation copied from https://github.com/mjs/imapclient
         (imapclient/imapclient.py), 3-clause BSD license
     """
-    if isinstance(arg, str):
-        arg = arg.replace('\\', '\\\\')
-        arg = arg.replace('"', '\\"')
-        q = '"'
-    else:
-        arg = arg.replace(b'\\', b'\\\\')
-        arg = arg.replace(b'"', b'\\"')
-        q = b'"'
-    return q + arg + q
+    arg = arg.replace('\\', '\\\\')
+    arg = arg.replace('"', '\\"')
+    return '"' + arg + '"'
 
 
-def arguments_rfs2971(**kwargs):
+def arguments_rfs2971(**kwargs: Union[dict, list, str]) -> Union[dict, list]:
     if kwargs:
         if len(kwargs) > ID_MAX_PAIRS_COUNT:
             raise ValueError('Must not send more than 30 field-value pairs')
@@ -147,7 +143,8 @@ def arguments_rfs2971(**kwargs):
 
 
 class Command(object):
-    def __init__(self, name, tag, *args, prefix=None, untagged_resp_name=None, loop=None, timeout=None):
+    def __init__(self, name: str, tag: str, *args, prefix: str = None, untagged_resp_name: str = None,
+                 loop: asyncio.AbstractEventLoop = None, timeout: float = None) -> None:
         self.name = name
         self.tag = tag
         self.args = args
@@ -164,7 +161,7 @@ class Command(object):
         self._literal_data = None
         self._expected_size = 0
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '{tag} {prefix}{name}{space}{args}'.format(
             tag=self.tag, prefix=self.prefix or '', name=self.name,
             space=' ' if self.args else '', args=' '.join(self.args))
@@ -173,23 +170,23 @@ class Command(object):
     def __eq__(self, other):
         return other is not None and other.tag == self.tag and other.name == self.name and other.args == self.args
 
-    def close(self, line, result):
+    def close(self, line: str, result: str) -> None:
         self.append_to_resp(line, result=result)
         self._timer.cancel()
         self._event.set()
 
-    def begin_literal_data(self, expected_size, literal_data=b''):
+    def begin_literal_data(self, expected_size: int, literal_data: bytes = b'') -> bytes:
         self._expected_size = expected_size
         self._literal_data = b''
         return self.append_literal_data(literal_data)
 
-    def wait_literal_data(self):
+    def wait_literal_data(self) -> bool:
         return self._expected_size != 0 and len(self._literal_data) != self._expected_size
 
-    def wait_data(self):
+    def wait_data(self) -> bool:
         return self.wait_literal_data()
 
-    def append_literal_data(self, data):
+    def append_literal_data(self, data: bytes) -> bytes:
         nb_bytes_to_add = self._expected_size - len(self._literal_data)
         self._literal_data += data[0:nb_bytes_to_add]
         if not self.wait_literal_data():
@@ -198,7 +195,7 @@ class Command(object):
         self._reset_timer()
         return data[nb_bytes_to_add:]
 
-    def append_to_resp(self, line, result='Pending'):
+    def append_to_resp(self, line: str, result: str = 'Pending') -> None:
         if self.response is None:
             self.response = Response(result, [line])
         else:
@@ -206,27 +203,27 @@ class Command(object):
             self.response = Response(result, old.lines + [line])
         self._reset_timer()
 
-    async def wait(self):
+    async def wait(self) -> None:
         await self._event.wait()
         if self._exception is not None:
             raise self._exception
 
-    def flush(self):
+    def flush(self) -> None:
         pass
 
-    def _end_literal_data(self):
+    def _end_literal_data(self) -> None:
         self._expected_size = 0
         self._literal_data = None
 
-    def _set_timer(self):
+    def _set_timer(self) -> None:
         if self._timeout is not None:
             self._timer = self._loop.call_later(self._timeout, self._timeout_callback)
 
-    def _timeout_callback(self):
+    def _timeout_callback(self) -> None:
         self._exception = CommandTimeout(self)
         self.close(str(self._exception), 'KO')
 
-    def _reset_timer(self):
+    def _reset_timer(self) -> None:
         self._timer.cancel()
         self._set_timer()
 
@@ -234,12 +231,12 @@ class Command(object):
 class FetchCommand(Command):
     FETCH_MESSAGE_DATA_RE = re.compile(r'[0-9]+ FETCH \(')
 
-    def __init__(self, tag, *args, prefix=None, untagged_resp_name=None,
-                 loop=None, timeout=None):
+    def __init__(self, tag: str, *args, prefix: str = None, untagged_resp_name: str = None,
+                 loop: asyncio.AbstractEventLoop = None, timeout: float = None) -> None:
         super().__init__('FETCH', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name,
                          loop=loop, timeout=timeout)
 
-    def wait_data(self):
+    def wait_data(self) -> bool:
         if self.response is None:
             return False
         last_fetch_index = 0
@@ -250,60 +247,60 @@ class FetchCommand(Command):
                                                       self.response.lines[last_fetch_index:])))
 
 
-def matched_parenthesis(string):
+def matched_parenthesis(string: str) -> bool:
     return string.count('(') == string.count(')')
 
 
 class IdleCommand(Command):
-    def __init__(self, tag, queue, *args, prefix=None, untagged_resp_name=None,
-                 loop=None, timeout=None):
+    def __init__(self, tag: str, queue: asyncio.Queue, *args, prefix: str = None, untagged_resp_name: str = None,
+                 loop: asyncio.AbstractEventLoop = None, timeout: float = None) -> None:
         super().__init__('IDLE', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name,
                          loop=loop, timeout=timeout)
         self.queue = queue
         self.buffer = list()
 
-    def append_to_resp(self, line, result='Pending'):
+    def append_to_resp(self, line: str, result: str = 'Pending') -> None:
         if result != 'Pending':
             super().append_to_resp(line, result)
         else:
             self.buffer.append(line)
 
-    def flush(self):
+    def flush(self) -> None:
         if self.buffer:
             self.queue.put_nowait(copy(self.buffer))
             self.buffer.clear()
 
 
 class AioImapException(Exception):
-    def __init__(self, reason):
+    def __init__(self, reason: str):
         super().__init__(reason)
 
 
 class Error(AioImapException):
-    def __init__(self, reason):
+    def __init__(self, reason: str):
         super().__init__(reason)
 
 
 class Abort(Error):
-    def __init__(self, reason):
+    def __init__(self, reason: str):
         super().__init__(reason)
 
 
 class CommandTimeout(AioImapException):
-    def __init__(self, command):
+    def __init__(self, command: Command):
         self.command = command
 
 
 class IncompleteRead(AioImapException):
-    def __init__(self, cmd, data=b''):
+    def __init__(self, cmd: Command, data: bytes = b''):
         self.cmd = cmd
         self.data = data
 
 
-def change_state(coro):
+def change_state(coro: Callable[..., Coroutine[Any, Any, Optional[Response]]]):
     @functools.wraps(coro)
-    async def wrapper(self, *args, **kargs):
-        with (await self.state_condition):
+    async def wrapper(self, *args, **kargs) -> Optional[Response]:
+        with await self.state_condition:
             res = await coro(self, *args, **kargs)
             log.debug('state -> %s' % self.state)
             self.state_condition.notify_all()
@@ -320,7 +317,7 @@ tagged_status_response_re = re.compile(r'[A-Z0-9]+ ((OK)|(NO)|(BAD))')
 
 
 class IMAP4ClientProtocol(asyncio.Protocol):
-    def __init__(self, loop, conn_lost_cb=None):
+    def __init__(self, loop: Optional[asyncio.AbstractEventLoop], conn_lost_cb: Callable[[Optional[Exception]], None] = None):
         self.loop = loop
         self.transport = None
         self.state = STARTED
@@ -339,11 +336,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.tagnum = 0
         self.tagpre = int2ap(random.randint(4096, 65535))
 
-    def connection_made(self, transport):
+    def connection_made(self, transport: BaseTransport) -> None:
         self.transport = transport
         self.state = CONNECTED
 
-    def data_received(self, d):
+    def data_received(self, d: bytes) -> None:
         log.debug('Received : %s' % d)
         try:
             self._handle_responses(self.incomplete_line + d, self._handle_line, self.current_command)
@@ -353,12 +350,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.current_command = incomplete_read.cmd
             self.incomplete_line = incomplete_read.data
 
-    def connection_lost(self, exc):
+    def connection_lost(self, exc: Optional[Exception]) -> None:
         log.debug('connection lost: %s', exc)
         if self.conn_lost_cb is not None:
             self.conn_lost_cb(exc)
 
-    def _handle_responses(self, data, line_handler, current_cmd=None):
+    def _handle_responses(self, data: bytes, line_handler: Callable[[str, Command], None], current_cmd: Command = None) -> None:
         if not data:
             if self.pending_sync_command is not None:
                 self.pending_sync_command.flush()
@@ -389,7 +386,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             self._handle_responses(tail, line_handler)
 
-    def _handle_line(self, line, current_cmd):
+    def _handle_line(self, line: str, current_cmd: Command) -> Optional[Command]:
         if not line:
             return
 
@@ -407,12 +404,12 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             log.info('unknown data received %s' % line)
 
-    def send(self, line):
+    def send(self, line: str) -> None:
         data = ('%s\r\n' % line).encode()
         log.debug('Sending : %s' % data)
         self.transport.write(data)
 
-    async def execute(self, command):
+    async def execute(self, command: Command) -> Response:
         if self.state not in Commands.get(command.name).valid_states:
             raise Abort('command %s illegal in state %s' % (command.name, self.state))
 
@@ -444,7 +441,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return command.response
 
     @change_state
-    async def welcome(self, command):
+    async def welcome(self, command) -> None:
         if 'PREAUTH' in command:
             self.state = AUTH
         elif 'OK' in command:
@@ -454,7 +451,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         await self.capability()
 
     @change_state
-    async def login(self, user, password):
+    async def login(self, user: str, password: str) -> Response:
         response = await self.execute(
             Command('LOGIN', self.new_tag(), user, '%s' % quoted(password), loop=self.loop))
 
@@ -466,14 +463,14 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return response
 
     @change_state
-    async def logout(self):
+    async def logout(self) -> Response:
         response = (await self.execute(Command('LOGOUT', self.new_tag(), loop=self.loop)))
         if 'OK' == response.result:
             self.state = LOGOUT
         return response
 
     @change_state
-    async def select(self, mailbox='INBOX'):
+    async def select(self, mailbox='INBOX') -> Response:
         response = await self.execute(
             Command('SELECT', self.new_tag(), mailbox, loop=self.loop))
 
@@ -482,47 +479,47 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return response
 
     @change_state
-    async def close(self):
+    async def close(self) -> Response:
         response = await self.execute(Command('CLOSE', self.new_tag(), loop=self.loop))
         if response.result == 'OK':
             self.state = AUTH
         return response
 
-    async def idle(self):
+    async def idle(self) -> Response:
         if 'IDLE' not in self.capabilities:
             raise Abort('server has not IDLE capability')
         self._idle_event.clear()
         return await self.execute(IdleCommand(self.new_tag(), self.idle_queue, loop=self.loop))
 
-    def has_pending_idle_command(self):
+    def has_pending_idle_command(self) -> bool:
         return self.pending_sync_command is not None and self.pending_sync_command.name == 'IDLE'
 
-    def idle_done(self):
+    def idle_done(self) -> None:
         self.send('DONE')
 
-    async def search(self, *criteria, charset='utf-8', by_uid=False):
+    async def search(self, *criteria, charset: Optional[str] = 'utf-8', by_uid: bool = False) -> Response:
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
         prefix = 'UID' if by_uid else ''
 
         return await self.execute(
             Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop))
 
-    async def fetch(self, message_set, message_parts, by_uid=False, timeout=None):
+    async def fetch(self, message_set: str, message_parts: str, by_uid: bool = False, timeout: float = None) -> Response:
         return await self.execute(
             FetchCommand(self.new_tag(), message_set, message_parts,
                          prefix='UID' if by_uid else '', loop=self.loop, timeout=timeout))
 
-    async def store(self, *args, by_uid=False):
+    async def store(self, *args: str, by_uid: bool = False) -> Response:
         return await self.execute(
             Command('STORE', self.new_tag(), *args,
                     prefix='UID' if by_uid else '', untagged_resp_name='FETCH', loop=self.loop))
 
-    async def expunge(self, *args, by_uid=False):
+    async def expunge(self, *args: str, by_uid=False) -> Response:
         return await self.execute(
             Command('EXPUNGE', self.new_tag(), *args,
                     prefix='UID' if by_uid else '', loop=self.loop))
 
-    async def uid(self, command, *criteria, timeout=None):
+    async def uid(self, command: str, *criteria: str, timeout: float = None) -> Response:
         if self.state not in Commands.get('UID').valid_states:
             raise Abort('command UID illegal in state %s' % self.state)
 
@@ -540,18 +537,18 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             return await self.expunge(*criteria, by_uid=True)
         raise Abort('command UID only possible with COPY, FETCH, EXPUNGE (w/UIDPLUS) or STORE (was %s)' % command.upper())
 
-    async def copy(self, *args, by_uid=False):
+    async def copy(self, *args: str, by_uid: bool = False) -> Response:
         return (await self.execute(
             Command('COPY', self.new_tag(), *args, prefix='UID' if by_uid else '', loop=self.loop)))
 
-    async def move(self, uid_set, mailbox, by_uid=False):
+    async def move(self, uid_set: str, mailbox: str, by_uid: bool = False) -> Response:
         if 'MOVE' not in self.capabilities:
             raise Abort('server has not MOVE capability')
 
         return (await self.execute(
             Command('MOVE', self.new_tag(), uid_set, mailbox, prefix='UID' if by_uid else '', loop=self.loop)))
 
-    async def capability(self):
+    async def capability(self) -> None: # that should be a Response (would avoid the Optional)
         response = await self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
         capability_list = response.lines[0].split()
@@ -562,7 +559,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         except IndexError:
             raise Error('server not IMAP4 compliant')
 
-    async def append(self, message_bytes, mailbox='INBOX', flags=None, date=None, timeout=None):
+    async def append(self, message_bytes: bytes, mailbox: str = 'INBOX', flags: str = None, date: Any = None, timeout: float = None) -> Response:
         args = [mailbox]
         if flags is not None:
             if (flags[0], flags[-1]) != ('(', ')'):
@@ -575,36 +572,35 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.literal_data = message_bytes
         return await self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop, timeout=timeout))
 
-    async def id(self, **kwargs):
+    async def id(self, **kwargs: Union[dict, list, str]) -> Response:
         args = arguments_rfs2971(**kwargs)
         return await self.execute(Command('ID', self.new_tag(), *args, loop=self.loop))
 
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
                        'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE', 'ENABLE'}
 
-    async def namespace(self):
+    async def namespace(self) -> Response:
         if 'NAMESPACE' not in self.capabilities:
             raise Abort('server has not NAMESPACE capability')
         return await self.execute(Command('NAMESPACE', self.new_tag(), loop=self.loop))
 
-    async def simple_command(self, name, *args):
+    async def simple_command(self, name, *args: str) -> Response:
         if name not in self.simple_commands:
             raise NotImplementedError('simple command only available for %s' % self.simple_commands)
         return await self.execute(Command(name, self.new_tag(), *args, loop=self.loop))
 
-    async def wait_async_pending_commands(self):
+    async def wait_async_pending_commands(self) -> None:
         await asyncio.wait([asyncio.ensure_future(cmd.wait()) for cmd in self.pending_async_commands.values()])
 
-    async def wait(self, state_regexp):
+    async def wait(self, state_regexp: Pattern) -> None:
         state_re = re.compile(state_regexp)
-        with (await self.state_condition):
+        with await self.state_condition:
             await self.state_condition.wait_for(lambda: state_re.match(self.state))
 
-    @asyncio.coroutine
-    def wait_for_idle_response(self):
-        yield from self._idle_event.wait()
+    async def wait_for_idle_response(self):
+        await self._idle_event.wait()
 
-    def _untagged_response(self, line):
+    def _untagged_response(self, line: str) -> Command:
         line = line.replace('* ', '')
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
@@ -627,7 +623,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                     log.info('ignored untagged response : %s' % line)
         return command
 
-    def _response_done(self, line):
+    def _response_done(self, line: str) -> None:
         log.debug('tagged status %s' % line)
         tag, _, response = line.partition(' ')
 
@@ -649,7 +645,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         response_result, _, response_text = response.partition(' ')
         command.close(response_text, result=response_result)
 
-    def _continuation(self, line):
+    def _continuation(self, line: str) -> None:
         if self.pending_sync_command is None:
             log.info('server says %s (ignored)' % line)
         elif self.pending_sync_command.name == 'APPEND':
@@ -666,19 +662,21 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.pending_sync_command.append_to_resp(line)
             self.pending_sync_command.flush()
 
-    def new_tag(self):
+    def new_tag(self) -> str:
         tag = self.tagpre + str(self.tagnum)
         self.tagnum += 1
         return tag
 
-    def _find_pending_async_cmd_by_tag(self, tag):
+    def _find_pending_async_cmd_by_tag(self, tag: str) -> list:
         return [c for c in self.pending_async_commands.values() if c is not None and c.tag == tag]
 
 
 class IMAP4(object):
-    TIMEOUT_SECONDS = 10
+    TIMEOUT_SECONDS = 10.0
 
-    def __init__(self, host='127.0.0.1', port=IMAP4_PORT, loop=None, timeout=TIMEOUT_SECONDS, conn_lost_cb=None, ssl_context=None):
+    def __init__(self, host: str = '127.0.0.1', port: int = IMAP4_PORT, loop: asyncio.AbstractEventLoop = None,
+                 timeout: float = TIMEOUT_SECONDS, conn_lost_cb: Callable[[Optional[Exception]], None] = None,
+                 ssl_context: ssl.SSLContext = None):
         self.timeout = timeout
         self.port = port
         self.host = host
@@ -686,65 +684,66 @@ class IMAP4(object):
         self._idle_waiter = None
         self.create_client(host, port, loop, conn_lost_cb, ssl_context)
 
-    def create_client(self, host, port, loop, conn_lost_cb=None, ssl_context=None):
+    def create_client(self, host: str, port: int, loop: asyncio.AbstractEventLoop,
+                      conn_lost_cb: Callable[[Optional[Exception]], None] = None, ssl_context: ssl.SSLContext = None) -> None:
         local_loop = loop if loop is not None else get_running_loop()
         self.protocol = IMAP4ClientProtocol(local_loop, conn_lost_cb)
         local_loop.create_task(local_loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 
-    def get_state(self):
+    def get_state(self) -> str:
         return self.protocol.state
 
-    async def wait_hello_from_server(self):
+    async def wait_hello_from_server(self) -> None:
         await asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.timeout)
 
-    async def login(self, user, password):
+    async def login(self, user: str, password: str) -> Response:
         return await asyncio.wait_for(self.protocol.login(user, password), self.timeout)
 
-    async def logout(self):
+    async def logout(self) -> Response:
         return await asyncio.wait_for(self.protocol.logout(), self.timeout)
 
-    async def select(self, mailbox='INBOX'):
+    async def select(self, mailbox: str = 'INBOX') -> Response:
         return await asyncio.wait_for(self.protocol.select(mailbox), self.timeout)
 
-    async def search(self, *criteria, charset='utf-8'):
+    async def search(self, *criteria: str, charset: Optional[str] = 'utf-8') -> Response:
         return await asyncio.wait_for(self.protocol.search(*criteria, charset=charset), self.timeout)
 
-    async def uid_search(self, *criteria, charset='utf-8'):
+    async def uid_search(self, *criteria: str, charset: Optional[str] = 'utf-8') -> Response:
         return await asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout)
 
-    async def uid(self, command, *criteria):
+    async def uid(self, command: str, *criteria: str) -> Response:
         return await self.protocol.uid(command, *criteria, timeout=self.timeout)
 
-    async def store(self, *criteria):
+    async def store(self, *criteria: str) -> Response:
         return await asyncio.wait_for(self.protocol.store(*criteria), self.timeout)
 
-    async def copy(self, *criteria):
+    async def copy(self, *criteria: str) -> Response:
         return await asyncio.wait_for(self.protocol.copy(*criteria), self.timeout)
 
-    async def expunge(self):
+    async def expunge(self) -> Response:
         return await asyncio.wait_for(self.protocol.expunge(), self.timeout)
 
-    async def fetch(self, message_set, message_parts):
+    async def fetch(self, message_set: str, message_parts: str) -> Response:
         return await self.protocol.fetch(message_set, message_parts, timeout=self.timeout)
 
-    async def idle(self):
+    async def idle(self) -> Response:
         return await self.protocol.idle()
 
-    def idle_done(self):
+    def idle_done(self) -> None:
         if self._idle_waiter is not None:
             self._idle_waiter.cancel()
         self.protocol.idle_done()
 
-    async def stop_wait_server_push(self):
+    async def stop_wait_server_push(self) -> bool:
         if self.protocol.has_pending_idle_command():
             await self.protocol.idle_queue.put(STOP_WAIT_SERVER_PUSH)
             return True
         return False
 
-    async def wait_server_push(self, timeout=TWENTY_NINE_MINUTES):
+    async def wait_server_push(self, timeout: float = TWENTY_NINE_MINUTES) -> Response:
         return await asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout)
 
-    async def idle_start(self, timeout=TWENTY_NINE_MINUTES):
+    async def idle_start(self, timeout: float = TWENTY_NINE_MINUTES) -> Future:
         if self._idle_waiter is not None:
             self._idle_waiter.cancel()
         idle = asyncio.ensure_future(self.idle())
@@ -757,86 +756,87 @@ class IMAP4(object):
         self._idle_waiter = self.protocol.loop.call_later(timeout, lambda: asyncio.ensure_future(self.stop_wait_server_push()))
         return idle
 
-    def has_pending_idle(self):
+    def has_pending_idle(self) -> bool:
         return self.protocol.has_pending_idle_command()
 
-    async def id(self, **kwargs):
+    async def id(self, **kwargs) -> Response:
         return await asyncio.wait_for(self.protocol.id(**kwargs), self.timeout)
 
-    async def namespace(self):
+    async def namespace(self) -> Response:
         return await asyncio.wait_for(self.protocol.namespace(), self.timeout)
 
-    async def noop(self):
+    async def noop(self) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('NOOP'), self.timeout)
 
-    async def check(self):
+    async def check(self) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('CHECK'), self.timeout)
 
-    async def examine(self, mailbox='INBOX'):
+    async def examine(self, mailbox: str = 'INBOX') -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('EXAMINE', mailbox), self.timeout)
 
-    async def status(self, mailbox, names):
+    async def status(self, mailbox: str, names: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('STATUS', mailbox, names), self.timeout)
 
-    async def subscribe(self, mailbox):
+    async def subscribe(self, mailbox: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('SUBSCRIBE', mailbox), self.timeout)
 
-    async def unsubscribe(self, mailbox):
+    async def unsubscribe(self, mailbox: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('UNSUBSCRIBE', mailbox), self.timeout)
 
-    async def lsub(self, reference_name, mailbox_name):
+    async def lsub(self, reference_name: str, mailbox_name: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('LSUB', reference_name, mailbox_name), self.timeout)
 
-    async def create(self, mailbox_name):
+    async def create(self, mailbox_name: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('CREATE', mailbox_name), self.timeout)
 
-    async def delete(self, mailbox_name):
+    async def delete(self, mailbox_name: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('DELETE', mailbox_name), self.timeout)
 
-    async def rename(self, old_mailbox_name, new_mailbox_name):
+    async def rename(self, old_mailbox_name: str, new_mailbox_name: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('RENAME', old_mailbox_name, new_mailbox_name), self.timeout)
 
-    async def list(self, reference_name, mailbox_pattern):
+    async def list(self, reference_name: str, mailbox_pattern: Pattern) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('LIST', reference_name, mailbox_pattern), self.timeout)
 
-    async def append(self, message_bytes, mailbox='INBOX', flags=None, date=None):
+    async def append(self, message_bytes, mailbox: str = 'INBOX', flags: str = None, date: Any = None) -> Response:
         return await self.protocol.append(message_bytes, mailbox, flags, date, timeout=self.timeout)
 
-    async def close(self):
+    async def close(self) -> Response:
         return await asyncio.wait_for(self.protocol.close(), self.timeout)
 
-    async def move(self, uid_set, mailbox):
+    async def move(self, uid_set: str, mailbox: str) -> Response:
         return await asyncio.wait_for(self.protocol.move(uid_set, mailbox), self.timeout)
 
-    async def enable(self, capability):
+    async def enable(self, capability: str) -> Response:
         if 'ENABLE' not in self.protocol.capabilities:
             raise Abort('server has not ENABLE capability')
 
         return await asyncio.wait_for(self.protocol.simple_command('ENABLE', capability), self.timeout)
 
-    def has_capability(self, capability):
+    def has_capability(self, capability: str) -> bool:
         return capability in self.protocol.capabilities
 
 
-def extract_exists(response):
+def extract_exists(response: Response) -> Optional[int]:
     for line in response.lines:
         if 'EXISTS' in line:
             return int(line.replace(' EXISTS', ''))
 
 
 class IMAP4_SSL(IMAP4):
-    def __init__(self, host='127.0.0.1', port=IMAP4_SSL_PORT, loop=None ,
-                 timeout=IMAP4.TIMEOUT_SECONDS, ssl_context=None):
+    def __init__(self, host: str = '127.0.0.1', port: int = IMAP4_SSL_PORT, loop: asyncio.AbstractEventLoop = None,
+                 timeout: float = IMAP4.TIMEOUT_SECONDS, ssl_context: ssl.SSLContext = None):
         super().__init__(host, port, loop, timeout, None, ssl_context)
 
-    def create_client(self, host, port, loop, conn_lost_cb=None, ssl_context=None):
+    def create_client(self, host: str, port: int, loop: asyncio.AbstractEventLoop,
+                      conn_lost_cb: Callable[[Optional[Exception]], None] = None, ssl_context: ssl.SSLContext = None) -> None:
         if ssl_context is None:
             ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         super().create_client(host, port, loop, conn_lost_cb, ssl_context)
 
 
 # functions from imaplib
-def int2ap(num):
+def int2ap(num) -> str:
     """Convert integer to A-P string representation."""
     val = ''
     ap = 'ABCDEFGHIJKLMNOP'
@@ -851,7 +851,7 @@ Months = ' Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')
 Mon2num = {s.encode():n+1 for n, s in enumerate(Months[1:])}
 
 
-def time2internaldate(date_time):
+def time2internaldate(date_time: Any) -> str:
     """Convert date_time to IMAP4 INTERNALDATE representation.
 
     Return string in form: '"DD-Mmm-YYYY HH:MM:SS +HHMM"'.  The

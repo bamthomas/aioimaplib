@@ -31,9 +31,6 @@ class TestQuote(TestCase):
     def test_quote_returns_str_when_input_is_str(self):
         self.assertTrue(isinstance(quoted('hello'), str))
 
-    def test_quote_returns_bytes_when_input_is_bytes(self):
-        self.assertTrue(isinstance(quoted(b'hello'), bytes))
-
 
 class TestArgument(TestCase):
     def test_arguments_rfs2971_empty(self):
