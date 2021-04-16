@@ -297,7 +297,7 @@ class IncompleteRead(AioImapException):
 def change_state(coro: Callable[..., Coroutine[Any, Any, Optional[Response]]]):
     @functools.wraps(coro)
     async def wrapper(self, *args, **kargs) -> Optional[Response]:
-        with await self.state_condition:
+        async with self.state_condition:
             res = await coro(self, *args, **kargs)
             log.debug('state -> %s' % self.state)
             self.state_condition.notify_all()
