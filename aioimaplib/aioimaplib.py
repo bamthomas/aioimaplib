@@ -103,8 +103,8 @@ def get_running_loop() -> asyncio.AbstractEventLoop:
         return asyncio.get_running_loop()
 
     loop = asyncio.get_event_loop()
-    #if not loop.is_running():
-     #   raise RuntimeError("no running event loop")
+    if not loop.is_running():
+        raise RuntimeError("no running event loop")
 
     return loop
 
