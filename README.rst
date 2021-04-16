@@ -16,7 +16,7 @@ This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Se
 
 The aim is to port the imaplib with asyncio_, to benefit from the sleep or treat model.
 
-It runs with python 3.5, 3.6, 3.7, 3.8.
+It runs with python 3.5, 3.6, 3.7, 3.8, 3.9.
 
 Example
 -------
