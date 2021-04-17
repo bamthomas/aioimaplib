@@ -42,7 +42,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
             Command('APPEND', imap_client.protocol.new_tag(), *args, loop=self.loop)
         )
         self.assertEquals('BAD', response.result)
-        self.assertTrue('expected CRLF but got' in response.lines[0])
+        self.assertTrue(b'expected CRLF but got' in response.lines[0])
 
     async def test_append_too_short(self):
         imap_client = await self.login_user('user@mail', 'pass')
@@ -56,4 +56,4 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
             Command('APPEND', imap_client.protocol.new_tag(), *args, loop=self.loop)
         )
         self.assertEquals('BAD', response.result)
-        self.assertTrue('expected 30 but was' in response.lines[0])
+        self.assertTrue(b'expected 30 but was' in response.lines[0])

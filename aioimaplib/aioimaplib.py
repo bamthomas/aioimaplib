@@ -27,7 +27,7 @@ from collections import namedtuple
 from copy import copy
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Union, Any, Coroutine, Callable, Optional, Pattern
+from typing import Union, Any, Coroutine, Callable, Optional, Pattern, List
 
 # to avoid imap servers to kill the connection after 30mn idling
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
@@ -148,15 +148,17 @@ class Command(object):
         self.prefix = prefix + ' ' if prefix else None
         self.untagged_resp_name = untagged_resp_name or name
 
-        self.response = None
         self._exception = None
         self._loop = loop if loop is not None else get_running_loop()
         self._event = asyncio.Event(loop=self._loop)
         self._timeout = timeout
         self._timer = asyncio.Handle(lambda: None, None, self._loop)  # fake timer
         self._set_timer()
-        self._literal_data = None
         self._expected_size = 0
+        
+        self._resp_literal_data = bytearray()
+        self._resp_result = 'Init'
+        self._resp_lines: List[bytes] = list()
 
     def __repr__(self) -> str:
         return '{tag} {prefix}{name}{space}{args}'.format(
@@ -167,37 +169,37 @@ class Command(object):
     def __eq__(self, other):
         return other is not None and other.tag == self.tag and other.name == self.name and other.args == self.args
 
-    def close(self, line: str, result: str) -> None:
+    @property
+    def response(self):
+        return Response(self._resp_result, self._resp_lines)
+
+    def close(self, line: bytes, result: str) -> None:
         self.append_to_resp(line, result=result)
         self._timer.cancel()
         self._event.set()
 
     def begin_literal_data(self, expected_size: int, literal_data: bytes = b'') -> bytes:
         self._expected_size = expected_size
-        self._literal_data = b''
         return self.append_literal_data(literal_data)
 
     def wait_literal_data(self) -> bool:
-        return self._expected_size != 0 and len(self._literal_data) != self._expected_size
+        return self._expected_size != 0 and len(self._resp_literal_data) != self._expected_size
 
     def wait_data(self) -> bool:
         return self.wait_literal_data()
 
     def append_literal_data(self, data: bytes) -> bytes:
-        nb_bytes_to_add = self._expected_size - len(self._literal_data)
-        self._literal_data += data[0:nb_bytes_to_add]
+        nb_bytes_to_add = self._expected_size - len(self._resp_literal_data)
+        self._resp_literal_data.extend(data[0:nb_bytes_to_add])
         if not self.wait_literal_data():
-            self.append_to_resp(self._literal_data)
+            self.append_to_resp(self._resp_literal_data)
             self._end_literal_data()
         self._reset_timer()
         return data[nb_bytes_to_add:]
 
-    def append_to_resp(self, line: str, result: str = 'Pending') -> None:
-        if self.response is None:
-            self.response = Response(result, [line])
-        else:
-            old = self.response
-            self.response = Response(result, old.lines + [line])
+    def append_to_resp(self, line: bytes, result: str = 'Pending') -> None:
+        self._resp_result = result
+        self._resp_lines.append(line)
         self._reset_timer()
 
     async def wait(self) -> None:
@@ -210,7 +212,7 @@ class Command(object):
 
     def _end_literal_data(self) -> None:
         self._expected_size = 0
-        self._literal_data = None
+        self._resp_literal_data = bytearray()
 
     def _set_timer(self) -> None:
         if self._timeout is not None:
@@ -218,7 +220,7 @@ class Command(object):
 
     def _timeout_callback(self) -> None:
         self._exception = CommandTimeout(self)
-        self.close(str(self._exception), 'KO')
+        self.close(str(self._exception).encode(), 'KO')
 
     def _reset_timer(self) -> None:
         self._timer.cancel()
@@ -226,7 +228,7 @@ class Command(object):
 
 
 class FetchCommand(Command):
-    FETCH_MESSAGE_DATA_RE = re.compile(r'[0-9]+ FETCH \(')
+    FETCH_MESSAGE_DATA_RE = re.compile(rb'[0-9]+ FETCH \(')
 
     def __init__(self, tag: str, *args, prefix: str = None, untagged_resp_name: str = None,
                  loop: asyncio.AbstractEventLoop = None, timeout: float = None) -> None:
@@ -234,18 +236,16 @@ class FetchCommand(Command):
                          loop=loop, timeout=timeout)
 
     def wait_data(self) -> bool:
-        if self.response is None:
-            return False
         last_fetch_index = 0
-        for index, line in enumerate(self.response.lines):
-            if isinstance(line, str) and self.FETCH_MESSAGE_DATA_RE.match(line):
+        for index, line in enumerate(self._resp_lines):
+            if isinstance(line, bytes) and self.FETCH_MESSAGE_DATA_RE.match(line):
                 last_fetch_index = index
-        return not matched_parenthesis(''.join(filter(lambda l: isinstance(l, str),
+        return not matched_parenthesis(b''.join(filter(lambda l: isinstance(l, bytes),
                                                       self.response.lines[last_fetch_index:])))
 
 
-def matched_parenthesis(string: str) -> bool:
-    return string.count('(') == string.count(')')
+def matched_parenthesis(fetch_response: bytes) -> bool:
+    return fetch_response.count(b'(') == fetch_response.count(b')')
 
 
 class IdleCommand(Command):
@@ -254,9 +254,9 @@ class IdleCommand(Command):
         super().__init__('IDLE', tag, *args, prefix=prefix, untagged_resp_name=untagged_resp_name,
                          loop=loop, timeout=timeout)
         self.queue = queue
-        self.buffer = list()
+        self.buffer: List[bytes] = list()
 
-    def append_to_resp(self, line: str, result: str = 'Pending') -> None:
+    def append_to_resp(self, line: bytes, result: str = 'Pending') -> None:
         if result != 'Pending':
             super().append_to_resp(line, result)
         else:
@@ -309,8 +309,8 @@ def change_state(coro: Callable[..., Coroutine[Any, Any, Optional[Response]]]):
 # cf https://tools.ietf.org/html/rfc3501#section-9
 # untagged responses types
 literal_data_re = re.compile(rb'.*\{(?P<size>\d+)\}$')
-message_data_re = re.compile(r'[0-9]+ ((FETCH)|(EXPUNGE))')
-tagged_status_response_re = re.compile(r'[A-Z0-9]+ ((OK)|(NO)|(BAD))')
+message_data_re = re.compile(rb'[0-9]+ ((FETCH)|(EXPUNGE))')
+tagged_status_response_re = re.compile(rb'[A-Z0-9]+ ((OK)|(NO)|(BAD))')
 
 
 class IMAP4ClientProtocol(asyncio.Protocol):
@@ -352,7 +352,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if self.conn_lost_cb is not None:
             self.conn_lost_cb(exc)
 
-    def _handle_responses(self, data: bytes, line_handler: Callable[[str, Command], None], current_cmd: Command = None) -> None:
+    def _handle_responses(self, data: bytes, line_handler: Callable[[bytes, Command], Optional[Command]], current_cmd: Command = None) -> None:
         if not data:
             if self.pending_sync_command is not None:
                 self.pending_sync_command.flush()
@@ -369,7 +369,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if not separator:
             raise IncompleteRead(current_cmd, data)
 
-        cmd = line_handler(line.decode(), current_cmd)
+        cmd = line_handler(line, current_cmd)
 
         begin_literal = literal_data_re.match(line)
         if begin_literal:
@@ -383,7 +383,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             self._handle_responses(tail, line_handler)
 
-    def _handle_line(self, line: str, current_cmd: Command) -> Optional[Command]:
+    def _handle_line(self, line: bytes, current_cmd: Command) -> Optional[Command]:
         if not line:
             return
 
@@ -394,9 +394,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         elif current_cmd is not None:
             current_cmd.append_to_resp(line)
             return current_cmd
-        elif line.startswith('*'):
+        elif line.startswith(b'*'):
             return self._untagged_response(line)
-        elif line.startswith('+'):
+        elif line.startswith(b'+'):
             self._continuation(line)
         else:
             log.info('unknown data received %s' % line)
@@ -438,13 +438,13 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return command.response
 
     @change_state
-    async def welcome(self, command) -> None:
-        if 'PREAUTH' in command:
+    async def welcome(self, command: bytes) -> None:
+        if b'PREAUTH' in command:
             self.state = AUTH
-        elif 'OK' in command:
+        elif b'OK' in command:
             self.state = NONAUTH
         else:
-            raise Error(command)
+            raise Error(command.decode())
         await self.capability()
 
     @change_state
@@ -455,8 +455,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         if 'OK' == response.result:
             self.state = AUTH
             for line in response.lines:
-                if 'CAPABILITY' in line:
-                    self.capabilities = self.capabilities.union(set(line.replace('CAPABILITY', '').strip().split()))
+                if b'CAPABILITY' in line:
+                    self.capabilities = self.capabilities.union(set(line.decode().replace('CAPABILITY', '').strip().split()))
         return response
 
     @change_state
@@ -548,7 +548,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     async def capability(self) -> None: # that should be a Response (would avoid the Optional)
         response = await self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
 
-        capability_list = response.lines[0].split()
+        capability_list = response.lines[0].decode().split()
         self.capabilities = set(capability_list)
         try:
             self.imap_version = list(
@@ -597,8 +597,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     async def wait_for_idle_response(self):
         await self._idle_event.wait()
 
-    def _untagged_response(self, line: str) -> Command:
-        line = line.replace('* ', '')
+    def _untagged_response(self, line: bytes) -> Command:
+        line = line.replace(b'* ', b'')
         if self.pending_sync_command is not None:
             self.pending_sync_command.append_to_resp(line)
             command = self.pending_sync_command
@@ -607,8 +607,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             if match:
                 cmd_name, text = match.group(1), match.string
             else:
-                cmd_name, _, text = line.partition(' ')
-            command = self.pending_async_commands.get(cmd_name.upper())
+                cmd_name, _, text = line.partition(b' ')
+            command = self.pending_async_commands.get(cmd_name.decode().upper())
             if command is not None:
                 command.append_to_resp(text)
             else:
@@ -620,18 +620,18 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                     log.info('ignored untagged response : %s' % line)
         return command
 
-    def _response_done(self, line: str) -> None:
+    def _response_done(self, line: bytes) -> None:
         log.debug('tagged status %s' % line)
-        tag, _, response = line.partition(' ')
+        tag, _, response = line.partition(b' ')
 
         if self.pending_sync_command is not None:
-            if self.pending_sync_command.tag != tag:
+            if self.pending_sync_command.tag != tag.decode():
                 raise Abort('unexpected tagged response with pending sync command (%s) response: %s' %
                             (self.pending_sync_command, response))
             command = self.pending_sync_command
             self.pending_sync_command = None
         else:
-            cmds = self._find_pending_async_cmd_by_tag(tag)
+            cmds = self._find_pending_async_cmd_by_tag(tag.decode())
             if len(cmds) == 0:
                 raise Abort('unexpected tagged (%s) response: %s' % (tag, response))
             elif len(cmds) > 1:
@@ -639,10 +639,10 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             command = cmds.pop()
             self.pending_async_commands.pop(command.untagged_resp_name)
 
-        response_result, _, response_text = response.partition(' ')
-        command.close(response_text, result=response_result)
+        response_result, _, response_text = response.partition(b' ')
+        command.close(response_text, result=response_result.decode())
 
-    def _continuation(self, line: str) -> None:
+    def _continuation(self, line: bytes) -> None:
         if self.pending_sync_command is None:
             log.info('server says %s (ignored)' % line)
         elif self.pending_sync_command.name == 'APPEND':
@@ -816,8 +816,8 @@ class IMAP4(object):
 
 def extract_exists(response: Response) -> Optional[int]:
     for line in response.lines:
-        if 'EXISTS' in line:
-            return int(line.replace(' EXISTS', ''))
+        if b'EXISTS' in line:
+            return int(line.replace(b' EXISTS', b'').decode())
 
 
 class IMAP4_SSL(IMAP4):
