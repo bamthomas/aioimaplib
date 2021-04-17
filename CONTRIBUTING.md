@@ -8,4 +8,4 @@ Here is a checklist to answer before pushing a new PR:
   - Are my refactorings (rename, dead code, extract method, extract class...) kept separated ? (*to favor distinct discussions on opiniated changes*)
   - Is my PR containing a single feature or refactoring ? (*to allow cherry-pick or revert*)
 - Is each of my tests in the same commit of the code it is related to ? (*to make a revert easier and make relationship between a test and its specific code easier to spot*)
-- Are the functions in production code (aioimaplib.py) having typehints ? (*to spot type mistakes and add more autocompletion*)
+- Do the functions in production code (aioimaplib.py) have typehints ? (*to spot type mistakes and add more autocompletion*)
