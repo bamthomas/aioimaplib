@@ -2,6 +2,13 @@ Changes
 =======
 
 
+V0.9.0
+------
+Please note that this release changes the API : response lines are now all of bytes type (and not in string).
+
+- [aiolib] compatible with python 3.9
+- [aiolib] avoid having distinct types (str/bytes) in response lines
+
 V0.8.0
 -------
 - [aiolib] adds type hints
