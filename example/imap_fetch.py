@@ -9,9 +9,9 @@ import aioimaplib
 
 ID_HEADER_SET = {'Content-Type', 'From', 'To', 'Cc', 'Bcc', 'Date', 'Subject',
                                    'Message-ID', 'In-Reply-To', 'References'}
-FETCH_MESSAGE_DATA_UID = re.compile(r'.*UID (?P<uid>\d+).*')
-FETCH_MESSAGE_DATA_SEQNUM = re.compile(r'(?P<seqnum>\d+) FETCH.*')
-FETCH_MESSAGE_DATA_FLAGS  = re.compile(r'.*FLAGS \((?P<flags>.*?)\).*')
+FETCH_MESSAGE_DATA_UID = re.compile(rb'.*UID (?P<uid>\d+).*')
+FETCH_MESSAGE_DATA_SEQNUM = re.compile(rb'(?P<seqnum>\d+) FETCH.*')
+FETCH_MESSAGE_DATA_FLAGS  = re.compile(rb'.*FLAGS \((?P<flags>.*?)\).*')
 MessageAttributes = namedtuple('MessageAttributes', 'uid flags sequence_number')
 
 
@@ -21,13 +21,14 @@ async def fetch_messages_headers(imap_client: aioimaplib.IMAP4_SSL, max_uid: int
     new_max_uid = max_uid
     if response.result == 'OK':
         for i in range(0, len(response.lines) - 1, 3):
-            fetch_command_without_literal = '%s %s' % (response.lines[i], response.lines[i + 2])
+            fetch_command_without_literal = b'%s %s' % (response.lines[i], response.lines[i + 2])
 
             uid = int(FETCH_MESSAGE_DATA_UID.match(fetch_command_without_literal).group('uid'))
             flags = FETCH_MESSAGE_DATA_FLAGS.match(fetch_command_without_literal).group('flags')
             seqnum = FETCH_MESSAGE_DATA_SEQNUM.match(fetch_command_without_literal).group('seqnum')
             # these attributes could be used for local state management
             message_attrs = MessageAttributes(uid, flags, seqnum)
+            print(message_attrs)
 
             # uid fetch always includes the UID of the last message in the mailbox
             # cf https://tools.ietf.org/html/rfc3501#page-61
