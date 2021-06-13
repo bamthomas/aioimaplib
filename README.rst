@@ -21,7 +21,7 @@ It runs with python 3.5, 3.6, 3.7, 3.8, 3.9.
 Example
 -------
 
-::
+.. code-block:: python
 
     import asyncio
     from aioimaplib import aioimaplib
@@ -52,7 +52,7 @@ IDLE command
 
 The RFC2177_ is implemented, to be able to wait for new mail messages without using CPU. The responses are pushed in an async queue, and it is possible to read them in real time. To leave the IDLE mode, it is necessary to send a "DONE" command to the server.
 
-::
+.. code-block:: python
 
     async def wait_for_new_message(host, user, password):
         imap_client = aioimaplib.IMAP4_SSL(host=host)
@@ -77,7 +77,7 @@ The RFC2177_ is implemented, to be able to wait for new mail messages without us
 
 Or in a more event based style (the IDLE command is closed at each message from server):
 
-::
+.. code-block:: python
 
    async def idle_loop(host, user, password):
       imap_client = aioimaplib.IMAP4_SSL(host=host, timeout=30)
@@ -103,7 +103,7 @@ Threading
 
 The IMAP4ClientProtocol class is not thread safe, it uses asyncio.Event_ and asyncio.Condition_ that are not thread safe, and state change for pending commands is not locked.
 
-It is possible to use threads but each IMAP4ClientProtocol instance should run in the same thread :
+It is possible to use threads but each IMAP4ClientProtocol instance should run in the same thread:
 
 .. image:: images/thread_imap_protocol.png
 
@@ -125,13 +125,16 @@ Logging
 -------
 .. _howto: https://docs.python.org/3.4/howto/logging.html#configuring-logging-for-a-library
 
-As said in the logging howto_ the logger is defined with ::
+As said in the logging howto_ the logger is defined with
+
+.. code-block:: python
 
     logger = logging.getLogger(__name__)
 
 
-Where name is 'aioimaplib.aioimaplib'. You can set the logger parameters, either by python API ::
+Where name is 'aioimaplib.aioimaplib'. You can set the logger parameters, either by python API
 
+.. code-block:: python
 
     aioimaplib_logger = logging.getLogger('aioimaplib.aioimaplib')
     sh = logging.StreamHandler()
@@ -139,8 +142,9 @@ Where name is 'aioimaplib.aioimaplib'. You can set the logger parameters, either
     sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
     aioimaplib_logger.addHandler(sh)
 
-Or loading config file (for example with logging.config.dictConfig(yaml.load(file))) with this piece of yaml file::
+Or loading config file (for example with logging.config.dictConfig(yaml.load(file))) with this piece of yaml file
 
+.. code-block:: yaml
 
     loggers:
     ...
@@ -164,9 +168,11 @@ Tested with
 Develop
 =======
 
-Developers are welcome ! If you want to improve it, fix bugs, test it with other IMAP servers, give feedback, thank you for it.
+Developers are welcome! If you want to improve it, fix bugs, test it with other IMAP servers, give feedback, thank you for it.
 
-To develop, just run::
+To develop, just run
+
+.. code-block:: bash
 
     virtualenv --python=python3.4 venv
     source venv/bin/activate
@@ -208,5 +214,8 @@ If it goes wrong
 ----------------
 Sometimes you break things and you don't understand what's going on (I always do). For this library I have two related tools:
 
-- ngrep on the imap test port : sudo ngrep -d lo port 12345
+.. role:: bash(code)
+   :language: bash
+
+- ngrep on the imap test port: :bash:`sudo ngrep -d lo port 12345`
 - activate debug logs changing INFO to DEBUG at the top of the mock server and the aioimaplib
