@@ -33,7 +33,7 @@ from typing import Union, Any, Coroutine, Callable, Optional, Pattern, List
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
 TWENTY_NINE_MINUTES = 1740.0
 
-STOP_WAIT_SERVER_PUSH = ['stop_wait_server_push']
+STOP_WAIT_SERVER_PUSH = [b'stop_wait_server_push']
 PY37_OR_LATER = sys.version_info[:2] >= (3, 7)
 
 log = logging.getLogger(__name__)
