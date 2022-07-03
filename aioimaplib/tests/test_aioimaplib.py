@@ -725,6 +725,14 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
                                   b'LIST completed.']),
                           (await imap_client.list('""', '.*')))
 
+    async def test_get_quotaroot(self):
+        imap_client = await self.login_user('user', 'pass')
+        self.imapserver.receive(Mail.create(['user']))
+
+        response = await imap_client.getquotaroot('INBOX')
+
+        self.assertEqual(response.lines, [b'INBOX (STORAGE 292 5000)', b'GETQUOTAROOT completed.'])
+
     async def test_append(self):
         imap_client = await self.login_user('user@mail', 'pass')
         self.assertEquals(0, extract_exists((await imap_client.examine('INBOX'))))

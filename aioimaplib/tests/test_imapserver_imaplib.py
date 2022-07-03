@@ -447,6 +447,14 @@ class TestImapServerWithImaplib(WithImapServer, TestCase):
         self.assertEquals([b'1'], (await asyncio.wait_for(
             self.loop.run_in_executor(None, functools.partial(imap_client.search, 'utf-8', 'OLDER', '84700')), 1))[1])
 
+    async def test_getquotaroot(self):
+        imap_client = await self.login_user('user', 'pass')
+        self.imapserver.receive(Mail.create(['user']))
+
+        self.assertEquals(('OK', [[b'INBOX INBOX'], [b'INBOX (STORAGE 292 5000)']]),
+                          (await asyncio.wait_for(self.loop.run_in_executor(None,
+                                                        functools.partial(imap_client.getquotaroot, 'INBOX')), 1)))
+
 
 class TestSSLImapServerWithImaplib(WithImapServer, TestCase):
     """ Test the imap server implementation with SSL enabled.

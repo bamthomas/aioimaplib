@@ -792,6 +792,9 @@ class IMAP4(object):
     async def rename(self, old_mailbox_name: str, new_mailbox_name: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('RENAME', old_mailbox_name, new_mailbox_name), self.timeout)
 
+    async def getquotaroot(self, mailbox_name: str) -> Response:
+        return await asyncio.wait_for(self.protocol.execute(Command('GETQUOTAROOT', self.protocol.new_tag(), 'INBOX', untagged_resp_name='QUOTA')), self.timeout)
+
     async def list(self, reference_name: str, mailbox_pattern: Pattern) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('LIST', reference_name, mailbox_pattern), self.timeout)
 

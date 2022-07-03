@@ -102,6 +102,9 @@ class ServerState(object):
     def get_mailbox_messages(self, user_login, user_mailbox):
         return self.mailboxes[user_login].get(user_mailbox)
 
+    def has_mailbox(self, user_login, user_mailbox):
+        return self.get_mailbox_messages(user_login, user_mailbox) is not None
+
     def imap_receive(self, user, mail, mailbox):
         uid = self.add_mail(user, mail, mailbox)
         log.debug('created mail with UID: %s' % uid)
@@ -190,6 +193,7 @@ FETCH_HEADERS_RE = re.compile(r'.*BODY.PEEK\[HEADER.FIELDS \((?P<headers>.+)\)\]
 
 class ImapProtocol(asyncio.Protocol):
     IDLE_STILL_HERE_PERIOD_SECONDS = 10
+    DEFAULT_QUOTA = 5000
 
     def __init__(self, server_state, fetch_chunk_size=0, capabilities=CAPABILITIES,
                  loop=asyncio.get_event_loop()):
@@ -634,6 +638,17 @@ class ImapProtocol(asyncio.Protocol):
     def delay(self, tag, *args):
         self.delay_seconds = int(args[0])
         self.send_tagged_line(tag, 'OK DELAY completed.')
+
+    def getquotaroot(self, tag, *args):
+        arg_list = list(args)
+        size = 0
+        if self.server_state.has_mailbox(self.user_login, arg_list[0]):
+            for message in self.server_state.get_mailbox_messages(self.user_login, arg_list[0]):
+                size += len(message.as_bytes())
+
+        self.send_untagged_line(f'QUOTAROOT {arg_list[0]} INBOX')
+        self.send_untagged_line(f'QUOTA INBOX (STORAGE {size} {self.DEFAULT_QUOTA})')
+        self.send_tagged_line(tag, 'OK GETQUOTAROOT completed.')
 
 
 class MockImapServer(object):
