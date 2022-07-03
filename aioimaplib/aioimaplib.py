@@ -150,7 +150,7 @@ class Command(object):
 
         self._exception = None
         self._loop = loop if loop is not None else get_running_loop()
-        self._event = asyncio.Event(loop=self._loop)
+        self._event = asyncio.Event()
         self._timeout = timeout
         self._timer = asyncio.Handle(lambda: None, None, self._loop)  # fake timer
         self._set_timer()
@@ -323,7 +323,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.pending_async_commands = dict()
         self.pending_sync_command = None
         self.idle_queue = asyncio.Queue()
-        self._idle_event = asyncio.Event(loop=loop)
+        self._idle_event = asyncio.Event()
         self.imap_version = None
         self.literal_data = None
         self.incomplete_line = b''

@@ -1,5 +1,5 @@
 import re
-from asyncio import get_event_loop, wait_for
+from asyncio import run, wait_for
 from collections import namedtuple
 from email.message import Message
 from email.parser import BytesHeaderParser, BytesParser
@@ -77,4 +77,4 @@ async def imap_loop(host, user, password) -> None:
 
 
 if __name__ == '__main__':
-    get_event_loop().run_until_complete(imap_loop('imap.server', 'account_id', 'password'))
+    run(imap_loop('imap.server', 'account_id', 'password'))

@@ -868,7 +868,7 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
         self.assertEqual(1, len(imap_client.protocol.pending_async_commands))
         await self.advance(1.1)
 
-        finished, pending = await asyncio.wait([noop_task], loop=self.loop)
+        finished, pending = await asyncio.wait([noop_task])
         self.assertTrue(noop_task in finished)
         self.assertTrue(isinstance(noop_task.exception(), CommandTimeout))
         self.assertEqual(0, len(imap_client.protocol.pending_async_commands))
@@ -884,7 +884,7 @@ class TestAioimaplibClocked(AioWithImapServer, asynctest.ClockedTestCase):
         self.assertIsNotNone(imap_client.protocol.pending_sync_command)
         await self.advance(1.1)
 
-        finished, pending = await asyncio.wait([delay_task], loop=self.loop)
+        finished, pending = await asyncio.wait([delay_task])
         self.assertTrue(delay_task in finished)
         self.assertTrue(isinstance(delay_task.exception(), CommandTimeout))
         self.assertIsNone(imap_client.protocol.pending_sync_command)
