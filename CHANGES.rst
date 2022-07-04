@@ -2,6 +2,14 @@ Changes
 =======
 
 
+V1.0.0
+------
+
+After 5 years and 420 usages let's switch to 1.0.0.
+
+- [aiolib] adds python 3.10 (but python 3.10 is failing on downloading interpretor)
+- [aiolib] adds getquotaroot command
+
 V0.9.0
 ------
 Please note that this release changes the API : response lines are now all of bytes type (and not in string).
