@@ -831,7 +831,7 @@ class IMAP4_SSL(IMAP4):
     def create_client(self, host: str, port: int, loop: asyncio.AbstractEventLoop,
                       conn_lost_cb: Callable[[Optional[Exception]], None] = None, ssl_context: ssl.SSLContext = None) -> None:
         if ssl_context is None:
-            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         super().create_client(host, port, loop, conn_lost_cb, ssl_context)
 
 
