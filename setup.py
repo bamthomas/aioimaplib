@@ -26,7 +26,7 @@ tests_require = [
 ]
 setup(
     name=NAME,
-    version='1.0.0',
+    version='1.0.1',
     description='Python asyncio IMAP4rev1 client library',
     long_description=README + '\n\n' + CHANGES,
     classifiers=[
