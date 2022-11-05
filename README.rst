@@ -178,7 +178,7 @@ To develop, just run
     source venv/bin/activate
     python setup.py develop
     pip install -r dev-requirements.txt
-    nosetests
+    pytest
 
 To add an imaplib or imaplib2 command you can :
 
