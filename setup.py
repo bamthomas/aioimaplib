@@ -16,7 +16,7 @@ with open(os.path.join(here, 'CHANGES.rst')) as changes:
 NAME = 'aioimaplib'
 
 tests_require = [
-    'nose',
+    'pytest',
     'asynctest',
     'mock',
     'pytz',
@@ -36,7 +36,7 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Topic :: Communications :: Email :: Post-Office :: IMAP",
-        "Topic :: Internet" 
+        "Topic :: Internet"
     ],
     author='Bruno Thomas',
     author_email='bruno@barreverte.fr',
@@ -45,7 +45,6 @@ setup(
     keywords='asyncio mail imap',
     packages=find_packages(exclude=('*.tests', '*.tests.*')),
     zip_safe=False,
-    test_suite="nose.collector",  
     install_requires=[],
     tests_require=tests_require,
 )

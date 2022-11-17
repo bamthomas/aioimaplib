@@ -4,7 +4,7 @@ About
 .. _imaplib: https://docs.python.org/3/library/imaplib.html
 .. _asyncio: https://docs.python.org/3/library/asyncio.html
 
-.. image:: https://travis-ci.org/bamthomas/aioimaplib.png?branch=master
+.. image:: https://github.com/bamthomas/aioimaplib/actions/workflows/tests/badge.svg
    :alt: Build status
    :target: https://travis-ci.com/bamthomas/aioimaplib
 
@@ -178,7 +178,7 @@ To develop, just run
     source venv/bin/activate
     python setup.py develop
     pip install -r dev-requirements.txt
-    nosetests
+    pytest
 
 To add an imaplib or imaplib2 command you can :
 

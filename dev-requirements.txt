@@ -1,4 +1,4 @@
-nose
+pytest
 asynctest
 mock
 pytz
