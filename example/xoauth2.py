@@ -26,13 +26,13 @@ SCOPES = [
     "https://outlook.office.com/IMAP.AccessAsUser.All",
 ]
 
-# for google
+# for google``
 # this is not tested yet.
 # from httpx_oauth.clients.google import GoogleOAuth2
 
 # client = GoogleOAuth2(
-#     "0f2c93d4-6a81-4597-8bf3-0002869d82fb",
-#     "rxN8Q~FABEmDxwiS7TtflBUPf~FkGR2raAtHlaQ6",
+# "<your-client-id>",
+# "<your-client-secret>",
 # )
 # SCOPES = ["https://mail.google.com/"]
 
@@ -45,7 +45,6 @@ token_path = Path(__file__).parent / ".oauth_token.json"
 async def main():
 
     token = await get_token()
-
     client = IMAP4_SSL("outlook.office365.com")
 
     await client.wait_hello_from_server()
@@ -112,8 +111,8 @@ async def authorization():
     callback_url = f"http://localhost:{CALLBACK_HTTP_PORT}/"
 
     url = await client.get_authorization_url(callback_url, scope=SCOPES)
-    token_respose = await start_server_and_open_browser(url)
-    access_token = await client.get_access_token(token_respose["code"][0], callback_url)
+    token_response = await start_server_and_open_browser(url)
+    access_token = await client.get_access_token(token_response["code"][0], callback_url)
 
     return access_token
 
