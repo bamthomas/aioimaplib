@@ -423,10 +423,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 await self.pending_async_commands[command.untagged_resp_name].wait()
             self.pending_async_commands[command.untagged_resp_name] = command
 
-        print("actually sending command")
         self.send(str(command))
         try:
-            print("waiting")
             await command.wait()
         except CommandTimeout:
             if Commands.get(command.name).exec == Exec.is_sync:
