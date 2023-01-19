@@ -29,6 +29,7 @@ import sys
 
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import ServerState, Mail, MockImapServer, ImapProtocol, InvalidUidSet
+import pytest
 
 
 class TestMailToString(unittest.TestCase):
@@ -37,84 +38,84 @@ class TestMailToString(unittest.TestCase):
 
         mail = imapserver.Mail.create(['user'], date=now)
 
-        self.assertEqual(mail.email.get('Date'), 'Tue, 02 Feb 2016 12:13:14 +0100')
+        assert mail.email.get('Date') == 'Tue, 02 Feb 2016 12:13:14 +0100'
 
     def test_message_default_date_string_is_utc(self):
         mail = imapserver.Mail.create(['user'])
 
-        self.assertTrue(mail.email.get('Date').endswith('+0000'))
+        assert mail.email.get('Date').endswith('+0000')
 
     def test_message_title_string_without_accents_isnot_encoded(self):
         now = pytz.timezone('Europe/Paris').localize(datetime(2016, 2, 2, 12, 13, 14, 151))
 
         mail = imapserver.Mail.create(['user'], subject='subject', date=now)
 
-        self.assertEqual(mail.email.get('Subject'), 'subject')
+        assert mail.email.get('Subject') == 'subject'
 
     def test_message_title_string_with_accents_is_base64encoded(self):
         mail = imapserver.Mail.create(['user'], subject='Classé ?')
 
-        self.assertTrue('=?utf-8?b?Q2xhc3PDqSA/?=' in mail.as_string())
+        assert '=?utf-8?b?Q2xhc3PDqSA/?=' in mail.as_string()
 
     def test_message_quoted_printable(self):
         mail = imapserver.Mail.create(['user'], content='Bonjour à vous', quoted_printable=True)
 
-        self.assertTrue('Bonjour =C3=A0 vous' in mail.as_string(), msg='"=C3=A0" not found in %s' % mail.as_string())
+        assert 'Bonjour =C3=A0 vous' in mail.as_string(), '"=C3=A0" not found in %s' % mail.as_string()
 
     def test_message_not_quoted_printable(self):
         mail = imapserver.Mail.create(['user'], subject='élo ?', content='Bonjour à vous').as_bytes()
 
         m = email.message_from_bytes(mail)
-        self.assertEquals('Bonjour à vous', m.get_payload(decode=True).decode())
+        assert 'Bonjour à vous' == m.get_payload(decode=True).decode()
 
     def test_header_encode_to(self):
         mail = imapserver.Mail.create(['Zébulon Durand <zeb@zebulon.io>'], mail_from='from@mail.fr', subject='subject')
 
-        self.assertTrue('=?utf-8?q?Z=C3=A9bulon_Durand_=3Czeb=40zebulon=2Eio=3E?=' in mail.as_string(), msg='expected string not found in :%s\n' % mail.as_string())
+        assert '=?utf-8?q?Z=C3=A9bulon_Durand_=3Czeb=40zebulon=2Eio=3E?=' in mail.as_string(), 'expected string not found in :%s\n' % mail.as_string()
 
     def test_mail_from(self):
         mail = imapserver.Mail.create(['user'], subject='subject')
-        self.assertEquals(mail.email.get('From'), '')
+        assert mail.email.get('From') == ''
 
         mail = imapserver.Mail.create(['user'], mail_from='<test@test>', subject='subject')
-        self.assertEquals(mail.email.get('From'), '<test@test>')
+        assert mail.email.get('From') == '<test@test>'
 
         mail = imapserver.Mail.create(['user'], mail_from='test@test', subject='subject')
-        self.assertEquals(mail.email.get('From'), '<test@test>')
+        assert mail.email.get('From') == '<test@test>'
 
         mail = imapserver.Mail.create(['user'], mail_from='Test <test@test>', subject='subject')
-        self.assertEquals(mail.email.get('From'), 'Test <test@test>')
+        assert mail.email.get('From') == 'Test <test@test>'
 
     def test_build_sequence_range(self):
-        self.assertEqual(range(1, 3), ImapProtocol(None)._build_sequence_range('1:2'))
-        self.assertEqual(range(1, 12), ImapProtocol(None)._build_sequence_range('1:11'))
-        self.assertEqual(range(1234, 12346), ImapProtocol(None)._build_sequence_range('1234:12345'))
-        self.assertEqual(range(1, sys.maxsize), ImapProtocol(None)._build_sequence_range('1:*'))
-        self.assertEqual([42], ImapProtocol(None)._build_sequence_range('42'))
+        assert range(1, 3) == ImapProtocol(None)._build_sequence_range('1:2')
+        assert range(1, 12) == ImapProtocol(None)._build_sequence_range('1:11')
+        assert range(1234, 12346) == ImapProtocol(None)._build_sequence_range('1234:12345')
+        assert range(1, sys.maxsize) == ImapProtocol(None)._build_sequence_range('1:*')
+        assert [42] == ImapProtocol(None)._build_sequence_range('42')
 
     def test_build_sequence_badrange(self):
-        with self.assertRaises(InvalidUidSet):
+        with pytest.raises(InvalidUidSet):
             ImapProtocol(None)._build_sequence_range('0:2')
 
-        with self.assertRaises(InvalidUidSet):
+        with pytest.raises(InvalidUidSet):
             ImapProtocol(None)._build_sequence_range('2:0')
 
-        with self.assertRaises(InvalidUidSet):
+        with pytest.raises(InvalidUidSet):
             ImapProtocol(None)._build_sequence_range('2:1')
 
 
 class TestServerState(unittest.TestCase):
     def test_max_ids_with_no_user(self):
-        self.assertEquals(0, ServerState().max_uid('user', 'INBOX'))
-        self.assertEquals(0, ServerState().max_id('user', 'INBOX'))
+        assert 0 == ServerState().max_uid('user', 'INBOX')
+        assert 0 == ServerState().max_id('user', 'INBOX')
 
     def test_max_ids_one_user_one_mail(self):
         server_state = ServerState()
         server_state.add_mail('user', Mail.create(['user']))
 
-        self.assertEquals(1, server_state.max_id('user', 'INBOX'))
-        self.assertEquals(1, server_state.max_uid('user', 'INBOX'))
-        self.assertEquals(0, server_state.max_id('user', 'OTHER_MAILBOX'))
+        assert 1 == server_state.max_id('user', 'INBOX')
+        assert 1 == server_state.max_uid('user', 'INBOX')
+        assert 0 == server_state.max_id('user', 'OTHER_MAILBOX')
 
     def test_max_ids_one_user_three_mails_in_two_mailboxes(self):
         server_state = ServerState()
@@ -122,9 +123,9 @@ class TestServerState(unittest.TestCase):
         server_state.add_mail('user', Mail.create(['user']), mailbox='INBOX')
         server_state.add_mail('user', Mail.create(['user']), mailbox='OUTBOX')
 
-        self.assertEquals(1, server_state.max_id('user', 'OUTBOX'))
-        self.assertEquals(2, server_state.max_id('user', 'INBOX'))
-        self.assertEquals(2, server_state.max_uid('user', 'INBOX'))
+        assert 1 == server_state.max_id('user', 'OUTBOX')
+        assert 2 == server_state.max_id('user', 'INBOX')
+        assert 2 == server_state.max_uid('user', 'INBOX')
 
     def test_reprocess_ids_if_a_message_is_removed(self):
         server_state = ServerState()
@@ -133,15 +134,15 @@ class TestServerState(unittest.TestCase):
         server_state.add_mail('user', Mail.create(['user'], 'from3'), mailbox='INBOX')
 
         server_state.remove_byid('user', 'INBOX', 1)
-        self.assertEqual(1, server_state.get_mailbox_messages('user', 'INBOX')[0].id)
-        self.assertEqual(2, server_state.get_mailbox_messages('user', 'INBOX')[1].id)
-        self.assertEquals(2, server_state.max_id('user', 'INBOX'))
-        self.assertEquals(3, server_state.max_uid('user', 'INBOX'))
+        assert 1 == server_state.get_mailbox_messages('user', 'INBOX')[0].id
+        assert 2 == server_state.get_mailbox_messages('user', 'INBOX')[1].id
+        assert 2 == server_state.max_id('user', 'INBOX')
+        assert 3 == server_state.max_uid('user', 'INBOX')
 
         server_state.remove_byid('user', 'INBOX', 1)
-        self.assertEqual(1, server_state.get_mailbox_messages('user', 'INBOX')[0].id)
-        self.assertEquals(1, server_state.max_id('user', 'INBOX'))
-        self.assertEquals(3, server_state.max_uid('user', 'INBOX'))
+        assert 1 == server_state.get_mailbox_messages('user', 'INBOX')[0].id
+        assert 1 == server_state.max_id('user', 'INBOX')
+        assert 3 == server_state.max_uid('user', 'INBOX')
 
 
 class WithImapServer(object):

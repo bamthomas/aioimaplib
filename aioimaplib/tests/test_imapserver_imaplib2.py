@@ -25,6 +25,7 @@ from mock import Mock
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
 from aioimaplib.tests.test_imapserver import WithImapServer
+import pytest
 
 
 class TestImapServerIdle(WithImapServer, TestCase):
@@ -48,10 +49,10 @@ class TestImapServerIdle(WithImapServer, TestCase):
         idle_callback.assert_called_once()
 
     async def test_login_twice(self):
-        with self.assertRaises(imaplib2.IMAP4.error) as expected:
+        with pytest.raises(imaplib2.IMAP4.error) as expected:
             imap_client = await self.login_user('user', 'pass', lib=imaplib2.IMAP4)
 
             await asyncio.wait_for(
                 self.loop.run_in_executor(None, functools.partial(imap_client.login, 'user', 'pass')), 1)
 
-        self.assertEqual(expected.exception.args, ('command LOGIN illegal in state AUTH',))
+            assert expected == 'command LOGIN illegal in state AUTH'
