@@ -4,7 +4,7 @@ About
 .. _imaplib: https://docs.python.org/3/library/imaplib.html
 .. _asyncio: https://docs.python.org/3/library/asyncio.html
 
-.. image:: https://github.com/bamthomas/aioimaplib/actions/workflows/tests.yml/badge.svg
+.. image:: https://github.com/bamthomas/aioimaplib/workflows/tests/badge.svg
    :alt: Build status
    :target: https://github.com/bamthomas/aioimaplib/actions/
 
