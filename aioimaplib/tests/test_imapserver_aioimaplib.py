@@ -32,7 +32,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
 
     async def test_append_too_long(self):
         imap_client = await self.login_user('user@mail', 'pass')
-        self.assertEquals(0, extract_exists((await imap_client.examine('INBOX'))))
+        assert 0 == extract_exists((await imap_client.examine('INBOX')))
 
         message_bytes = b'do you see me ?'
         imap_client.protocol.literal_data = message_bytes * 2
@@ -41,12 +41,12 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         response = await imap_client.protocol.execute(
             Command('APPEND', imap_client.protocol.new_tag(), *args, loop=self.loop)
         )
-        self.assertEquals('BAD', response.result)
-        self.assertTrue(b'expected CRLF but got' in response.lines[0])
+        assert 'BAD' == response.result
+        assert b'expected CRLF but got' in response.lines[0]
 
     async def test_append_too_short(self):
         imap_client = await self.login_user('user@mail', 'pass')
-        self.assertEquals(0, extract_exists((await imap_client.examine('INBOX'))))
+        assert 0 == extract_exists((await imap_client.examine('INBOX')))
 
         message_bytes = b'do you see me ?' * 2
         imap_client.protocol.literal_data = message_bytes[:5]
@@ -55,5 +55,5 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         response = await imap_client.protocol.execute(
             Command('APPEND', imap_client.protocol.new_tag(), *args, loop=self.loop)
         )
-        self.assertEquals('BAD', response.result)
-        self.assertTrue(b'expected 30 but was' in response.lines[0])
+        assert 'BAD' == response.result
+        assert b'expected 30 but was' in response.lines[0]

@@ -20,49 +20,40 @@ from OpenSSL import crypto
 from unittest import TestCase
 
 from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
-
-
-class TestCreateTempSelfSignedCert(TestCase):
-    def setUp(self):
-        self.cert, self.key = create_temp_self_signed_cert()
+def setUp(self):
+    self.cert, self.key = create_temp_self_signed_cert()
 
     def tearDown(self):
         os.remove(self.cert)
         os.remove(self.key)
 
     def test_create_temp_self_signed_cert_returns_two_file_names(self):
-        self.assertTrue(os.path.isfile(self.cert))
-        self.assertTrue(os.path.isfile(self.key))
+        assert os.path.isfile(self.cert)
+        assert os.path.isfile(self.key)
 
     def test_create_temp_self_signed_cert_returns_cert_as_first_value(self):
         with open(self.cert, 'rb') as f:
             data = f.read()
 
-        try:
-            crypto.load_certificate(crypto.FILETYPE_PEM, data)
-        except crypto.Error:
-            self.fail('First file is not a certificate')
+            try:
+                crypto.load_certificate(crypto.FILETYPE_PEM, data)
+            except crypto.Error:
+                self.fail('First file is not a certificate')
 
     def test_create_temp_self_signed_cert_returns_key_as_second_value(self):
         with open(self.key, 'rb') as f:
             data = f.read()
 
-        try:
-            crypto.load_privatekey(crypto.FILETYPE_PEM, data)
-        except crypto.Error:
-            self.fail('First file is not a key')
+            try:
+                crypto.load_privatekey(crypto.FILETYPE_PEM, data)
+            except crypto.Error:
+                self.fail('First file is not a key')
 
     def test_create_temp_self_signed_cert_can_generate_more_than_one_pair_of_keys(self):
         (second_cert, second_key) = create_temp_self_signed_cert()
-
-        # Check the second certificate is different and exists
-        self.assertNotEqual(self.cert, second_cert)
-        self.assertTrue(os.path.isfile(second_cert))
-
-        # Check the second key is different and exists
-        self.assertNotEqual(self.key, second_key)
-        self.assertTrue(os.path.isfile(second_key))
-
-        # Clean up
+        assert self.cert != second_cert
+        assert os.path.isfile(second_cert)
+        assert self.key != second_key
+        assert os.path.isfile(second_key)
         os.remove(second_cert)
         os.remove(second_key)
