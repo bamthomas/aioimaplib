@@ -4,9 +4,9 @@ About
 .. _imaplib: https://docs.python.org/3/library/imaplib.html
 .. _asyncio: https://docs.python.org/3/library/asyncio.html
 
-.. image:: https://github.com/bamthomas/aioimaplib/actions/workflows/tests/badge.svg
+.. image:: https://github.com/bamthomas/aioimaplib/actions/workflows/tests.yml/badge.svg
    :alt: Build status
-   :target: https://travis-ci.com/bamthomas/aioimaplib
+   :target: https://github.com/bamthomas/aioimaplib/actions/
 
 .. image:: https://coveralls.io/repos/github/bamthomas/aioimaplib/badge.svg
    :target: https://coveralls.io/github/bamthomas/aioimaplib
@@ -16,7 +16,7 @@ This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Se
 
 The aim is to port the imaplib with asyncio_, to benefit from the sleep or treat model.
 
-It runs with python 3.6, 3.7, 3.8, 3.9.
+It runs with python 3.7, 3.8, 3.9, 3.10.
 
 Example
 -------
