@@ -7,3 +7,4 @@ imaplib2
 docutils
 pyopenssl
 twine
+httpx-oauth

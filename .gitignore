@@ -17,3 +17,5 @@ dist
 .coverage
 build
 .tox
+example/.oauth_token.json
+

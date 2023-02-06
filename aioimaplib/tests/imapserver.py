@@ -14,6 +14,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
+from base64 import b64decode
 import email
 import email.mime.nonmultipart
 import logging
@@ -42,7 +43,7 @@ log.addHandler(sh)
 
 NONAUTH, AUTH, SELECTED, IDLE, LOGOUT = 'NONAUTH', 'AUTH', 'SELECTED', 'IDLE', 'LOGOUT'
 UID_RANGE_RE = re.compile(r'(?P<start>\d+):(?P<end>\d|\*)')
-CAPABILITIES = 'IDLE UIDPLUS MOVE ENABLE NAMESPACE'
+CAPABILITIES = 'IDLE UIDPLUS MOVE ENABLE NAMESPACE AUTH=XOAUTH2'
 CRLF = b'\r\n'
 
 
@@ -187,7 +188,7 @@ def critical_section(next_state):
     return decorator
 
 
-command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\[\]\+\-\\\%]+)?$)')
+command_re = re.compile(br'((DONE)|(?P<tag>\w+) (?P<cmd>[\w]+)([\w \.#@:\*"\(\)\{\}\[\]\+\-\\\%=]+)?$)')
 FETCH_HEADERS_RE = re.compile(r'.*BODY.PEEK\[HEADER.FIELDS \((?P<headers>.+)\)\].*')
 
 
@@ -276,6 +277,23 @@ class ImapProtocol(asyncio.Protocol):
         self.server_state.login(self.user_login, self)
         self.send_untagged_line('CAPABILITY IMAP4rev1 %s' % self.capabilities)
         self.send_tagged_line(tag, 'OK LOGIN completed')
+
+    @critical_section(next_state=AUTH)
+    def authenticate(self, tag, method, sasl_string):
+        if method != "XOAUTH2":
+            self.error(tag, 'Only XOAUTH2 autheticate is supported.')
+            return
+        
+        token = b64decode(sasl_string).decode('ascii')
+
+        # disassemble sasl string
+        user_part, token_part = token.split('\1',1)
+
+        _, self.user_login = user_part.split("=")
+
+        self.server_state.login(self.user_login, self)
+        
+        self.send_tagged_line(tag, 'OK AUTHENTICATE completed')
 
     @critical_section(next_state=LOGOUT)
     def logout(self, tag, *args):

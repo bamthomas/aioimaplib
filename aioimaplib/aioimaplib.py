@@ -15,6 +15,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
+from base64 import b64encode
 import functools
 import logging
 import random
@@ -460,6 +461,25 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return response
 
     @change_state
+    async def xoauth2(self, user: str, token: str) -> Response:
+        """Authentication with XOAUTH2.
+
+        Tested with outlook.
+        
+        Specification:
+        https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth
+        https://developers.google.com/gmail/imap/xoauth2-protocol
+        """
+        sasl_string = b64encode(f"user={user}\1auth=Bearer {token}\1\1".encode("ascii"))
+
+        response = await self.execute(
+            Command('AUTHENTICATE', self.new_tag(), 'XOAUTH2', sasl_string.decode("ascii"), loop=self.loop))
+
+        if 'OK' == response.result:
+            self.state = AUTH
+        return response
+
+    @change_state
     async def logout(self) -> Response:
         response = (await self.execute(Command('LOGOUT', self.new_tag(), loop=self.loop)))
         if 'OK' == response.result:
@@ -695,6 +715,9 @@ class IMAP4(object):
 
     async def login(self, user: str, password: str) -> Response:
         return await asyncio.wait_for(self.protocol.login(user, password), self.timeout)
+
+    async def xoauth2(self, user: str, token: bytes) -> Response:
+        return await asyncio.wait_for(self.protocol.xoauth2(user, token), self.timeout)
 
     async def logout(self) -> Response:
         return await asyncio.wait_for(self.protocol.logout(), self.timeout)

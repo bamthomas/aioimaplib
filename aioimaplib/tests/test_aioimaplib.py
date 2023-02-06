@@ -408,6 +408,16 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         assert imap_client.has_capability('IDLE')
         assert imap_client.has_capability('UIDPLUS')
 
+    async def test_xoauth2(self):
+        imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
+        await asyncio.wait_for(imap_client.wait_hello_from_server(), 2)
+
+        result, data = await imap_client.xoauth2('user', 'myspecialtoken')
+
+        self.assertEquals(aioimaplib.AUTH, imap_client.protocol.state)
+        self.assertEqual('OK', result)
+        self.assertEqual(b'AUTHENTICATE completed', data[-1])
+
     async def test_login_with_special_characters(self):
         imap_client = aioimaplib.IMAP4(port=12345, loop=self.loop, timeout=3)
         await asyncio.wait_for(imap_client.wait_hello_from_server(), 2)

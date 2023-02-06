@@ -154,6 +154,16 @@ Or loading config file (for example with logging.config.dictConfig(yaml.load(fil
         propagate: no
     ...
 
+Authentication with OAuth2
+--------------------------
+
+Starting with the 01/01/23 Microsoft Outlook can only be accessed with OAuth2. 
+You need to register you client to be used with oauth. Find more 
+:https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth:`here`.
+
+This might be also used with Google Mail, but it is not tested for it.
+
+
 Tested with
 -----------
 
@@ -200,7 +210,7 @@ TODO
 .. _rfc2342: https://tools.ietf.org/html/rfc2342
 .. _rfc4469: https://tools.ietf.org/html/rfc4469
 
-- 23/25 IMAP4rev1 commands are implemented from the main rfc3501_. 'STARTTLS' and 'AUTHENTICATE' are still missing.
+- 23/25 IMAP4rev1 commands are implemented from the main rfc3501_. 'STARTTLS' and 'AUTHENTICATE'(except with XOAUTH2) are still missing.
 - 'COMPRESS' from rfc4978_
 - 'SETACL' 'DELETEACL' 'GETACL' 'MYRIGHTS' 'LISTRIGHTS' from ACL rfc4314_
 - 'GETQUOTA': 'GETQUOTAROOT': 'SETQUOTA' from quota rfc2087_
