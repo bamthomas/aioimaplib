@@ -48,11 +48,11 @@ async def fetch_message_body(imap_client: aioimaplib.IMAP4_SSL, uid: int) -> Mes
 
 def handle_server_push(push_messages: Collection[str]) -> None:
     for msg in push_messages:
-        if msg.endswith('EXISTS'):
+        if msg.endswith(b'EXISTS'):
             print('new message: %s' % msg) # could fetch only the message instead of max_uuid:* in the loop
-        elif msg.endswith('EXPUNGE'):
+        elif msg.endswith(b'EXPUNGE'):
             print('message removed: %s' % msg)
-        elif 'FETCH' in msg and '\Seen' in msg:
+        elif b'FETCH' in msg and b'\Seen' in msg:
             print('message seen %s' % msg)
         else:
             print('unprocessed push message : %s' % msg)
