@@ -455,7 +455,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     async def login(self, user: str, password: str) -> Response:
         response = await self.execute(
             Command('LOGIN', self.new_tag(), user, '%s' % quoted(password), loop=self.loop),
-        scrub=password)
+            scrub=password,
+        )
 
         if 'OK' == response.result:
             self.state = AUTH
@@ -477,7 +478,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         sasl_string = b64encode(f"user={user}\1auth=Bearer {token}\1\1".encode("ascii"))
 
         response = await self.execute(
-            Command('AUTHENTICATE', self.new_tag(), 'XOAUTH2', sasl_string.decode("ascii"), loop=self.loop))
+            Command('AUTHENTICATE', self.new_tag(), 'XOAUTH2', sasl_string.decode("ascii"), loop=self.loop),
+            scrub=token,
+        )
 
         if 'OK' == response.result:
             self.state = AUTH
