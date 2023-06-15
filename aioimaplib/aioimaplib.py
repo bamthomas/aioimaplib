@@ -402,12 +402,15 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         else:
             log.info('unknown data received %s' % line)
 
-    def send(self, line: str) -> None:
+    def send(self, line: str, scrub: str =None) -> None:
         data = ('%s\r\n' % line).encode()
-        log.debug('Sending : %s' % data)
+        if scrub:
+            log.debug('Sending : %s' % data.replace(scrub.encode(), len(scrub) * b'*'))
+        else:
+            log.debug('Sending : %s' % data)
         self.transport.write(data)
 
-    async def execute(self, command: Command) -> Response:
+    async def execute(self, command: Command, scrub: str =None) -> Response:
         if self.state not in Commands.get(command.name).valid_states:
             raise Abort('command %s illegal in state %s' % (command.name, self.state))
 
@@ -423,7 +426,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
                 await self.pending_async_commands[command.untagged_resp_name].wait()
             self.pending_async_commands[command.untagged_resp_name] = command
 
-        self.send(str(command))
+        self.send(str(command), scrub=scrub)
         try:
             await command.wait()
         except CommandTimeout:
@@ -451,7 +454,8 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     @change_state
     async def login(self, user: str, password: str) -> Response:
         response = await self.execute(
-            Command('LOGIN', self.new_tag(), user, '%s' % quoted(password), loop=self.loop))
+            Command('LOGIN', self.new_tag(), user, '%s' % quoted(password), loop=self.loop),
+        scrub=password)
 
         if 'OK' == response.result:
             self.state = AUTH
