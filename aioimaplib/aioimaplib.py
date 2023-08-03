@@ -330,6 +330,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         self.incomplete_line = b''
         self.current_command = None
         self.conn_lost_cb = conn_lost_cb
+        self.tasks: set[Future] = set()
 
         self.tagnum = 0
         self.tagpre = int2ap(random.randint(4096, 65535))
@@ -389,7 +390,9 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             return
 
         if self.state == CONNECTED:
-            asyncio.ensure_future(self.welcome(line))
+            task = asyncio.ensure_future(self.welcome(line))
+            self.tasks.add(task)
+            task.add_done_callback(self.tasks.discard)
         elif tagged_status_response_re.match(line):
             self._response_done(line)
         elif current_cmd is not None:
