@@ -709,6 +709,7 @@ class IMAP4(object):
         self.host = host
         self.protocol = None
         self._idle_waiter = None
+        self.tasks: set[Future] = set()
         self.create_client(host, port, loop, conn_lost_cb, ssl_context)
 
     def create_client(self, host: str, port: int, loop: asyncio.AbstractEventLoop,
