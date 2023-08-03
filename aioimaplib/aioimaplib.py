@@ -777,13 +777,22 @@ class IMAP4(object):
         if self._idle_waiter is not None:
             self._idle_waiter.cancel()
         idle = asyncio.ensure_future(self.idle())
+        self.tasks.add(idle)
+        idle.add_done_callback(self.tasks.discard)
         wait_for_ack = asyncio.ensure_future(self.protocol.wait_for_idle_response())
+        self.tasks.add(wait_for_ack)
+        wait_for_ack.add_done_callback(self.tasks.discard)
         await asyncio.wait({idle, wait_for_ack}, return_when=asyncio.FIRST_COMPLETED)
         if not self.has_pending_idle():
             wait_for_ack.cancel()
             raise Abort('server returned error to IDLE command')
+        
+        def start_stop_wait_server_push():
+            task = asyncio.ensure_future(self.stop_wait_server_push())
+            self.tasks.add(task)
+            task.add_done_callback(self.tasks.discard)
 
-        self._idle_waiter = self.protocol.loop.call_later(timeout, lambda: asyncio.ensure_future(self.stop_wait_server_push()))
+        self._idle_waiter = self.protocol.loop.call_later(timeout, start_stop_wait_server_push)
         return idle
 
     def has_pending_idle(self) -> bool:
