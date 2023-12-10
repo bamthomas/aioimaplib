@@ -471,6 +471,18 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
         assert 'OK' == result
         assert b'1 2' == data[0]
 
+    async def test_search_messages(self):
+        """Increase compatibility with https://docs.python.org/3/library/imaplib.html#imap4-example."""
+        self.imapserver.receive(Mail.create(['user']))
+        self.imapserver.receive(Mail.create(['user']))
+        imap_client = await self.login_user('user', 'pass', select=True)
+
+        # E.g. typ, data = M.search(None, 'ALL')
+        result, data = await imap_client.search(None, 'ALL')
+
+        assert 'OK' == result
+        assert b'1 2' == data[0]
+
     async def test_uid_with_illegal_command(self):
         imap_client = await self.login_user('user', 'pass', select=True)
 

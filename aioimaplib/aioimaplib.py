@@ -156,7 +156,7 @@ class Command(object):
         self._timer = asyncio.Handle(lambda: None, None, self._loop)  # fake timer
         self._set_timer()
         self._expected_size = 0
-        
+
         self._resp_literal_data = bytearray()
         self._resp_result = 'Init'
         self._resp_lines: List[bytes] = list()
@@ -164,7 +164,8 @@ class Command(object):
     def __repr__(self) -> str:
         return '{tag} {prefix}{name}{space}{args}'.format(
             tag=self.tag, prefix=self.prefix or '', name=self.name,
-            space=' ' if self.args else '', args=' '.join(self.args))
+            space=' ' if self.args else '', args=' '.join(str(arg) if arg is not None else '' \
+                                                          for arg in self.args))
 
     # for tests
     def __eq__(self, other):
@@ -473,7 +474,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         """Authentication with XOAUTH2.
 
         Tested with outlook.
-        
+
         Specification:
         https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth
         https://developers.google.com/gmail/imap/xoauth2-protocol
@@ -787,7 +788,7 @@ class IMAP4(object):
         if not self.has_pending_idle():
             wait_for_ack.cancel()
             raise Abort('server returned error to IDLE command')
-        
+
         def start_stop_wait_server_push():
             task = asyncio.ensure_future(self.stop_wait_server_push())
             self.tasks.add(task)
