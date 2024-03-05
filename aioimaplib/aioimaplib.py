@@ -507,6 +507,15 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return response
 
     @change_state
+    async def examine(self, mailbox='INBOX') -> Response:
+        response = await self.execute(
+            Command('EXAMINE', self.new_tag(), mailbox, loop=self.loop))
+
+        if 'OK' == response.result:
+            self.state = SELECTED
+        return response
+
+    @change_state
     async def close(self) -> Response:
         response = await self.execute(Command('CLOSE', self.new_tag(), loop=self.loop))
         if response.result == 'OK':
@@ -813,7 +822,7 @@ class IMAP4(object):
         return await asyncio.wait_for(self.protocol.simple_command('CHECK'), self.timeout)
 
     async def examine(self, mailbox: str = 'INBOX') -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('EXAMINE', mailbox), self.timeout)
+        return await asyncio.wait_for(self.protocol.examine(mailbox), self.timeout)
 
     async def status(self, mailbox: str, names: str) -> Response:
         return await asyncio.wait_for(self.protocol.simple_command('STATUS', mailbox, names), self.timeout)
