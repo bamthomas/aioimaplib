@@ -356,35 +356,36 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.conn_lost_cb(exc)
 
     def _handle_responses(self, data: bytes, line_handler: Callable[[bytes, Command], Optional[Command]], current_cmd: Command = None) -> None:
-        if not data:
-            if self.pending_sync_command is not None:
-                self.pending_sync_command.flush()
-            if current_cmd is not None and current_cmd.wait_data():
-                raise IncompleteRead(current_cmd)
-            return
+        while data:
+            if current_cmd is not None and current_cmd.wait_literal_data():
+                data = current_cmd.append_literal_data(data)
+                if current_cmd.wait_literal_data():
+                    raise IncompleteRead(current_cmd)
 
-        if current_cmd is not None and current_cmd.wait_literal_data():
-            data = current_cmd.append_literal_data(data)
-            if current_cmd.wait_literal_data():
-                raise IncompleteRead(current_cmd)
+            line, separator, tail = data.partition(CRLF)
+            if not separator:
+                raise IncompleteRead(current_cmd, data)
 
-        line, separator, tail = data.partition(CRLF)
-        if not separator:
-            raise IncompleteRead(current_cmd, data)
+            cmd = line_handler(line, current_cmd)
 
-        cmd = line_handler(line, current_cmd)
+            begin_literal = literal_data_re.match(line)
+            if begin_literal:
+                size = int(begin_literal.group('size'))
+                if cmd is None:
+                    cmd = Command('NIL', 'unused')
+                cmd.begin_literal_data(size)
+                current_cmd = cmd
+            elif cmd is not None and cmd.wait_data():
+                current_cmd = cmd
+            else:
+                current_cmd = None
 
-        begin_literal = literal_data_re.match(line)
-        if begin_literal:
-            size = int(begin_literal.group('size'))
-            if cmd is None:
-                cmd = Command('NIL', 'unused')
-            cmd.begin_literal_data(size)
-            self._handle_responses(tail, line_handler, current_cmd=cmd)
-        elif cmd is not None and cmd.wait_data():
-            self._handle_responses(tail, line_handler, current_cmd=cmd)
-        else:
-            self._handle_responses(tail, line_handler)
+            data = tail
+
+        if self.pending_sync_command is not None:
+            self.pending_sync_command.flush()
+        if current_cmd is not None and current_cmd.wait_data():
+            raise IncompleteRead(current_cmd)
 
     def _handle_line(self, line: bytes, current_cmd: Command) -> Optional[Command]:
         if not line:
