@@ -28,7 +28,7 @@ from collections import namedtuple
 from copy import copy
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Union, Any, Coroutine, Callable, Optional, Pattern, List
+from typing import Literal, Union, Any, Coroutine, Callable, Optional, Pattern, List
 
 # to avoid imap servers to kill the connection after 30mn idling
 # cf https://www.imapwiki.org/ClientImplementation/Synchronization
@@ -513,11 +513,11 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             self.state = AUTH
         return response
 
-    async def idle(self) -> Response:
+    def idle(self) -> Coroutine[Any, Any, Response]:
         if 'IDLE' not in self.capabilities:
             raise Abort('server has not IDLE capability')
         self._idle_event.clear()
-        return await self.execute(IdleCommand(self.new_tag(), self.idle_queue, loop=self.loop))
+        return self.execute(IdleCommand(self.new_tag(), self.idle_queue, loop=self.loop))
 
     def has_pending_idle_command(self) -> bool:
         return self.pending_sync_command is not None and self.pending_sync_command.name == 'IDLE'
@@ -525,56 +525,56 @@ class IMAP4ClientProtocol(asyncio.Protocol):
     def idle_done(self) -> None:
         self.send('DONE')
 
-    async def search(self, *criteria, charset: Optional[str] = 'utf-8', by_uid: bool = False) -> Response:
+    def search(self, *criteria, charset: Optional[str] = 'utf-8', by_uid: bool = False) -> Coroutine[Any, Any, Response]:
         args = ('CHARSET', charset) + criteria if charset is not None else criteria
         prefix = 'UID' if by_uid else ''
 
-        return await self.execute(
+        return self.execute(
             Command('SEARCH', self.new_tag(), *args, prefix=prefix, loop=self.loop))
 
-    async def fetch(self, message_set: str, message_parts: str, by_uid: bool = False, timeout: float = None) -> Response:
-        return await self.execute(
+    def fetch(self, message_set: str, message_parts: str, by_uid: bool = False, timeout: float = None) -> Coroutine[Any, Any, Response]:
+        return self.execute(
             FetchCommand(self.new_tag(), message_set, message_parts,
                          prefix='UID' if by_uid else '', loop=self.loop, timeout=timeout))
 
-    async def store(self, *args: str, by_uid: bool = False) -> Response:
-        return await self.execute(
+    def store(self, *args: str, by_uid: bool = False) -> Coroutine[Any, Any, Response]:
+        return self.execute(
             Command('STORE', self.new_tag(), *args,
                     prefix='UID' if by_uid else '', untagged_resp_name='FETCH', loop=self.loop))
 
-    async def expunge(self, *args: str, by_uid=False) -> Response:
-        return await self.execute(
+    def expunge(self, *args: str, by_uid=False) -> Coroutine[Any, Any, Response]:
+        return self.execute(
             Command('EXPUNGE', self.new_tag(), *args,
                     prefix='UID' if by_uid else '', loop=self.loop))
 
-    async def uid(self, command: str, *criteria: str, timeout: float = None) -> Response:
+    def uid(self, command: str, *criteria: str, timeout: float = None) -> Coroutine[Any, Any, Response]:
         if self.state not in Commands.get('UID').valid_states:
             raise Abort('command UID illegal in state %s' % self.state)
 
         if command.upper() == 'FETCH':
-            return await self.fetch(criteria[0], criteria[1], by_uid=True, timeout=timeout)
+            return self.fetch(criteria[0], criteria[1], by_uid=True, timeout=timeout)
         if command.upper() == 'STORE':
-            return await self.store(*criteria, by_uid=True)
+            return  self.store(*criteria, by_uid=True)
         if command.upper() == 'COPY':
-            return await self.copy(*criteria, by_uid=True)
+            return self.copy(*criteria, by_uid=True)
         if command.upper() == 'MOVE':
-            return await self.move(*criteria, by_uid=True)
+            return self.move(*criteria, by_uid=True)
         if command.upper() == 'EXPUNGE':
             if 'UIDPLUS' not in self.capabilities:
                 raise Abort('EXPUNGE with uids is only valid with UIDPLUS capability. UIDPLUS not in (%s)' % self.capabilities)
-            return await self.expunge(*criteria, by_uid=True)
+            return self.expunge(*criteria, by_uid=True)
         raise Abort('command UID only possible with COPY, FETCH, EXPUNGE (w/UIDPLUS) or STORE (was %s)' % command.upper())
 
-    async def copy(self, *args: str, by_uid: bool = False) -> Response:
-        return (await self.execute(
-            Command('COPY', self.new_tag(), *args, prefix='UID' if by_uid else '', loop=self.loop)))
+    def copy(self, *args: str, by_uid: bool = False) -> Coroutine[Any, Any, Response]:
+        return self.execute(
+            Command('COPY', self.new_tag(), *args, prefix='UID' if by_uid else '', loop=self.loop))
 
-    async def move(self, uid_set: str, mailbox: str, by_uid: bool = False) -> Response:
+    def move(self, uid_set: str, mailbox: str, by_uid: bool = False) -> Coroutine[Any, Any, Response]:
         if 'MOVE' not in self.capabilities:
             raise Abort('server has not MOVE capability')
 
-        return (await self.execute(
-            Command('MOVE', self.new_tag(), uid_set, mailbox, prefix='UID' if by_uid else '', loop=self.loop)))
+        return self.execute(
+            Command('MOVE', self.new_tag(), uid_set, mailbox, prefix='UID' if by_uid else '', loop=self.loop))
 
     async def capability(self) -> None: # that should be a Response (would avoid the Optional)
         response = await self.execute(Command('CAPABILITY', self.new_tag(), loop=self.loop))
@@ -587,7 +587,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         except IndexError:
             raise Error('server not IMAP4 compliant')
 
-    async def append(self, message_bytes: bytes, mailbox: str = 'INBOX', flags: str = None, date: Any = None, timeout: float = None) -> Response:
+    def append(self, message_bytes: bytes, mailbox: str = 'INBOX', flags: str = None, date: Any = None, timeout: float = None) -> Coroutine[Any, Any, Response]:
         args = [mailbox]
         if flags is not None:
             if (flags[0], flags[-1]) != ('(', ')'):
@@ -598,35 +598,35 @@ class IMAP4ClientProtocol(asyncio.Protocol):
             args.append(time2internaldate(date))
         args.append('{%s}' % len(message_bytes))
         self.literal_data = message_bytes
-        return await self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop, timeout=timeout))
+        return self.execute(Command('APPEND', self.new_tag(), *args, loop=self.loop, timeout=timeout))
 
-    async def id(self, **kwargs: Union[dict, list, str]) -> Response:
+    def id(self, **kwargs: Union[dict, list, str]) -> Coroutine[Any, Any, Response]:
         args = arguments_rfs2971(**kwargs)
-        return await self.execute(Command('ID', self.new_tag(), *args, loop=self.loop))
+        return self.execute(Command('ID', self.new_tag(), *args, loop=self.loop))
 
     simple_commands = {'NOOP', 'CHECK', 'STATUS', 'CREATE', 'DELETE', 'RENAME',
                        'SUBSCRIBE', 'UNSUBSCRIBE', 'LSUB', 'LIST', 'EXAMINE', 'ENABLE'}
 
-    async def namespace(self) -> Response:
+    def namespace(self) -> Coroutine[Any, Any, Response]:
         if 'NAMESPACE' not in self.capabilities:
             raise Abort('server has not NAMESPACE capability')
-        return await self.execute(Command('NAMESPACE', self.new_tag(), loop=self.loop))
+        return self.execute(Command('NAMESPACE', self.new_tag(), loop=self.loop))
 
-    async def simple_command(self, name, *args: str) -> Response:
+    def simple_command(self, name, *args: str) -> Coroutine[Any, Any, Response]:
         if name not in self.simple_commands:
             raise NotImplementedError('simple command only available for %s' % self.simple_commands)
-        return await self.execute(Command(name, self.new_tag(), *args, loop=self.loop))
+        return self.execute(Command(name, self.new_tag(), *args, loop=self.loop))
 
-    async def wait_async_pending_commands(self) -> None:
-        await asyncio.wait([asyncio.ensure_future(cmd.wait()) for cmd in self.pending_async_commands.values()])
+    def wait_async_pending_commands(self) -> Coroutine[Any, Any, None]:
+        return asyncio.wait([asyncio.ensure_future(cmd.wait()) for cmd in self.pending_async_commands.values()])
 
     async def wait(self, state_regexp: Pattern) -> None:
         state_re = re.compile(state_regexp)
         async with self.state_condition:
             await self.state_condition.wait_for(lambda: state_re.match(self.state))
 
-    async def wait_for_idle_response(self):
-        await self._idle_event.wait()
+    def wait_for_idle_response(self) -> Coroutine[Any, Any, Literal[True]]:
+        return self._idle_event.wait()
 
     def _untagged_response(self, line: bytes) -> Command:
         line = line.replace(b'* ', b'')
@@ -722,44 +722,44 @@ class IMAP4(object):
     def get_state(self) -> str:
         return self.protocol.state
 
-    async def wait_hello_from_server(self) -> None:
-        await asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.timeout)
+    def wait_hello_from_server(self) -> Coroutine[Any, Any, Literal[True]]:
+        return asyncio.wait_for(self.protocol.wait('AUTH|NONAUTH'), self.timeout)
 
-    async def login(self, user: str, password: str) -> Response:
-        return await asyncio.wait_for(self.protocol.login(user, password), self.timeout)
+    def login(self, user: str, password: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.login(user, password), self.timeout)
 
-    async def xoauth2(self, user: str, token: bytes) -> Response:
-        return await asyncio.wait_for(self.protocol.xoauth2(user, token), self.timeout)
+    def xoauth2(self, user: str, token: bytes) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.xoauth2(user, token), self.timeout)
 
-    async def logout(self) -> Response:
-        return await asyncio.wait_for(self.protocol.logout(), self.timeout)
+    def logout(self) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.logout(), self.timeout)
 
-    async def select(self, mailbox: str = 'INBOX') -> Response:
-        return await asyncio.wait_for(self.protocol.select(mailbox), self.timeout)
+    def select(self, mailbox: str = 'INBOX') -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.select(mailbox), self.timeout)
 
-    async def search(self, *criteria: str, charset: Optional[str] = 'utf-8') -> Response:
-        return await asyncio.wait_for(self.protocol.search(*criteria, charset=charset), self.timeout)
+    def search(self, *criteria: str, charset: Optional[str] = 'utf-8') -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.search(*criteria, charset=charset), self.timeout)
 
-    async def uid_search(self, *criteria: str, charset: Optional[str] = 'utf-8') -> Response:
-        return await asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout)
+    def uid_search(self, *criteria: str, charset: Optional[str] = 'utf-8') -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.search(*criteria, by_uid=True, charset=charset), self.timeout)
 
-    async def uid(self, command: str, *criteria: str) -> Response:
-        return await self.protocol.uid(command, *criteria, timeout=self.timeout)
+    def uid(self, command: str, *criteria: str) -> Coroutine[Any, Any, Response]:
+        return self.protocol.uid(command, *criteria, timeout=self.timeout)
 
-    async def store(self, *criteria: str) -> Response:
-        return await asyncio.wait_for(self.protocol.store(*criteria), self.timeout)
+    def store(self, *criteria: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.store(*criteria), self.timeout)
 
-    async def copy(self, *criteria: str) -> Response:
-        return await asyncio.wait_for(self.protocol.copy(*criteria), self.timeout)
+    def copy(self, *criteria: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.copy(*criteria), self.timeout)
 
-    async def expunge(self) -> Response:
-        return await asyncio.wait_for(self.protocol.expunge(), self.timeout)
+    def expunge(self) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.expunge(), self.timeout)
 
-    async def fetch(self, message_set: str, message_parts: str) -> Response:
-        return await self.protocol.fetch(message_set, message_parts, timeout=self.timeout)
+    def fetch(self, message_set: str, message_parts: str) -> Coroutine[Any, Any, Response]:
+        return self.protocol.fetch(message_set, message_parts, timeout=self.timeout)
 
-    async def idle(self) -> Response:
-        return await self.protocol.idle()
+    def idle(self) -> Coroutine[Any, Any, Response]:
+        return self.protocol.idle()
 
     def idle_done(self) -> None:
         if self._idle_waiter is not None:
@@ -772,8 +772,8 @@ class IMAP4(object):
             return True
         return False
 
-    async def wait_server_push(self, timeout: float = TWENTY_NINE_MINUTES) -> Response:
-        return await asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout)
+    def wait_server_push(self, timeout: float = TWENTY_NINE_MINUTES) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.idle_queue.get(), timeout=timeout)
 
     async def idle_start(self, timeout: float = TWENTY_NINE_MINUTES) -> Future:
         if self._idle_waiter is not None:
@@ -800,62 +800,62 @@ class IMAP4(object):
     def has_pending_idle(self) -> bool:
         return self.protocol.has_pending_idle_command()
 
-    async def id(self, **kwargs) -> Response:
-        return await asyncio.wait_for(self.protocol.id(**kwargs), self.timeout)
+    def id(self, **kwargs) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.id(**kwargs), self.timeout)
 
-    async def namespace(self) -> Response:
-        return await asyncio.wait_for(self.protocol.namespace(), self.timeout)
+    def namespace(self) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.namespace(), self.timeout)
 
-    async def noop(self) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('NOOP'), self.timeout)
+    def noop(self) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('NOOP'), self.timeout)
 
-    async def check(self) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('CHECK'), self.timeout)
+    def check(self) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('CHECK'), self.timeout)
 
-    async def examine(self, mailbox: str = 'INBOX') -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('EXAMINE', mailbox), self.timeout)
+    def examine(self, mailbox: str = 'INBOX') -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('EXAMINE', mailbox), self.timeout)
 
-    async def status(self, mailbox: str, names: str) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('STATUS', mailbox, names), self.timeout)
+    def status(self, mailbox: str, names: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('STATUS', mailbox, names), self.timeout)
 
-    async def subscribe(self, mailbox: str) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('SUBSCRIBE', mailbox), self.timeout)
+    def subscribe(self, mailbox: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('SUBSCRIBE', mailbox), self.timeout)
 
-    async def unsubscribe(self, mailbox: str) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('UNSUBSCRIBE', mailbox), self.timeout)
+    def unsubscribe(self, mailbox: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('UNSUBSCRIBE', mailbox), self.timeout)
 
-    async def lsub(self, reference_name: str, mailbox_name: str) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('LSUB', reference_name, mailbox_name), self.timeout)
+    def lsub(self, reference_name: str, mailbox_name: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('LSUB', reference_name, mailbox_name), self.timeout)
 
-    async def create(self, mailbox_name: str) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('CREATE', mailbox_name), self.timeout)
+    def create(self, mailbox_name: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('CREATE', mailbox_name), self.timeout)
 
-    async def delete(self, mailbox_name: str) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('DELETE', mailbox_name), self.timeout)
+    def delete(self, mailbox_name: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('DELETE', mailbox_name), self.timeout)
 
-    async def rename(self, old_mailbox_name: str, new_mailbox_name: str) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('RENAME', old_mailbox_name, new_mailbox_name), self.timeout)
+    def rename(self, old_mailbox_name: str, new_mailbox_name: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('RENAME', old_mailbox_name, new_mailbox_name), self.timeout)
 
-    async def getquotaroot(self, mailbox_name: str) -> Response:
-        return await asyncio.wait_for(self.protocol.execute(Command('GETQUOTAROOT', self.protocol.new_tag(), 'INBOX', untagged_resp_name='QUOTA')), self.timeout)
+    def getquotaroot(self, mailbox_name: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.execute(Command('GETQUOTAROOT', self.protocol.new_tag(), 'INBOX', untagged_resp_name='QUOTA')), self.timeout)
 
-    async def list(self, reference_name: str, mailbox_pattern: Pattern) -> Response:
-        return await asyncio.wait_for(self.protocol.simple_command('LIST', reference_name, mailbox_pattern), self.timeout)
+    def list(self, reference_name: str, mailbox_pattern: Pattern) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.simple_command('LIST', reference_name, mailbox_pattern), self.timeout)
 
-    async def append(self, message_bytes, mailbox: str = 'INBOX', flags: str = None, date: Any = None) -> Response:
-        return await self.protocol.append(message_bytes, mailbox, flags, date, timeout=self.timeout)
+    def append(self, message_bytes, mailbox: str = 'INBOX', flags: str = None, date: Any = None) -> Coroutine[Any, Any, Response]:
+        return self.protocol.append(message_bytes, mailbox, flags, date, timeout=self.timeout)
 
-    async def close(self) -> Response:
-        return await asyncio.wait_for(self.protocol.close(), self.timeout)
+    def close(self) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.close(), self.timeout)
 
-    async def move(self, uid_set: str, mailbox: str) -> Response:
-        return await asyncio.wait_for(self.protocol.move(uid_set, mailbox), self.timeout)
+    def move(self, uid_set: str, mailbox: str) -> Coroutine[Any, Any, Response]:
+        return asyncio.wait_for(self.protocol.move(uid_set, mailbox), self.timeout)
 
-    async def enable(self, capability: str) -> Response:
+    def enable(self, capability: str) -> Coroutine[Any, Any, Response]:
         if 'ENABLE' not in self.protocol.capabilities:
             raise Abort('server has not ENABLE capability')
 
-        return await asyncio.wait_for(self.protocol.simple_command('ENABLE', capability), self.timeout)
+        return asyncio.wait_for(self.protocol.simple_command('ENABLE', capability), self.timeout)
 
     def has_capability(self, capability: str) -> bool:
         return capability in self.protocol.capabilities
