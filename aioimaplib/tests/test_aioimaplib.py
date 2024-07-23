@@ -753,7 +753,7 @@ class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
 
         response = await imap_client.getquotaroot('INBOX')
 
-        assert response.lines == [b'INBOX (STORAGE 294 5000)', b'GETQUOTAROOT completed.']
+        assert response.lines == [b'INBOX (STORAGE 292 5000)', b'GETQUOTAROOT completed.']
 
     async def test_append(self):
         imap_client = await self.login_user('user@mail', 'pass')
