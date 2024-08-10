@@ -711,13 +711,14 @@ class IMAP4(object):
         self.protocol = None
         self._idle_waiter = None
         self.tasks: set[Future] = set()
+        self._client_task = None 
         self.create_client(host, port, loop, conn_lost_cb, ssl_context)
 
     def create_client(self, host: str, port: int, loop: asyncio.AbstractEventLoop,
                       conn_lost_cb: Callable[[Optional[Exception]], None] = None, ssl_context: ssl.SSLContext = None) -> None:
         local_loop = loop if loop is not None else get_running_loop()
         self.protocol = IMAP4ClientProtocol(local_loop, conn_lost_cb)
-        local_loop.create_task(local_loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
+        self._client_task = local_loop.create_task(local_loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 
     def get_state(self) -> str:
         return self.protocol.state
