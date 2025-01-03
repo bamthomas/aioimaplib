@@ -51,6 +51,9 @@ class TestAioimaplibUtils(unittest.TestCase):
         self.imap_protocol.data_received(b'')
         self.imap_protocol._handle_line.assert_not_called()
 
+    def test_split_responses_extremely_long(self):
+        self.imap_protocol.data_received(b'UID 1\r\n' * 1500)
+
     def test_split_responses_regular_lines(self):
         self.imap_protocol.data_received(b'* BYE Logging out\r\nCAPB2 OK LOGOUT completed\r\n')
         self.imap_protocol._handle_line.assert_has_calls([call(b'* BYE Logging out', None), call(b'CAPB2 OK LOGOUT completed', None)])
