@@ -21,7 +21,6 @@ import ssl
 import unittest
 from datetime import datetime, timedelta
 
-import asynctest
 from mock import call, MagicMock
 from pytz import utc
 
@@ -351,7 +350,7 @@ class AllowedVersionsMockImapServer(MockImapServer):
             return protocol
 
         server = self.loop.create_server(create_protocol, host, port, ssl=ssl_context)
-        return self.loop.run_until_complete(server)
+        return self.loop.run(server)
 
 
 class AllowedVersionsAioWithImapServer(AioWithImapServer):

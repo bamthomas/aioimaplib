@@ -16,44 +16,40 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
 
-import asynctest
+import pytest
 
 from aioimaplib import extract_exists
 from aioimaplib.aioimaplib import Command
-from aioimaplib.tests.test_aioimaplib import AioWithImapServer
+from aioimaplib.tests.server_fixture import with_server, login_user_async
 
 
-class TestAioimaplib(AioWithImapServer, asynctest.TestCase):
-    def setUp(self):
-        self._init_server(self.loop)
+@pytest.mark.asyncio()
+async def test_append_too_long(with_server):
+    imap_client = await login_user_async('user@mail', 'pass')
+    assert 0 == extract_exists((await imap_client.examine('INBOX')))
 
-    async def tearDown(self):
-        await self._shutdown_server()
+    message_bytes = b'do you see me ?'
+    imap_client.protocol.literal_data = message_bytes * 2
 
-    async def test_append_too_long(self):
-        imap_client = await self.login_user('user@mail', 'pass')
-        assert 0 == extract_exists((await imap_client.examine('INBOX')))
+    args = ['INBOX', '{%s}' % len(message_bytes)]
+    response = await imap_client.protocol.execute(
+        Command('APPEND', imap_client.protocol.new_tag(), *args, loop=asyncio.get_running_loop())
+    )
+    assert 'BAD' == response.result
+    assert b'expected CRLF but got' in response.lines[0]
 
-        message_bytes = b'do you see me ?'
-        imap_client.protocol.literal_data = message_bytes * 2
 
-        args = ['INBOX', '{%s}' % len(message_bytes)]
-        response = await imap_client.protocol.execute(
-            Command('APPEND', imap_client.protocol.new_tag(), *args, loop=self.loop)
-        )
-        assert 'BAD' == response.result
-        assert b'expected CRLF but got' in response.lines[0]
+@pytest.mark.asyncio()
+async def test_append_too_short(with_server):
+    imap_client = await login_user_async('user@mail', 'pass')
+    assert 0 == extract_exists((await imap_client.examine('INBOX')))
 
-    async def test_append_too_short(self):
-        imap_client = await self.login_user('user@mail', 'pass')
-        assert 0 == extract_exists((await imap_client.examine('INBOX')))
+    message_bytes = b'do you see me ?' * 2
+    imap_client.protocol.literal_data = message_bytes[:5]
 
-        message_bytes = b'do you see me ?' * 2
-        imap_client.protocol.literal_data = message_bytes[:5]
-
-        args = ['INBOX', '{%s}' % len(message_bytes)]
-        response = await imap_client.protocol.execute(
-            Command('APPEND', imap_client.protocol.new_tag(), *args, loop=self.loop)
-        )
-        assert 'BAD' == response.result
-        assert b'expected 30 but was' in response.lines[0]
+    args = ['INBOX', '{%s}' % len(message_bytes)]
+    response = await imap_client.protocol.execute(
+        Command('APPEND', imap_client.protocol.new_tag(), *args, loop=asyncio.get_running_loop())
+    )
+    assert 'BAD' == response.result
+    assert b'expected 30 but was' in response.lines[0]

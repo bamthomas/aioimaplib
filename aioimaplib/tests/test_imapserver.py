@@ -23,7 +23,6 @@ import asyncio
 
 import functools
 
-import asynctest
 import pytz
 import sys
 

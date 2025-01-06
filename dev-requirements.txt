@@ -1,5 +1,5 @@
 pytest
-asynctest
+pytest-asyncio
 mock
 pytz
 tzlocal

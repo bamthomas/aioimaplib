@@ -19,40 +19,35 @@ import functools
 
 import time
 
-from asynctest import TestCase
 from imaplib2 import imaplib2
 from mock import Mock
 from aioimaplib.tests import imapserver
 from aioimaplib.tests.imapserver import Mail
-from aioimaplib.tests.test_imapserver import WithImapServer
+from aioimaplib.tests.server_fixture import with_server, login_user
 import pytest
 
 
-class TestImapServerIdle(WithImapServer, TestCase):
-    def setUp(self):
-        self._init_server(self.loop)
+@pytest.mark.asyncio()
+async def test_idle(with_server):
+    imap_client = await login_user('user', 'pass', select=True, lib=imaplib2.IMAP4)
+    idle_callback = Mock()
+    asyncio.get_running_loop().run_in_executor(None, functools.partial(imap_client.idle, callback=idle_callback))
+    await asyncio.wait_for(with_server.get_connection('user').wait(imapserver.IDLE), 1)
 
-    async def tearDown(self):
-        await self._shutdown_server()
+    asyncio.get_running_loop().run_in_executor(None, functools.partial(with_server.receive,
+                                                      Mail.create(to=['user'], mail_from='me', subject='hello')))
 
-    async def test_idle(self):
-        imap_client = await self.login_user('user', 'pass', select=True, lib=imaplib2.IMAP4)
-        idle_callback = Mock()
-        self.loop.run_in_executor(None, functools.partial(imap_client.idle, callback=idle_callback))
-        await asyncio.wait_for(self.imapserver.get_connection('user').wait(imapserver.IDLE), 1)
+    await asyncio.wait_for(with_server.get_connection('user').wait(imapserver.SELECTED), 5)
+    time.sleep(0.1) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
+    idle_callback.assert_called_once()
 
-        self.loop.run_in_executor(None, functools.partial(self.imapserver.receive,
-                                                          Mail.create(to=['user'], mail_from='me', subject='hello')))
 
-        await asyncio.wait_for(self.imapserver.get_connection('user').wait(imapserver.SELECTED), 5)
-        time.sleep(0.1) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
-        idle_callback.assert_called_once()
+@pytest.mark.asyncio()
+async def test_login_twice(with_server):
+    with pytest.raises(imaplib2.IMAP4.error) as expected:
+        imap_client = await login_user('user', 'pass', lib=imaplib2.IMAP4)
 
-    async def test_login_twice(self):
-        with pytest.raises(imaplib2.IMAP4.error) as expected:
-            imap_client = await self.login_user('user', 'pass', lib=imaplib2.IMAP4)
+        await asyncio.wait_for(
+            asyncio.get_running_loop().run_in_executor(None, functools.partial(imap_client.login, 'user', 'pass')), 1)
 
-            await asyncio.wait_for(
-                self.loop.run_in_executor(None, functools.partial(imap_client.login, 'user', 'pass')), 1)
-
-            assert expected == 'command LOGIN illegal in state AUTH'
+        assert expected == 'command LOGIN illegal in state AUTH'
