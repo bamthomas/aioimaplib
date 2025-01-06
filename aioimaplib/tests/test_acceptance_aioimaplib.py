@@ -19,27 +19,21 @@ import email
 
 import os
 
-from asynctest import TestCase
+import pytest
 
 from aioimaplib.tests.imapserver import Mail
-from aioimaplib.tests.test_aioimaplib import AioWithImapServer
+from aioimaplib.tests.server_fixture import with_server, login_user_async
 
 
-class TestAioimaplibAcceptance(AioWithImapServer, TestCase):
-    def setUp(self):
-        self._init_server(self.loop)
+@pytest.mark.asyncio()
+async def test_file_with_attachment(with_server):
+    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data/test_attachment.eml'), mode='br') as msg:
+        imap_client = await login_user_async('user@mail', 'pass', select=True)
+        mail = Mail(email.message_from_binary_file(msg))
 
-    async def tearDown(self):
-        await self._shutdown_server()
+        with_server.receive(mail, imap_user='user@mail')
 
-    async def test_file_with_attachement(self):
-        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data/test_attachment.eml'), mode='br') as msg:
-            imap_client = await self.login_user('user@mail', 'pass', select=True)
-            mail = Mail(email.message_from_binary_file(msg))
+        result, data = await imap_client.fetch('1', '(RFC822)')
 
-            self.imapserver.receive(mail, imap_user='user@mail')
-
-            result, data = await imap_client.fetch('1', '(RFC822)')
-
-            assert 'OK' == result
-            assert [b'1 FETCH (RFC822 {418898}', mail.as_bytes(), b')', b'FETCH completed.'] == data
+        assert 'OK' == result
+        assert [b'1 FETCH (RFC822 {418898}', mail.as_bytes(), b')', b'FETCH completed.'] == data
