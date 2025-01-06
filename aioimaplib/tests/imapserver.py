@@ -675,7 +675,13 @@ class MockImapServer(object):
         self._connections = list()
         self.capabilities = capabilities
         if loop is None:
-            self.loop = asyncio.get_event_loop()
+            if sys.version_info < (3, 10):
+                self.loop = asyncio.get_event_loop()
+            else:
+                try:
+                    self.loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    self.loop = asyncio.new_event_loop()
         else:
             self.loop = loop
 
@@ -712,9 +718,7 @@ class MockImapServer(object):
             protocol = ImapProtocol(self._server_state, fetch_chunk_size, self.capabilities, self.loop)
             self._connections.append(protocol)
             return protocol
-
-        server = self.loop.create_server(create_protocol, host, port, ssl=ssl_context)
-        return self.loop.run_until_complete(server)
+        return self.loop.create_server(create_protocol, host, port, ssl=ssl_context)
 
     def reset(self):
         self._server_state.reset()
@@ -791,7 +795,11 @@ class Mail(object):
         return Mail(msg, date=date)
 
 
+async def main():
+    srv = await MockImapServer(loop=asyncio.get_running_loop()).run_server()
+    async with srv:
+        await srv.serve_forever()
+
+
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    server = MockImapServer().run_server()
-    loop.run_forever()
+    asyncio.run(main())
