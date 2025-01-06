@@ -20,8 +20,11 @@ from OpenSSL import crypto
 from unittest import TestCase
 
 from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
-def setUp(self):
-    self.cert, self.key = create_temp_self_signed_cert()
+
+
+class TestSslCert(TestCase):
+    def setUp(self):
+        self.cert, self.key = create_temp_self_signed_cert()
 
     def tearDown(self):
         os.remove(self.cert)
