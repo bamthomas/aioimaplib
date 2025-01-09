@@ -692,13 +692,13 @@ files = [
 
 [[package]]
 name = "pygments"
-version = "2.19.0"
+version = "2.19.1"
 description = "Pygments is a syntax highlighting package written in Python."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "pygments-2.19.0-py3-none-any.whl", hash = "sha256:4755e6e64d22161d5b61432c0600c923c5927214e7c956e31c23923c89251a9b"},
-    {file = "pygments-2.19.0.tar.gz", hash = "sha256:afc4146269910d4bdfabcd27c24923137a74d562a23a320a41a55ad303e19783"},
+    {file = "pygments-2.19.1-py3-none-any.whl", hash = "sha256:9ea1544ad55cecf4b8242fab6dd35a93bbce657034b0611ee383099054ab6d8c"},
+    {file = "pygments-2.19.1.tar.gz", hash = "sha256:61c16d2a8576dc0649d9f39e089b5f02bcd27fba10d8fb4dcc28173f7a45151f"},
 ]
 
 [package.extras]
@@ -746,13 +746,13 @@ dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "pygments
 
 [[package]]
 name = "pytest-asyncio"
-version = "0.25.1"
+version = "0.25.2"
 description = "Pytest support for asyncio"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "pytest_asyncio-0.25.1-py3-none-any.whl", hash = "sha256:c84878849ec63ff2ca509423616e071ef9cd8cc93c053aa33b5b8fb70a990671"},
-    {file = "pytest_asyncio-0.25.1.tar.gz", hash = "sha256:79be8a72384b0c917677e00daa711e07db15259f4d23203c59012bcd989d4aee"},
+    {file = "pytest_asyncio-0.25.2-py3-none-any.whl", hash = "sha256:0d0bb693f7b99da304a0634afc0a4b19e49d5e0de2d670f38dc4bfa5727c5075"},
+    {file = "pytest_asyncio-0.25.2.tar.gz", hash = "sha256:3f8ef9a98f45948ea91a0ed3dc4268b5326c0e7bce73892acc654df4262ad45f"},
 ]
 
 [package.dependencies]
@@ -1057,4 +1057,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "5851db91cfd93cef348e00136238c0d9c8ba7d8f35ff05a5e6a25888c3c6eee2"
+content-hash = "1e6b84b8db2c989b257ec680f512e3df80ba28d04b65d304322c5c9b86aa6e51"
