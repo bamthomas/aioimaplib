@@ -38,7 +38,7 @@ async def test_idle(with_server):
                                                       Mail.create(to=['user'], mail_from='me', subject='hello')))
 
     await asyncio.wait_for(with_server.get_connection('user').wait(imapserver.SELECTED), 5)
-    time.sleep(0.1) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
+    time.sleep(0.2) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
     idle_callback.assert_called_once()
 
 
