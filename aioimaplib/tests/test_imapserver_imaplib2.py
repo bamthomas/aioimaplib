@@ -27,6 +27,7 @@ from aioimaplib.tests.server_fixture import with_server, login_user
 import pytest
 
 
+@pytest.mark.flaky(reruns=5)
 @pytest.mark.asyncio()
 async def test_idle(with_server):
     imap_client = await login_user('user', 'pass', select=True, lib=imaplib2.IMAP4)

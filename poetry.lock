@@ -763,6 +763,21 @@ docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1)"]
 testing = ["coverage (>=6.2)", "hypothesis (>=5.7.1)"]
 
 [[package]]
+name = "pytest-rerunfailures"
+version = "15.0"
+description = "pytest plugin to re-run tests to eliminate flaky failures"
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "pytest-rerunfailures-15.0.tar.gz", hash = "sha256:2d9ac7baf59f4c13ac730b47f6fa80e755d1ba0581da45ce30b72fb3542b4474"},
+    {file = "pytest_rerunfailures-15.0-py3-none-any.whl", hash = "sha256:dd150c4795c229ef44320adc9a0c0532c51b78bb7a6843a8c53556b9a611df1a"},
+]
+
+[package.dependencies]
+packaging = ">=17.1"
+pytest = ">=7.4,<8.2.2 || >8.2.2"
+
+[[package]]
 name = "pytz"
 version = "2024.2"
 description = "World timezone definitions, modern and historical"
@@ -1042,4 +1057,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "29b0f24a255a3d597bb8ff903ee8f2a67a62aea99ee1aad87a4dfb5ace09fae5"
+content-hash = "5851db91cfd93cef348e00136238c0d9c8ba7d8f35ff05a5e6a25888c3c6eee2"

@@ -28,6 +28,7 @@ python = "^3.9"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3"
 pytest-asyncio = "^0.25"
+pytest-rerunfailures = "^15.0"
 mock = "^5.1"
 pytz = "^2024"
 tzlocal = "^5.2"
