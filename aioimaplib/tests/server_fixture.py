@@ -4,6 +4,7 @@ import imaplib
 import ssl
 from email.charset import add_charset, SHORTEST
 from ssl import SSLContext
+from typing import Optional
 
 import pytest
 
@@ -12,7 +13,7 @@ from aioimaplib.tests.imapserver import MockImapServer
 from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
 
 
-async def main_test(server: MockImapServer, ssl_context: SSLContext | None):
+async def main_test(server: MockImapServer, ssl_context: Optional[SSLContext]):
     srv = await server.run_server(host='127.0.0.1', port=12345, fetch_chunk_size=64, ssl_context=ssl_context)
     async with srv:
         await srv.serve_forever()
