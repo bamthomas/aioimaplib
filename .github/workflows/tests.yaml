@@ -14,15 +14,13 @@ on:
     paths-ignore:
       - '**.rst'
 jobs:
-  tests:
-    name: ${{ matrix.python }}
-    runs-on: ubuntu-latest
+  test:
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        python:
-          - '3.10'
-          - '3.9'
+        os: [ "ubuntu-latest" ]
+        python-version: [ "3.9", "3.10" ]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
