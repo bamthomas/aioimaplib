@@ -132,6 +132,7 @@ async def test_when_sync_commands_timeout__they_should_be_removed_from_protocol_
     assert imap_client.protocol.pending_sync_command is None
 
 
+# test failing with python 12
 @pytest.mark.asyncio()
 async def test_idle_start__exits_queue_get_without_timeout_error(event_loop, with_server, advance_time):
     imap_client = await login_user_async('user', 'pass', select=True, loop=event_loop)

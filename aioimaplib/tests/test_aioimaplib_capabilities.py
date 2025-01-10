@@ -5,14 +5,38 @@ import pytest
 
 from aioimaplib import aioimaplib
 from aioimaplib.aioimaplib import Abort
-from aioimaplib.tests.imapserver import ImapProtocol, ServerState
-from aioimaplib.tests.server_fixture import with_server, login_user_async
+from aioimaplib.tests.imapserver import ImapProtocol, ServerState, MockImapServer
+from aioimaplib.tests.server_fixture import with_server, login_user_async, main_test
 
 aioimaplib.log.setLevel(logging.WARNING)
 sh = logging.StreamHandler()
 sh.setLevel(logging.INFO)
 sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(module)s:%(lineno)d] %(message)s"))
 aioimaplib.log.addHandler(sh)
+
+
+# test failing with python 12
+@pytest.mark.asyncio()
+async def test_capabilities_server_not_compliant(event_loop):
+    class NotCompliantProtocol(ImapProtocol):
+        def capability(self, tag, *args):
+            """should send CAPABILITY IMAP4rev1 YESAUTH """
+            self.send_untagged_line('CAPABILITY YESAUTH')
+            self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
+
+    class NotCompliantServer(MockImapServer):
+        def run_server(self, host='127.0.0.1', port=1143, fetch_chunk_size=0, ssl_context=None):
+            return event_loop.create_server(lambda: NotCompliantProtocol(ServerState(), loop=self.loop), host=host, port=port, ssl=None)
+
+    imap_srv = NotCompliantServer(loop=event_loop)
+    srv = await imap_srv.run_server(port=12345)
+    main_server_future = asyncio.ensure_future(main_test(server=srv, ssl_context=None))
+
+    with pytest.raises(asyncio.TimeoutError):
+        with pytest.raises(aioimaplib.Error) as expected:
+            await login_user_async('user', 'pass', timeout=0.1)
+
+        assert expected == 'server not IMAP4 compliant'
 
 
 @pytest.mark.asyncio()
@@ -23,28 +47,6 @@ async def test_capabilities(with_server):
     assert 'IMAP4REV1' == imap_client.protocol.imap_version
     assert {'IMAP4rev1', 'YESAUTH'} == imap_client.protocol.capabilities
     assert imap_client.has_capability('YESAUTH')
-
-
-@pytest.mark.asyncio()
-async def test_capabilities_server_not_compliant(event_loop):
-    def create_protocol():
-        class NotCompliantProtocol(ImapProtocol):
-            def capability(self, tag, *args):
-                """No sent IMAP4rev1"""
-                self.send_untagged_line('CAPABILITY YESAUTH')
-                self.send_tagged_line(tag, 'OK Pre-login capabilities listed, post-login capabilities have more')
-        protocol = NotCompliantProtocol(ServerState(), loop=event_loop)
-        return protocol
-
-    srv = await event_loop.create_server(create_protocol, host='127.0.0.1', port=12345, ssl=None)
-    async with srv:
-        await srv.start_serving()
-
-        with pytest.raises(asyncio.TimeoutError):
-            with pytest.raises(aioimaplib.Error) as expected:
-                await login_user_async('user', 'pass', timeout=0.1)
-
-            assert expected == 'server not IMAP4 compliant'
 
 
 @pytest.mark.parametrize("with_server", [''], indirect=True) # '' = no capabilities

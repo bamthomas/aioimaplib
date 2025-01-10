@@ -16,7 +16,10 @@ from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
 async def main_test(server: MockImapServer, ssl_context: Optional[SSLContext]):
     srv = await server.run_server(host='127.0.0.1', port=12345, fetch_chunk_size=64, ssl_context=ssl_context)
     async with srv:
-        await srv.serve_forever()
+        try:
+            await srv.serve_forever()
+        except Exception:
+            srv.shutdown()
 
 
 @pytest.fixture()
@@ -36,13 +39,13 @@ def advance_time(event_loop, request):
 def with_server(event_loop, request):
     capabilities = request.param if hasattr(request, 'param') else None  #
     imapserver = create_server(capabilities, event_loop)
-    cancel_handle = asyncio.ensure_future(main_test(server=imapserver, ssl_context=None))
+    main_server_future = asyncio.ensure_future(main_test(server=imapserver, ssl_context=None))
     event_loop.run_until_complete(asyncio.sleep(0.01))
     try:
         yield imapserver
     finally:
         imapserver.reset()
-        cancel_handle.cancel()
+        main_server_future.cancel()
 
 
 def create_server(capabilities, event_loop):
@@ -66,9 +69,8 @@ def with_ssl_server(event_loop, with_ssl):
     try:
         yield imapserver
     finally:
+        imapserver.reset()
         cancel_handle.cancel()
-
-    imapserver.reset()
 
 
 async def login_user(login, password, select=False, lib=imaplib.IMAP4, loop=None):

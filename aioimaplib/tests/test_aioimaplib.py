@@ -765,7 +765,6 @@ async def test_rfc2971_id(with_server):
     assert ('OK', [b'ID command completed']) == response
 
 
-
 @pytest.mark.asyncio()
 async def test_callback_is_called_when_connection_is_lost(event_loop):
     imapserver = create_server(None, event_loop)
