@@ -1,6 +1,14 @@
 Changes
 =======
 
+V2.0.0
+------
+
+- refactor: rename imapserver into imap_testing_server
+- refactor: move imapserver into main package
+- refactor: move test module outside from main package
+- feat: add a script to be able to run imap testing server from command line
+
 V1.2.0
 ------
 
