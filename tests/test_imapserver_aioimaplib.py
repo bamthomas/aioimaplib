@@ -20,7 +20,7 @@ import pytest
 
 from aioimaplib import extract_exists
 from aioimaplib.aioimaplib import Command
-from aioimaplib.tests.server_fixture import with_server, login_user_async
+from tests.server_fixture import with_server, login_user_async
 
 
 @pytest.mark.asyncio()

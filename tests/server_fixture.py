@@ -9,8 +9,8 @@ from typing import Optional
 import pytest
 
 from aioimaplib import aioimaplib
-from aioimaplib.tests.imapserver import MockImapServer
-from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
+from aioimaplib.imapserver import MockImapServer
+from tests.ssl_cert import create_temp_self_signed_cert
 
 
 async def main_test(server: MockImapServer, ssl_context: Optional[SSLContext]):

@@ -19,7 +19,7 @@ import os
 from OpenSSL import crypto
 from unittest import TestCase
 
-from aioimaplib.tests.ssl_cert import create_temp_self_signed_cert
+from tests.ssl_cert import create_temp_self_signed_cert
 
 
 class TestSslCert(TestCase):

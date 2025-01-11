@@ -21,9 +21,9 @@ import time
 
 from imaplib2 import imaplib2
 from mock import Mock
-from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import Mail
-from aioimaplib.tests.server_fixture import with_server, login_user
+from aioimaplib import imapserver
+from aioimaplib.imapserver import Mail
+from tests.server_fixture import with_server, login_user
 import pytest
 
 
