@@ -21,8 +21,8 @@ import os
 
 import pytest
 
-from aioimaplib.tests.imapserver import Mail
-from aioimaplib.tests.server_fixture import with_server, login_user_async
+from aioimaplib.imapserver import Mail
+from tests.server_fixture import with_server, login_user_async
 
 
 @pytest.mark.asyncio()

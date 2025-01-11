@@ -26,8 +26,8 @@ import functools
 import pytz
 import sys
 
-from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import ServerState, Mail, MockImapServer, ImapProtocol, InvalidUidSet
+from aioimaplib import imapserver
+from aioimaplib.imapserver import ServerState, Mail, MockImapServer, ImapProtocol, InvalidUidSet
 import pytest
 
 

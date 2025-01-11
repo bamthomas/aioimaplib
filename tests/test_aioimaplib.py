@@ -26,9 +26,9 @@ from pytz import utc
 
 from aioimaplib import aioimaplib, extract_exists, STOP_WAIT_SERVER_PUSH, FetchCommand, IdleCommand
 from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Abort
-from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import Mail
-from aioimaplib.tests.server_fixture import with_ssl_server, with_ssl, with_server, login_user_async, create_server
+from aioimaplib import imapserver
+from aioimaplib.imapserver import Mail
+from tests.server_fixture import with_ssl_server, with_ssl, with_server, login_user_async, create_server
 
 aioimaplib.log.setLevel(logging.WARNING)
 sh = logging.StreamHandler()

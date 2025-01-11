@@ -3,8 +3,8 @@ import asyncio
 import pytest
 
 from aioimaplib import Command, CommandTimeout, STOP_WAIT_SERVER_PUSH, AioImapException, Response
-from aioimaplib.tests import imapserver
-from aioimaplib.tests.server_fixture import with_server, login_user_async, advance_time
+from aioimaplib import imapserver
+from tests.server_fixture import with_server, login_user_async, advance_time
 
 
 @pytest.mark.asyncio()

@@ -24,9 +24,9 @@ from datetime import datetime, timedelta
 import pytest
 from pytz import utc
 
-from aioimaplib.tests import imapserver
-from aioimaplib.tests.imapserver import Mail
-from aioimaplib.tests.server_fixture import with_server, login_user, with_ssl, with_ssl_server
+from aioimaplib import imapserver
+from aioimaplib.imapserver import Mail
+from tests.server_fixture import with_server, login_user, with_ssl, with_ssl_server
 
 
 @pytest.mark.asyncio
