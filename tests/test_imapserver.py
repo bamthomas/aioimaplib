@@ -26,8 +26,7 @@ import functools
 import pytz
 import sys
 
-from aioimaplib import imapserver
-from aioimaplib.imapserver import ServerState, Mail, MockImapServer, ImapProtocol, InvalidUidSet
+from aioimaplib.imap_testing_server import ServerState, Mail, MockImapServer, ImapProtocol, InvalidUidSet
 import pytest
 
 
@@ -35,54 +34,54 @@ class TestMailToString(unittest.TestCase):
     def test_message_date_string(self):
         now = pytz.timezone('Europe/Paris').localize(datetime(2016, 2, 2, 12, 13, 14, 151))
 
-        mail = imapserver.Mail.create(['user'], date=now)
+        mail = Mail.create(['user'], date=now)
 
         assert mail.email.get('Date') == 'Tue, 02 Feb 2016 12:13:14 +0100'
 
     def test_message_default_date_string_is_utc(self):
-        mail = imapserver.Mail.create(['user'])
+        mail = Mail.create(['user'])
 
         assert mail.email.get('Date').endswith('+0000')
 
     def test_message_title_string_without_accents_isnot_encoded(self):
         now = pytz.timezone('Europe/Paris').localize(datetime(2016, 2, 2, 12, 13, 14, 151))
 
-        mail = imapserver.Mail.create(['user'], subject='subject', date=now)
+        mail = Mail.create(['user'], subject='subject', date=now)
 
         assert mail.email.get('Subject') == 'subject'
 
     def test_message_title_string_with_accents_is_base64encoded(self):
-        mail = imapserver.Mail.create(['user'], subject='Classé ?')
+        mail = Mail.create(['user'], subject='Classé ?')
 
         assert '=?utf-8?b?Q2xhc3PDqSA/?=' in mail.as_string()
 
     def test_message_quoted_printable(self):
-        mail = imapserver.Mail.create(['user'], content='Bonjour à vous', quoted_printable=True)
+        mail = Mail.create(['user'], content='Bonjour à vous', quoted_printable=True)
 
         assert 'Bonjour =C3=A0 vous' in mail.as_string(), '"=C3=A0" not found in %s' % mail.as_string()
 
     def test_message_not_quoted_printable(self):
-        mail = imapserver.Mail.create(['user'], subject='élo ?', content='Bonjour à vous').as_bytes()
+        mail = Mail.create(['user'], subject='élo ?', content='Bonjour à vous').as_bytes()
 
         m = email.message_from_bytes(mail)
         assert 'Bonjour à vous' == m.get_payload(decode=True).decode()
 
     def test_header_encode_to(self):
-        mail = imapserver.Mail.create(['Zébulon Durand <zeb@zebulon.io>'], mail_from='from@mail.fr', subject='subject')
+        mail = Mail.create(['Zébulon Durand <zeb@zebulon.io>'], mail_from='from@mail.fr', subject='subject')
 
         assert '=?utf-8?q?Z=C3=A9bulon_Durand_=3Czeb=40zebulon=2Eio=3E?=' in mail.as_string(), 'expected string not found in :%s\n' % mail.as_string()
 
     def test_mail_from(self):
-        mail = imapserver.Mail.create(['user'], subject='subject')
+        mail = Mail.create(['user'], subject='subject')
         assert mail.email.get('From') == ''
 
-        mail = imapserver.Mail.create(['user'], mail_from='<test@test>', subject='subject')
+        mail = Mail.create(['user'], mail_from='<test@test>', subject='subject')
         assert mail.email.get('From') == '<test@test>'
 
-        mail = imapserver.Mail.create(['user'], mail_from='test@test', subject='subject')
+        mail = Mail.create(['user'], mail_from='test@test', subject='subject')
         assert mail.email.get('From') == '<test@test>'
 
-        mail = imapserver.Mail.create(['user'], mail_from='Test <test@test>', subject='subject')
+        mail = Mail.create(['user'], mail_from='Test <test@test>', subject='subject')
         assert mail.email.get('From') == 'Test <test@test>'
 
     def test_build_sequence_range(self):

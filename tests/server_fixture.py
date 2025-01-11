@@ -9,7 +9,7 @@ from typing import Optional
 import pytest
 
 from aioimaplib import aioimaplib
-from aioimaplib.imapserver import MockImapServer
+from aioimaplib.imap_testing_server import MockImapServer
 from tests.ssl_cert import create_temp_self_signed_cert
 
 

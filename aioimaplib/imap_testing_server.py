@@ -806,8 +806,8 @@ async def async_main(**kwargs):
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        prog='imapserver',
-        description='Small python asyncio IMAP testing server.',
+        prog='imap-testing-server',
+        description='Small python asyncio IMAP testing server from aioimaplib.',
         epilog='')
     parser.add_argument('--port', help='tcp port of the server', default=1143)
     parser.add_argument('--host', help='host of the server', default='127.0.0.1')

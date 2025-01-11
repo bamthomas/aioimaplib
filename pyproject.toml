@@ -43,4 +43,4 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-imapserver = "aioimaplib.imapserver:main"
+imap-testing-server = "aioimaplib.imap_testing_server:main"

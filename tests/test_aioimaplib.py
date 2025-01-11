@@ -26,8 +26,8 @@ from pytz import utc
 
 from aioimaplib import aioimaplib, extract_exists, STOP_WAIT_SERVER_PUSH, FetchCommand, IdleCommand
 from aioimaplib.aioimaplib import Commands, IMAP4ClientProtocol, Command, Abort
-from aioimaplib import imapserver
-from aioimaplib.imapserver import Mail
+from aioimaplib import imap_testing_server
+from aioimaplib.imap_testing_server import Mail
 from tests.server_fixture import with_ssl_server, with_ssl, with_server, login_user_async, create_server
 
 aioimaplib.log.setLevel(logging.WARNING)
@@ -610,11 +610,11 @@ async def test_check(with_server):
 @pytest.mark.asyncio()
 async def test_close(with_server):
     imap_client = await login_user_async('user', 'pass', select=True)
-    assert imapserver.SELECTED == with_server.get_connection('user').state
+    assert imap_testing_server.SELECTED == with_server.get_connection('user').state
 
     assert ('OK', [b'CLOSE completed.']) == (await imap_client.close())
 
-    assert imapserver.AUTH == with_server.get_connection('user').state
+    assert imap_testing_server.AUTH == with_server.get_connection('user').state
 
 
 @pytest.mark.asyncio()
