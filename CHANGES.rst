@@ -1,6 +1,30 @@
 Changes
 =======
 
+V1.2.0
+------
+
+Cleanup and build upgrades release.
+Library has not been changed since previous version.
+
+- build: passing from master to main default branch
+- build: test with python secure releases 3.9, 3.10, 3.11
+- refactor: tests passing from asynctest to pytest-asyncio
+- build: from setuptools to poetry
+
+V1.1.0
+------
+
+- feat:  Add a scrub option to send(), use that with LOGIN and AUTHENTICATE #94
+- doc :  Imap fetch example #89
+- feat:  Imap Oauth for Outlook #84
+- tests: Use assert instead of unittest assertions #88
+- build: Pytest, tox and GHA closes #81
+
+V1.0.1
+------
+
+- Correct ssl_context purpose to SERVER_AUTH. closes #78
 
 V1.0.0
 ------
