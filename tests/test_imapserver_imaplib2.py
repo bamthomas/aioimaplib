@@ -21,8 +21,7 @@ import time
 
 from imaplib2 import imaplib2
 from mock import Mock
-from aioimaplib import imapserver
-from aioimaplib.imapserver import Mail
+from aioimaplib.imap_testing_server import Mail, IDLE, SELECTED
 from tests.server_fixture import with_server, login_user
 import pytest
 
@@ -33,12 +32,12 @@ async def test_idle(with_server):
     imap_client = await login_user('user', 'pass', select=True, lib=imaplib2.IMAP4)
     idle_callback = Mock()
     asyncio.get_running_loop().run_in_executor(None, functools.partial(imap_client.idle, callback=idle_callback))
-    await asyncio.wait_for(with_server.get_connection('user').wait(imapserver.IDLE), 1)
+    await asyncio.wait_for(with_server.get_connection('user').wait(IDLE), 1)
 
     asyncio.get_running_loop().run_in_executor(None, functools.partial(with_server.receive,
                                                       Mail.create(to=['user'], mail_from='me', subject='hello')))
 
-    await asyncio.wait_for(with_server.get_connection('user').wait(imapserver.SELECTED), 5)
+    await asyncio.wait_for(with_server.get_connection('user').wait(SELECTED), 5)
     time.sleep(0.2) # eurk hate sleeps but I don't know how to wait for the lib to receive end of IDLE
     idle_callback.assert_called_once()
 

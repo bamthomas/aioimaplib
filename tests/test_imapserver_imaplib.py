@@ -24,8 +24,7 @@ from datetime import datetime, timedelta
 import pytest
 from pytz import utc
 
-from aioimaplib import imapserver
-from aioimaplib.imapserver import Mail
+from aioimaplib.imap_testing_server import Mail, AUTH, SELECTED, LOGOUT
 from tests.server_fixture import with_server, login_user, with_ssl, with_ssl_server
 
 
@@ -47,7 +46,7 @@ async def test_server_login(with_server):
 
     assert 'OK' == result
     assert [b'LOGIN completed'] == data
-    assert imapserver.AUTH == with_server.get_connection('user').state
+    assert AUTH == with_server.get_connection('user').state
 
 
 @pytest.mark.asyncio
@@ -59,7 +58,7 @@ async def test_select_no_messages_in_mailbox(with_server):
 
     assert 'OK' == result
     assert [b'0'] == data
-    assert imapserver.SELECTED == with_server.get_connection('user@mail').state
+    assert SELECTED == with_server.get_connection('user@mail').state
 
 
 @pytest.mark.asyncio
@@ -95,7 +94,7 @@ async def test_examine_no_messages_in_mailbox(with_server):
     assert ('OK', [b'0']) == (await asyncio.wait_for(
         asyncio.get_running_loop().run_in_executor(None, functools.partial(imap_client.select, readonly=True)), 1))
 
-    assert imapserver.AUTH == with_server.get_connection('user').state
+    assert AUTH == with_server.get_connection('user').state
 
 
 @pytest.mark.asyncio
@@ -383,12 +382,12 @@ async def test_subscribe_unsubscribe_lsub(with_server):
 @pytest.mark.asyncio
 async def test_close(with_server):
     imap_client = await login_user('user', 'pass', select=True)
-    assert imapserver.SELECTED == with_server.get_connection('user').state
+    assert SELECTED == with_server.get_connection('user').state
 
     assert ('OK', [b'CLOSE completed.']) == \
                       (await asyncio.wait_for(asyncio.get_running_loop().run_in_executor(None, imap_client.close), 1))
 
-    assert imapserver.AUTH == with_server.get_connection('user').state
+    assert AUTH == with_server.get_connection('user').state
 
 
 @pytest.mark.asyncio
@@ -480,7 +479,7 @@ async def test_logout(with_server):
 
     assert 'BYE' == result  # uhh ?
     assert [b'Logging out'] == data
-    assert imapserver.LOGOUT == with_server.get_connection('user').state
+    assert LOGOUT == with_server.get_connection('user').state
 
 
 @pytest.mark.asyncio

@@ -21,7 +21,7 @@ import os
 
 import pytest
 
-from aioimaplib.imapserver import Mail
+from aioimaplib.imap_testing_server import Mail
 from tests.server_fixture import with_server, login_user_async
 
 

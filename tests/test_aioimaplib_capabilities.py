@@ -5,7 +5,7 @@ import pytest
 
 from aioimaplib import aioimaplib
 from aioimaplib.aioimaplib import Abort
-from aioimaplib.imapserver import ImapProtocol, ServerState, MockImapServer
+from aioimaplib.imap_testing_server import ImapProtocol, ServerState, MockImapServer
 from tests.server_fixture import with_server, login_user_async, main_test
 
 aioimaplib.log.setLevel(logging.WARNING)

@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from aioimaplib import Command, CommandTimeout, STOP_WAIT_SERVER_PUSH, AioImapException, Response
-from aioimaplib import imapserver
+from aioimaplib.imap_testing_server import ImapProtocol
 from tests.server_fixture import with_server, login_user_async, advance_time
 
 
@@ -152,7 +152,7 @@ async def test_idle_start__exits_queueget_with_keepalive_without_timeout_error(e
     imap_client = await login_user_async('user', 'pass', select=True, loop=event_loop)
 
     # Idle long enough for the server to issue a keep-alive
-    server_idle_timeout = imapserver.ImapProtocol.IDLE_STILL_HERE_PERIOD_SECONDS
+    server_idle_timeout = ImapProtocol.IDLE_STILL_HERE_PERIOD_SECONDS
     idle_timeout = server_idle_timeout + 1
     idle = await imap_client.idle_start(idle_timeout)
 
