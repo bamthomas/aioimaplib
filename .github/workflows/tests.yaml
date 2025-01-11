@@ -3,13 +3,13 @@ name: tests
 on:
   push:
     branches:
-      - master
+      - main
       - '*.*.*'
     paths-ignore:
       - '**.rst'
   pull_request:
     branches:
-      - master
+      - main
       - '*.*.*'
     paths-ignore:
       - '**.rst'
