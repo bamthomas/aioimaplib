@@ -14,6 +14,8 @@ About
 
 This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth. Some utilities functions are taken from imaplib/imaplib2 thanks to them.
 
+Thank you to all contributors for your time and interest :pray: :point_right:
+
 The aim is to port the imaplib with asyncio_, to benefit from the sleep or treat model.
 
 It is tested against python 3.9, 3.10, 3.11 matrix. But the library itself *could* run with other python versions.
