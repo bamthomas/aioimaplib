@@ -13,6 +13,7 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import argparse
 import asyncio
 from base64 import b64decode
 import email
@@ -795,11 +796,24 @@ class Mail(object):
         return Mail(msg, date=date)
 
 
-async def main():
-    srv = await MockImapServer(loop=asyncio.get_running_loop()).run_server()
+async def async_main(**kwargs):
+    log.info(f"Running IMAP server on {kwargs['host']}:{kwargs['port']}")
+    srv = await MockImapServer(loop=asyncio.get_running_loop()).run_server(host=kwargs['host'], port=kwargs['port'])
     async with srv:
         await srv.serve_forever()
 
 
+def main():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        prog='imapserver',
+        description='Small python asyncio IMAP testing server.',
+        epilog='')
+    parser.add_argument('--port', help='tcp port of the server', default=1143)
+    parser.add_argument('--host', help='host of the server', default='127.0.0.1')
+    args = parser.parse_args()
+    asyncio.run(async_main(**args.__dict__))
+
+
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
