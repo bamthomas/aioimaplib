@@ -16,7 +16,7 @@ This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Se
 
 Thank you to all contributors for your time and interest :pray: :point_right:
 
-The aim is to port the imaplib with asyncio_, to benefit from the sleep or treat model.
+The aim is to port the imaplib with asyncio_, to benefit from the sleep or treat model. It has no dependencies for runtime (the core library).
 
 It is tested against python 3.9, 3.10, 3.11 matrix. But the library itself *could* run with other python versions.
 
@@ -179,17 +179,20 @@ Tested with
 
 Develop
 =======
+.. _poetry: https://python-poetry.org/
 
 Developers are welcome! If you want to improve it, fix bugs, test it with other IMAP servers, give feedback, thank you for it.
 
-To develop, just run
+We use poetry_ for building the library. Just run
 
 .. code-block:: bash
 
-    virtualenv --python=python3.4 venv
-    source venv/bin/activate
-    python setup.py develop
-    pip install -r dev-requirements.txt
+    poetry install
+    poetry run pytest
+
+    # or you can create a poetry shell
+    poetry install
+    poetry shell
     pytest
 
 To add an imaplib or imaplib2 command you can :
