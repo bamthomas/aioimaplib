@@ -23,7 +23,7 @@ import re
 import ssl
 import sys
 import time
-from asyncio import BaseTransport, Future
+from asyncio import BaseTransport, Future, Task
 from collections import namedtuple
 from copy import copy
 from datetime import datetime, timezone, timedelta
@@ -701,6 +701,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
 
 class IMAP4(object):
     TIMEOUT_SECONDS = 10.0
+    _client_task: Task
 
     def __init__(self, host: str = '127.0.0.1', port: int = IMAP4_PORT, loop: asyncio.AbstractEventLoop = None,
                  timeout: float = TIMEOUT_SECONDS, conn_lost_cb: Callable[[Optional[Exception]], None] = None,
@@ -717,7 +718,7 @@ class IMAP4(object):
                       conn_lost_cb: Callable[[Optional[Exception]], None] = None, ssl_context: ssl.SSLContext = None) -> None:
         local_loop = loop if loop is not None else get_running_loop()
         self.protocol = IMAP4ClientProtocol(local_loop, conn_lost_cb)
-        local_loop.create_task(local_loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
+        self._client_task = local_loop.create_task(local_loop.create_connection(lambda: self.protocol, host, port, ssl=ssl_context))
 
     def get_state(self) -> str:
         return self.protocol.state
