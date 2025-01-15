@@ -340,8 +340,8 @@ class ImapProtocol(asyncio.Protocol):
         mailbox_name = args[0]
         self.server_state.create_mailbox_if_not_exists(self.user_login, mailbox_name)
         mailbox = self.server_state.get_mailbox_messages(self.user_login, mailbox_name)
-        self.send_untagged_line('FLAGS (\Answered \Flagged \Deleted \Seen \Draft)')
-        self.send_untagged_line('OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.')
+        self.send_untagged_line(r'FLAGS (\Answered \Flagged \Deleted \Seen \Draft)')
+        self.send_untagged_line(r'OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.')
         self.send_untagged_line('{nb_messages} EXISTS'.format(nb_messages=len(mailbox)))
         self.send_untagged_line('{nb_messages} RECENT'.format(nb_messages=0))
         self.send_untagged_line('OK [UIDVALIDITY {uidvalidity}] UIDs valid'.format(uidvalidity=self.uidvalidity))
@@ -433,7 +433,7 @@ class ImapProtocol(asyncio.Protocol):
             if (by_uid and message.uid in fetch_range) or (not by_uid and message.id in fetch_range):
                 response = self._build_fetch_response(message, parts, by_uid=by_uid)
                 if 'BODY.PEEK' not in parts_str and ('BODY[]' in parts_str or 'RFC822' in parts_str):
-                    message.flags.append('\Seen')
+                    message.flags.append(r'\Seen')
                 self.send_raw_untagged_line(response)
         self.send_tagged_line(tag, 'OK FETCH completed.')
 
