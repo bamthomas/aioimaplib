@@ -1,6 +1,13 @@
 Changes
 =======
 
+V2.0.1
+------
+
+- chore: keep connection task reference for future use see
+- chore: fix invalid escape sequences using r-strings #116
+- chore: drop Python2 crumbs #117
+
 V2.0.0
 ------
 

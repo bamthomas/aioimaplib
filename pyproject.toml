@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aioimaplib"
-version = "2.0.0"
+version = "2.0.1"
 description = "Python asyncio IMAP4rev1 client library"
 authors = ["Bruno THOMAS <bthomas@iroco.fr>"]
 license = "GPL-3.0"
