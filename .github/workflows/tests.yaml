@@ -48,7 +48,9 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          pytest --cov=aioimaplib
+          pytest --cov=aioimaplib --cov-report=lcov
           coverage report
       - name: Coveralls
         uses: coverallsapp/github-action@v2
+        with:
+          format: lcov
