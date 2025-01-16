@@ -19,9 +19,9 @@ import logging
 import ssl
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import call, MagicMock
 
 import pytest
-from mock import call, MagicMock
 from pytz import utc
 
 from aioimaplib import aioimaplib, extract_exists, STOP_WAIT_SERVER_PUSH, FetchCommand, IdleCommand
