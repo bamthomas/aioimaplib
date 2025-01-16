@@ -12,6 +12,10 @@ About
    :target: https://coveralls.io/github/bamthomas/aioimaplib
 
 
+.. code-block:: text
+
+    As you may have noticed for users of the library, it has changed from a personal account to the organization Iroco. It is mainly because it is time consuming to maintain the library that  is done on the "Iroco time" and it makes more sense to have a collective responsibility for it. Finally, the initial development of the library took place as part of Iroco. This does not call into question the opensource nature of the library, since at Iroco we advocate for the building of digital commons.
+
 This library is inspired by imaplib_ and imaplib2_ from Piers Lauder, Nicolas Sebrecht, Sebastian Spaeth. Some utilities functions are taken from imaplib/imaplib2 thanks to them.
 
 Thank you to all contributors for your time and interest :pray: :point_right:
