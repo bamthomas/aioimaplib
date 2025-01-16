@@ -14,13 +14,11 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import asyncio
-
 import functools
-
 import time
+from unittest.mock import Mock
 
 from imaplib2 import imaplib2
-from mock import Mock
 from aioimaplib.imap_testing_server import Mail, IDLE, SELECTED
 from tests.server_fixture import with_server, login_user
 import pytest

@@ -140,7 +140,7 @@ def arguments_rfs2971(**kwargs: Union[dict, list, str]) -> Union[dict, list]:
     return args
 
 
-class Command(object):
+class Command:
     def __init__(self, name: str, tag: str, *args, prefix: str = None, untagged_resp_name: str = None,
                  loop: asyncio.AbstractEventLoop = None, timeout: float = None) -> None:
         self.name = name
@@ -699,7 +699,7 @@ class IMAP4ClientProtocol(asyncio.Protocol):
         return [c for c in self.pending_async_commands.values() if c is not None and c.tag == tag]
 
 
-class IMAP4(object):
+class IMAP4:
     TIMEOUT_SECONDS = 10.0
     _client_task: Task
 

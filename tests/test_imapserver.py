@@ -143,7 +143,7 @@ class TestServerState(unittest.TestCase):
         assert 3 == server_state.max_uid('user', 'INBOX')
 
 
-class WithImapServer(object):
+class WithImapServer:
     def _init_server(self, loop, capabilities=None, ssl_context=None):
         self.loop = loop
         if capabilities is not None:

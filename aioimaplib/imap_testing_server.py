@@ -53,7 +53,7 @@ class InvalidUidSet(RuntimeError):
         super().__init__(*args)
 
 
-class ServerState(object):
+class ServerState:
     DEFAULT_MAILBOXES = ['INBOX', 'Trash', 'Sent', 'Drafts']
 
     def __init__(self):
@@ -670,7 +670,7 @@ class ImapProtocol(asyncio.Protocol):
         self.send_tagged_line(tag, 'OK GETQUOTAROOT completed.')
 
 
-class MockImapServer(object):
+class MockImapServer:
     def __init__(self, capabilities=CAPABILITIES, loop=None) -> None:
         self._server_state = ServerState()
         self._connections = list()
@@ -725,7 +725,7 @@ class MockImapServer(object):
         self._server_state.reset()
 
 
-class Mail(object):
+class Mail:
     def __init__(self, email, date=datetime.now()):
         self.date = date
         self.email = email
