@@ -4,12 +4,12 @@ About
 .. _imaplib: https://docs.python.org/3/library/imaplib.html
 .. _asyncio: https://docs.python.org/3/library/asyncio.html
 
-.. image:: https://github.com/bamthomas/aioimaplib/workflows/tests/badge.svg
+.. image:: https://github.com/iroco-co/aioimaplib/workflows/tests/badge.svg
    :alt: Build status
-   :target: https://github.com/bamthomas/aioimaplib/actions/
+   :target: https://github.com/iroco-co/aioimaplib/actions/
 
-.. image:: https://coveralls.io/repos/github/bamthomas/aioimaplib/badge.svg
-   :target: https://coveralls.io/github/bamthomas/aioimaplib
+.. image:: https://coveralls.io/repos/github/iroco-co/aioimaplib/badge.svg
+   :target: https://coveralls.io/github/iroco-co/aioimaplib
 
 
 .. code-block:: text

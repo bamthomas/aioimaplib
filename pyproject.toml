@@ -5,7 +5,7 @@ description = "Python asyncio IMAP4rev1 client library"
 authors = ["Bruno THOMAS <bthomas@iroco.fr>"]
 license = "GPL-3.0"
 readme = "README.rst"
-repository = "https://github.com/bamthomas/aioimaplib"
+repository = "https://github.com/iroco-co/aioimaplib"
 keywords = ["asyncio", "mail", "imap"]
 classifiers = [
     "Intended Audience :: Developers",
