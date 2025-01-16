@@ -8,9 +8,8 @@ About
    :alt: Build status
    :target: https://github.com/iroco-co/aioimaplib/actions/
 
-.. image:: https://coveralls.io/repos/github/iroco-co/aioimaplib/badge.svg
-   :target: https://coveralls.io/github/iroco-co/aioimaplib
-
+.. image:: https://coveralls.io/repos/github/iroco-co/aioimaplib/badge.svg?branch=main
+   :target: https://coveralls.io/github/iroco-co/aioimaplib?branch=main
 
 .. code-block:: text
 
