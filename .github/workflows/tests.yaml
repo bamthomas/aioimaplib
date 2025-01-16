@@ -50,3 +50,5 @@ jobs:
           source .venv/bin/activate
           pytest --cov=aioimaplib
           coverage report
+      - name: Coveralls
+        uses: coverallsapp/github-action@v2
